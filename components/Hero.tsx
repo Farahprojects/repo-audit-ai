@@ -31,7 +31,6 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze }) => {
           SCAI v2.0 is Live
         </div>
 
->>>>>>> f9947517140c1b2a9d6f9c850bd80ef24c8a68d4
         {/* Headline */}
         <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 leading-[1.1] md:leading-[1.1]">
           Your Code. <br />
