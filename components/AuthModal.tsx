@@ -43,7 +43,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         onClose();
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      const message = err.message || 'An error occurred';
+      // Map common Supabase auth errors to friendly messages
+      if (message.includes('Invalid login credentials')) {
+        setError('Invalid email or password. Please try again.');
+      } else if (message.includes('User already registered')) {
+        setError('This email is already registered. Try signing in instead.');
+      } else if (message.includes('Email not confirmed')) {
+        setError('Please check your email and confirm your account first.');
+      } else if (message.includes('Password should be')) {
+        setError('Password must be at least 6 characters long.');
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
