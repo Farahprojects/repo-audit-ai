@@ -1,1 +1,7 @@
-project_id = "hxoaarkqvowisunnanyx"
+project_id = "zlrivxntdtewfagrbtry"
+
+[functions.github-proxy]
+verify_jwt = false
+
+[functions.audit-runner]
+verify_jwt = false
