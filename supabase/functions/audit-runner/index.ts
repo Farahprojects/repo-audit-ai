@@ -7,6 +7,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const ENV = {
+  GEMINI_API_KEY: Deno.env.get('GEMINI_API_KEY'),
+  SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
+  SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+  GEMINI_MODEL: Deno.env.get('GEMINI_MODEL') || 'gemini-1.5-pro',
+};
+
 const AUDIT_PROMPT = `You are an expert code auditor. Analyze the provided codebase and return a JSON response with the following structure:
 
 {
@@ -42,11 +49,7 @@ serve(async (req) => {
   }
 
   try {
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!GEMINI_API_KEY) {
+    if (!ENV.GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
@@ -54,8 +57,8 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     let userId: string | null = null;
 
-    if (authHeader && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    if (authHeader && ENV.SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY) {
+      const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
       const token = authHeader.replace('Bearer ', '');
       const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id || null;
@@ -82,10 +85,13 @@ serve(async (req) => {
     // Call Gemini API
     console.log('Calling Gemini API...');
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${ENV.GEMINI_MODEL}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': ENV.GEMINI_API_KEY!
+        },
         body: JSON.stringify({
           contents: [
             { role: 'user', parts: [{ text: AUDIT_PROMPT + '\n\n' + userPrompt }] }
@@ -100,8 +106,7 @@ serve(async (req) => {
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text();
-      console.error('Gemini API error:', geminiResponse.status, errorText);
-      console.error('Request URL:', `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent`);
+      console.error('[gemini] error:', geminiResponse.status, errorText);
       throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
     }
 
@@ -125,8 +130,8 @@ serve(async (req) => {
     const { healthScore, summary, issues } = auditResult;
 
     // Save to database if user is authenticated
-    if (userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    if (userId && ENV.SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY) {
+      const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
       
       // Check and deduct credits
       const { data: profile } = await supabase
