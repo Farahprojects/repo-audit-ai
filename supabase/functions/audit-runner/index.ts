@@ -11,7 +11,9 @@ const ENV = {
   GEMINI_API_KEY: Deno.env.get('GEMINI_API_KEY'),
   SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
-  GEMINI_MODEL: Deno.env.get('GEMINI_MODEL') || 'gemini-1.5-pro-latest',
+  // Use specific version numbers for Google Cloud Console API keys (not AI Studio)
+  // Available: gemini-1.5-pro-002, gemini-1.5-flash-002, gemini-2.0-flash
+  GEMINI_MODEL: Deno.env.get('GEMINI_MODEL') || 'gemini-1.5-pro-002',
 };
 
 const AUDIT_PROMPT = `You are an expert code auditor. Analyze the provided codebase and return a JSON response with the following structure:
@@ -115,7 +117,7 @@ serve(async (req) => {
 
     // Extract and parse the JSON response
     let responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
+
     // Clean up response if wrapped in markdown
     responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
@@ -132,7 +134,7 @@ serve(async (req) => {
     // Save to database if user is authenticated
     if (userId && ENV.SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY) {
       const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
-      
+
       // Check and deduct credits
       const { data: profile } = await supabase
         .from('profiles')
@@ -160,7 +162,7 @@ serve(async (req) => {
             .from('profiles')
             .update({ credits: profile.credits - 1 })
             .eq('id', userId);
-          
+
           console.log(`Audit saved for user ${userId}, credits remaining: ${profile.credits - 1}`);
         }
       }
