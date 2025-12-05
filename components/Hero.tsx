@@ -25,11 +25,6 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze }) => {
 
       <div className="max-w-4xl w-full text-center z-10 space-y-8 md:space-y-10">
         
-        {/* Badge */}
-        <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-slate-100 text-slate-600 text-sm font-medium mb-4 shadow-sm border border-slate-200">
-          <span className="w-2 h-2 rounded-full bg-success mr-2 animate-pulse"></span>
-          RepoAudit v2.0 is Live
-        </div>
 
         {/* Headline */}
         <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 leading-[1.1] md:leading-[1.1]">
