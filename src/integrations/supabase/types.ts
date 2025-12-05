@@ -14,7 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audits: {
+        Row: {
+          created_at: string
+          health_score: number | null
+          id: string
+          issues: Json | null
+          repo_url: string
+          summary: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          health_score?: number | null
+          id?: string
+          issues?: Json | null
+          repo_url: string
+          summary?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          health_score?: number | null
+          id?: string
+          issues?: Json | null
+          repo_url?: string
+          summary?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          converted: boolean
+          created_at: string
+          email: string
+          id: string
+          repo_scanned: string | null
+          tier_interest: string | null
+        }
+        Insert: {
+          converted?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          repo_scanned?: string | null
+          tier_interest?: string | null
+        }
+        Update: {
+          converted?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          repo_scanned?: string | null
+          tier_interest?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          credits: number
+          email: string | null
+          github_username: string | null
+          id: string
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credits?: number
+          email?: string | null
+          github_username?: string | null
+          id: string
+          tier?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          email?: string | null
+          github_username?: string | null
+          id?: string
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
