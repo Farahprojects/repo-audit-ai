@@ -57,8 +57,6 @@ export default defineConfig(({ mode }) => {
             supabase: ['@supabase/supabase-js'],
             // UI libraries
             ui: ['lucide-react'],
-            // AI libraries
-            ai: ['@google/genai'],
           },
         },
       },
