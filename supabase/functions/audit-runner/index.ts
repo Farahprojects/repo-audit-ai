@@ -11,7 +11,7 @@ const ENV = {
   GEMINI_API_KEY: Deno.env.get('GEMINI_API_KEY'),
   SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
-  GEMINI_MODEL: Deno.env.get('GEMINI_MODEL') || 'gemini-1.5-pro',
+  GEMINI_MODEL: Deno.env.get('GEMINI_MODEL') || 'gemini-1.5-pro-latest',
 };
 
 const AUDIT_PROMPT = `You are an expert code auditor. Analyze the provided codebase and return a JSON response with the following structure:
