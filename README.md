@@ -6,8 +6,6 @@
 
 This contains everything you need to run your SCAI app locally.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1YDBeVz7VpM81JhiMG6PUUAptEcvhKv6V
-
 ## Run Locally
 
 **Prerequisites:**  Node.js
