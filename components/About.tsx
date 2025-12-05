@@ -42,7 +42,7 @@ const About: React.FC = () => {
              { 
                icon: Code2, 
                title: 'Code is Craft', 
-               desc: "We respect the artistry of coding. RepoAudit doesn't just look for bugs; it looks for elegance." 
+               desc: "We respect the artistry of coding. SCAI doesn't just look for bugs; it looks for elegance." 
              },
              { 
                icon: Users, 

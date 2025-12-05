@@ -96,37 +96,37 @@ const App: React.FC = () => {
     switch (view) {
         case 'landing':
             return {
-                title: "RepoAudit.ai - AI Code Auditor & Security Scanner",
+                title: "SCAI - AI Code Auditor & Security Scanner",
                 description: "The AI Senior Engineer that never sleeps. Instant automated code review, security scanning, and technical debt audit for your GitHub repositories.",
                 keywords: "AI code review, static analysis, github security scanner, technical debt audit"
             };
         case 'pricing':
             return {
-                title: "Pricing - RepoAudit.ai",
+                title: "Pricing - SCAI",
                 description: "Simple, transparent pricing for automated code reviews. Start auditing your technical debt for free.",
                 keywords: "code review pricing, static analysis cost, saas pricing"
             };
         case 'about':
             return {
                 title: "About Us - The AI Senior Engineer",
-                description: "RepoAudit.ai is built by ex-FAANG engineers to democratize world-class software architecture and security audits.",
+                description: "SCAI is built by ex-FAANG engineers to democratize world-class software architecture and security audits.",
                 keywords: "automated software engineering, ai developer tools, code quality mission"
             };
         case 'contact':
             return {
-                title: "Contact Sales - RepoAudit.ai",
+                title: "Contact Sales - SCAI",
                 description: "Get in touch with our team for enterprise security audits, on-premise deployments, and partnership inquiries.",
                 keywords: "enterprise code security, contact support"
             };
         case 'report':
             return {
-                title: reportData ? `Audit Result: ${reportData.repoName} (${reportData.healthScore}/100)` : "Audit Report - RepoAudit.ai",
+                title: reportData ? `Audit Result: ${reportData.repoName} (${reportData.healthScore}/100)` : "Audit Report - SCAI",
                 description: reportData ? `AI Code Audit for ${reportData.repoName}. Found ${reportData.issues.length} issues impacting security and performance.` : "View your code audit report.",
                 keywords: "code audit report, security vulnerabilities found, performance bottlenecks"
             };
         default:
             return {
-                title: "RepoAudit.ai - Code. Perfected.",
+                title: "SCAI - Code. Perfected.",
                 description: "Instant security, performance, and architecture audits for any codebase.",
                 keywords: "ai code tools"
             };

@@ -17,7 +17,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
                 <Shield className="w-4 h-4 text-white" />
               </div>
-              <span className="text-slate-900 font-bold text-lg">RepoAudit.ai</span>
+              <span className="text-slate-900 font-bold text-lg">SCAI</span>
             </div>
             <p className="text-slate-500 text-sm leading-relaxed mb-6">
               The AI-powered senior engineer that audits your code 24/7.
@@ -63,7 +63,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
 
         <div className="border-t border-slate-100 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-slate-400 text-sm font-medium">
-            © {new Date().getFullYear()} RepoAudit Inc.
+            © {new Date().getFullYear()} SCAI Inc.
           </p>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>

@@ -28,7 +28,7 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze }) => {
         {/* Badge */}
         <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-slate-100 text-slate-600 text-sm font-medium mb-4 shadow-sm border border-slate-200">
           <span className="w-2 h-2 rounded-full bg-success mr-2 animate-pulse"></span>
-          RepoAudit v2.0 is Live
+          SCAI v2.0 is Live
         </div>
 
         {/* Headline */}

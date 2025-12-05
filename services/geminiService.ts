@@ -81,7 +81,7 @@ const generateMockReport = (repoName: string, stats: any): RepoReport => {
     repoName,
     stats,
     healthScore: Math.floor(Math.random() * 40) + 60, // Random score between 60-100
-    summary: `Demo audit completed for ${repoName}. This is a simulated report showing potential issues that would be detected by RepoAudit.ai's AI analysis. Configure your Gemini API key to get real AI-powered code analysis.`,
+    summary: `Demo audit completed for ${repoName}. This is a simulated report showing potential issues that would be detected by SCAI's AI analysis. Configure your Gemini API key to get real AI-powered code analysis.`,
     issues: mockIssues
   };
 };

@@ -48,7 +48,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick 
           <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-105 transition-transform">
             <Shield className="w-5 h-5 text-white" />
           </div>
-          <span className="text-slate-900 font-bold text-xl tracking-tight">RepoAudit.ai</span>
+          <span className="text-slate-900 font-bold text-xl tracking-tight">SCAI</span>
         </div>
 
         {/* Desktop Nav */}

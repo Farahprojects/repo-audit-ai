@@ -30,7 +30,7 @@ serve(async (req) => {
     const headers = {
       'Authorization': `Bearer ${GITHUB_TOKEN}`,
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'RepoAudit-AI'
+      'User-Agent': 'SCAI'
     };
 
     // If filePath is provided, fetch single file content

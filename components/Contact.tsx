@@ -16,7 +16,7 @@ const Contact: React.FC = () => {
 
           <div className="space-y-8">
              {[
-               { icon: Mail, title: "Email Us", l1: "support@repoaudit.ai", l2: "sales@repoaudit.ai" },
+               { icon: Mail, title: "Email Us", l1: "support@scai.co", l2: "sales@scai.co" },
                { icon: MessageSquare, title: "Live Chat", l1: "Available Mon-Fri", l2: "9am - 5pm PST" },
                { icon: MapPin, title: "Office", l1: "123 Innovation Dr", l2: "San Francisco, CA" }
              ].map((item, i) => (

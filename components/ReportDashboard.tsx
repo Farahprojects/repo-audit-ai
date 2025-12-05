@@ -70,7 +70,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart }) =>
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
              <div className="w-3 h-3 bg-white rounded-full"></div>
           </div>
-          RepoAudit
+          SCAI
         </div>
 
         <nav className="space-y-2 flex-1">

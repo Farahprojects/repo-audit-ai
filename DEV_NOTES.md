@@ -1,4 +1,4 @@
-# RepoAudit.ai - Backend Implementation Guide
+# SCAI - Backend Implementation Guide
 
 ## Overview
 This document outlines the requirements for the backend architecture to support the frontend. 
