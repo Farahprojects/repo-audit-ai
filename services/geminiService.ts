@@ -6,92 +6,12 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 // Initialize AI client only if API key is available
 const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
-// Mock response for demo purposes when API key is not set
-const generateMockReport = (repoName: string, stats: any): RepoReport => {
-  const mockIssues = [
-    {
-      id: "sec-001",
-      title: "Input Validation Missing",
-      description: "User inputs are not properly validated before processing, potentially allowing injection attacks.",
-      category: "Security" as const,
-      severity: "Critical" as const,
-      filePath: "src/components/InputHandler.tsx",
-      lineNumber: 45,
-      badCode: "const userInput = req.body.data;",
-      fixedCode: "const userInput = validateInput(req.body.data);"
-    },
-    {
-      id: "perf-001",
-      title: "Inefficient Loop Implementation",
-      description: "Nested loops with O(n²) complexity detected. Consider optimizing with hash maps or caching.",
-      category: "Performance" as const,
-      severity: "Warning" as const,
-      filePath: "src/utils/processing.ts",
-      lineNumber: 112,
-      badCode: "for (let i = 0; i < data.length; i++) {\n  for (let j = 0; j < data.length; j++) {",
-      fixedCode: "const processed = new Set();\nfor (let item of data) {\n  if (!processed.has(item.id)) {"
-    },
-    {
-      id: "arch-001",
-      title: "Tight Coupling Between Components",
-      description: "Components are tightly coupled, making testing and maintenance difficult. Consider dependency injection.",
-      category: "Architecture" as const,
-      severity: "Info" as const,
-      filePath: "src/services/ApiService.ts",
-      lineNumber: 78,
-      badCode: "import { Database } from '../db/connection';",
-      fixedCode: "constructor(private db: IDatabase) {}"
-    },
-    {
-      id: "sec-002",
-      title: "Hardcoded Secrets",
-      description: "API keys and secrets are hardcoded in source code instead of using environment variables.",
-      category: "Security" as const,
-      severity: "Critical" as const,
-      filePath: "src/config/constants.ts",
-      lineNumber: 15,
-      badCode: "const API_KEY = 'sk-123456789';",
-      fixedCode: "const API_KEY = process.env.API_KEY;"
-    },
-    {
-      id: "perf-002",
-      title: "Memory Leak in Event Listeners",
-      description: "Event listeners are not properly cleaned up, potentially causing memory leaks over time.",
-      category: "Performance" as const,
-      severity: "Warning" as const,
-      filePath: "src/components/Dashboard.tsx",
-      lineNumber: 203,
-      badCode: "window.addEventListener('resize', handleResize);",
-      fixedCode: "window.addEventListener('resize', handleResize);\n  return () => window.removeEventListener('resize', handleResize);"
-    },
-    {
-      id: "arch-002",
-      title: "Single Responsibility Violation",
-      description: "Class handles multiple responsibilities. Consider splitting into smaller, focused classes.",
-      category: "Architecture" as const,
-      severity: "Info" as const,
-      filePath: "src/models/UserManager.ts",
-      lineNumber: 45,
-      badCode: "class UserManager {\n  save() {}\n  validate() {}\n  sendEmail() {}\n  generateReport() {}\n}",
-      fixedCode: "class UserManager {\n  save() {}\n  validate() {}\n}\nclass EmailService {\n  sendEmail() {}\n}\nclass ReportGenerator {\n  generateReport() {}\n}"
-    }
-  ];
-
-  return {
-    repoName,
-    stats,
-    healthScore: Math.floor(Math.random() * 40) + 60, // Random score between 60-100
-    summary: `Demo audit completed for ${repoName}. This is a simulated report showing potential issues that would be detected by SCAI's AI analysis. Configure your Gemini API key to get real AI-powered code analysis.`,
-    issues: mockIssues
-  };
-};
 
 export const generateAuditReport = async (repoName: string, stats: any, fileContents: {path: string, content: string}[]): Promise<RepoReport> => {
 
-  // If API key is not configured, return mock data
+  // Fail fast if API key is not configured
   if (!ai) {
-    console.warn("Gemini API key not configured. Using mock audit report for demonstration.");
-    return generateMockReport(repoName, stats);
+    throw new Error("Gemini API key not configured. Please set VITE_GEMINI_API_KEY in your .env.local file.");
   }
 
   // Construct a context string from the files
