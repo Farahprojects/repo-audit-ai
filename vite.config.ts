@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => ({
     host: '::',
     port: 8080,
   },
+  define: {
+    'process.env': {},
+  },
   plugins: [
     react(),
     mode === 'development' && componentTagger(),
