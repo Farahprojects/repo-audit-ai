@@ -10,24 +10,9 @@ const corsHeaders = {
 const ENV = {
   SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+  GEMINI_API_KEY: Deno.env.get('GEMINI_API_KEY'),
+  GEMINI_MODEL: 'gemini-2.0-flash-exp', // Only working model with this key
 };
-
-// API keys to try in order (with their names for logging)
-const API_KEYS: { name: string; key: string | undefined }[] = [
-  { name: 'APILLM', key: Deno.env.get('APILLM') },
-  { name: 'APISTANDARD', key: Deno.env.get('APISTANDARD') },
-  { name: 'GEMINI_API_KEY', key: Deno.env.get('GEMINI_API_KEY') },
-].filter(k => k.key); // Only keep keys that are set
-
-// Models to try in order of preference
-const MODELS_TO_TRY = [
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-pro',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-pro-002',
-  'gemini-1.5-flash-002',
-];
 
 const AUDIT_PROMPT = `You are an expert code auditor. Analyze the provided codebase and return a JSON response with the following structure:
 
@@ -64,12 +49,9 @@ serve(async (req) => {
   }
 
   try {
-    if (API_KEYS.length === 0) {
-      throw new Error('No API keys configured. Set APILLM, APISTANDARD, or GEMINI_API_KEY');
+    if (!ENV.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is not configured');
     }
-
-    console.log(`Available API keys: ${API_KEYS.map(k => k.name).join(', ')}`);
-
 
     // Get user from auth header
     const authHeader = req.headers.get('Authorization');
@@ -100,68 +82,43 @@ serve(async (req) => {
 
     const userPrompt = `Analyze this codebase from ${repoUrl}:\n\n${fileContext}`;
 
-    // Call Gemini API with fallback across keys and models
-    console.log('Calling Gemini API with fallback...');
-
-    let geminiResponse: Response | null = null;
-    let successKey: string | null = null;
-    let successModel: string | null = null;
-    let lastError: string = '';
-
-    // Try each API key
-    for (const apiKeyConfig of API_KEYS) {
-      // Try each model with this key
-      for (const model of MODELS_TO_TRY) {
-        console.log(`[gemini] Trying ${apiKeyConfig.name} with model ${model}...`);
-
-        try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': apiKeyConfig.key!
-              },
-              body: JSON.stringify({
-                contents: [
-                  { role: 'user', parts: [{ text: AUDIT_PROMPT + '\n\n' + userPrompt }] }
-                ],
-                generationConfig: {
-                  temperature: 0.2,
-                  maxOutputTokens: 8192,
-                }
-              })
-            }
-          );
-
-          if (response.ok) {
-            geminiResponse = response;
-            successKey = apiKeyConfig.name;
-            successModel = model;
-            console.log(`[gemini] ✅ SUCCESS with ${apiKeyConfig.name} using model ${model}`);
-            break;
-          } else {
-            const errorText = await response.text();
-            lastError = `${response.status} - ${errorText}`;
-            console.log(`[gemini] ❌ ${apiKeyConfig.name} + ${model} failed: ${response.status}`);
+    // Call Gemini API
+    console.log(`Calling Gemini API with model: ${ENV.GEMINI_MODEL}`);
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${ENV.GEMINI_MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': ENV.GEMINI_API_KEY
+        },
+        body: JSON.stringify({
+          contents: [
+            { role: 'user', parts: [{ text: AUDIT_PROMPT + '\n\n' + userPrompt }] }
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 8192,
           }
-        } catch (fetchError) {
-          lastError = `Fetch error: ${fetchError}`;
-          console.log(`[gemini] ❌ ${apiKeyConfig.name} + ${model} fetch error: ${fetchError}`);
-        }
+        })
       }
+    );
 
-      if (geminiResponse) break; // Found a working combination
-    }
-
-    if (!geminiResponse) {
-      console.error('[gemini] All API keys and models failed. Last error:', lastError);
-      throw new Error(`Gemini API error: All keys/models failed. Last error: ${lastError}`);
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      console.error('[gemini] error:', geminiResponse.status, errorText);
+      throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
     }
 
     const geminiData = await geminiResponse.json();
-    console.log(`✅ Gemini response received using key=${successKey} model=${successModel}`);
+
+    // Log token usage for monitoring
+    const usage = geminiData.usageMetadata;
+    if (usage) {
+      console.log(`📊 Token usage: prompt=${usage.promptTokenCount}, response=${usage.candidatesTokenCount}, total=${usage.totalTokenCount}`);
+    }
+
+    console.log(`✅ Gemini response received using model=${ENV.GEMINI_MODEL}`);
 
     // Extract and parse the JSON response
     let responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
