@@ -65,7 +65,7 @@ const App: React.FC = () => {
         setScannerProgress(60);
 
         // Step 4: AI Audit (Real API)
-        addLog(`[Agent: Security] Sending code context to Gemini 2.5...`);
+        addLog(`[Agent: Security] Sending code context to Gemini 1.5...`);
         const report = await generateAuditReport(repoInfo.repo, stats, fileContents);
         
         addLog(`[Success] Report generated successfully.`);
