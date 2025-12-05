@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Menu, X } from 'lucide-react';
+import { Shield, Menu, X, User, LogOut } from 'lucide-react';
 import { ViewState } from '../types';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface NavbarProps {
   currentView: ViewState;
   onNavigate: (view: ViewState) => void;
   onSignInClick: () => void;
+  user: SupabaseUser | null;
+  onSignOut: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick }) => {
+const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick, user, onSignOut }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -70,12 +73,28 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick 
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-4">
-          <button 
-             onClick={onSignInClick}
-             className="text-slate-600 hover:text-slate-900 text-sm font-medium px-4"
-          >
-            Log in
-          </button>
+          {user ? (
+            <>
+              <div className="flex items-center gap-2 text-slate-600 text-sm">
+                <User className="w-4 h-4" />
+                <span className="font-medium truncate max-w-[150px]">{user.email}</span>
+              </div>
+              <button 
+                onClick={onSignOut}
+                className="text-slate-500 hover:text-slate-900 text-sm font-medium px-3 py-2 flex items-center gap-1.5"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button 
+               onClick={onSignInClick}
+               className="text-slate-600 hover:text-slate-900 text-sm font-medium px-4"
+            >
+              Log in
+            </button>
+          )}
           <button 
             onClick={() => onNavigate('landing')}
             className="bg-slate-900 text-white hover:bg-slate-800 px-6 py-2.5 rounded-full text-sm font-semibold transition-all shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5"
@@ -110,12 +129,27 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick 
                 </button>
               ))}
               <div className="pt-8 flex flex-col gap-4">
-                <button 
-                  onClick={() => { onSignInClick(); setIsMenuOpen(false); }}
-                  className="w-full py-4 text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 font-medium"
-                >
-                  Log In
-                </button>
+                {user ? (
+                  <>
+                    <div className="text-center text-slate-600 text-sm mb-2">
+                      Signed in as <span className="font-medium">{user.email}</span>
+                    </div>
+                    <button 
+                      onClick={() => { onSignOut(); setIsMenuOpen(false); }}
+                      className="w-full py-4 text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 font-medium flex items-center justify-center gap-2"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <button 
+                    onClick={() => { onSignInClick(); setIsMenuOpen(false); }}
+                    className="w-full py-4 text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 font-medium"
+                  >
+                    Log In
+                  </button>
+                )}
                 <button 
                   onClick={() => handleNavClick('landing')}
                   className="w-full py-4 bg-primary text-white rounded-full hover:bg-blue-600 font-bold shadow-lg shadow-primary/20"

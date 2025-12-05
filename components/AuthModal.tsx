@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Github, Mail, ArrowRight, Shield } from 'lucide-react';
+import { X, Github, Mail, ArrowRight, Shield, Loader2 } from 'lucide-react';
+import { supabase } from '../src/integrations/supabase/client';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -12,14 +13,57 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTimeout(() => {
-      onClose();
-    }, 800);
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (mode === 'signup') {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+          },
+        });
+        if (error) throw error;
+        setError('Check your email for the confirmation link!');
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGitHubSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setError(err.message || 'An error occurred');
+      setLoading(false);
+    }
   };
 
   return (
@@ -48,8 +92,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </p>
           </div>
 
-          <button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2 mb-6 shadow-lg shadow-slate-900/20">
-            <Github className="w-5 h-5" />
+          {error && (
+            <div className={`mb-4 p-3 rounded-xl text-sm ${error.includes('Check your email') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {error}
+            </div>
+          )}
+
+          <button 
+            onClick={handleGitHubSignIn}
+            disabled={loading}
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2 mb-6 shadow-lg shadow-slate-900/20 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Github className="w-5 h-5" />}
             Continue with GitHub
           </button>
 
@@ -87,14 +141,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 className="w-full bg-slate-50 border border-slate-200 rounded-full py-3 px-6 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-slate-400"
                 placeholder="••••••••"
                 required
+                minLength={6}
               />
             </div>
 
             <button 
               type="submit"
-              className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2 mt-4 shadow-lg shadow-primary/25"
+              disabled={loading}
+              className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2 mt-4 shadow-lg shadow-primary/25 disabled:opacity-50"
             >
-              {mode === 'signin' ? 'Sign In' : 'Sign Up'} <ArrowRight className="w-4 h-4" />
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                <>{mode === 'signin' ? 'Sign In' : 'Sign Up'} <ArrowRight className="w-4 h-4" /></>
+              )}
             </button>
           </form>
 
@@ -103,7 +161,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               {mode === 'signin' ? "No account? " : "Have an account? "}
             </span>
             <button 
-              onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+              onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); }}
               className="text-primary hover:text-blue-700 font-bold transition-colors"
             >
               {mode === 'signin' ? 'Sign up' : 'Log in'}

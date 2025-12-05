@@ -13,8 +13,10 @@ import SEO from './components/SEO';
 import { ViewState, AuditStats, RepoReport } from './types';
 import { generateAuditReport } from './services/geminiService';
 import { fetchRepoFiles, parseGitHubUrl } from './services/githubService';
+import { useAuth } from './hooks/useAuth';
 
 const App: React.FC = () => {
+  const { user, signOut } = useAuth();
   const [view, setView] = useState<ViewState>('landing');
   const [repoUrl, setRepoUrl] = useState('');
   const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
@@ -181,6 +183,8 @@ const App: React.FC = () => {
           currentView={view} 
           onNavigate={setView} 
           onSignInClick={() => setIsAuthOpen(true)}
+          user={user}
+          onSignOut={signOut}
         />
       )}
       
