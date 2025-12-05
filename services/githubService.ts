@@ -4,7 +4,7 @@ const GITHUB_API_BASE = 'https://api.github.com';
 
 // In production, this should be an endpoint to your backend (e.g., /api/github/fetch)
 // to hide the token and handle rate limiting.
-const GITHUB_TOKEN = process.env.VITE_GITHUB_TOKEN || ''; 
+const GITHUB_TOKEN = import.meta.env.VITE_GITHUB_TOKEN || ''; 
 
 interface FileContent {
   path: string;

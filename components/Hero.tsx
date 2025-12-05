@@ -49,14 +49,14 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze }) => {
             <div className="pl-6 text-slate-400">
               <Github className="w-6 h-6" />
             </div>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="github.com/username/repo"
               className="flex-1 bg-transparent border-none text-slate-900 placeholder-slate-400 focus:ring-0 px-4 py-3 text-base md:text-lg outline-none w-full"
             />
-            <button 
+            <button
               type="submit"
               className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-full font-semibold transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2 whitespace-nowrap"
             >
