@@ -22,6 +22,7 @@ export type Database = {
           issues: Json | null
           repo_url: string
           summary: string | null
+          total_tokens: number | null
           user_id: string | null
         }
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           issues?: Json | null
           repo_url: string
           summary?: string | null
+          total_tokens?: number | null
           user_id?: string | null
         }
         Update: {
@@ -40,6 +42,7 @@ export type Database = {
           issues?: Json | null
           repo_url?: string
           summary?: string | null
+          total_tokens?: number | null
           user_id?: string | null
         }
         Relationships: [
