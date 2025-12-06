@@ -61,7 +61,47 @@ COMMENT ON COLUMN public.email_messages.raw_headers IS 'VPS response data and ad
 
 -- ============================================
 
--- 2. Domain Slugs Table
+-- 2. Verification Codes Table
+
+-- ============================================
+
+-- Stores temporary verification codes for email verification
+
+CREATE TABLE IF NOT EXISTS public.verification_codes (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    email text NOT NULL,
+    code text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Add indexes for performance
+CREATE INDEX IF NOT EXISTS idx_verification_codes_user_id ON public.verification_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_email ON public.verification_codes(email);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_expires_at ON public.verification_codes(expires_at);
+
+-- Enable Row Level Security
+ALTER TABLE public.verification_codes ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policies - users can only access their own codes
+CREATE POLICY "Users can view their own verification codes" ON public.verification_codes
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create their own verification codes" ON public.verification_codes
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own verification codes" ON public.verification_codes
+    FOR DELETE USING (auth.uid() = user_id);
+
+COMMENT ON TABLE public.verification_codes IS 'Temporary verification codes for email verification';
+COMMENT ON COLUMN public.verification_codes.code IS '6-digit verification code';
+COMMENT ON COLUMN public.verification_codes.expires_at IS 'When the code expires (typically 5 minutes)';
+
+-- ============================================
+
+-- 3. Domain Slugs Table
 
 -- ============================================
 
@@ -150,6 +190,7 @@ SET
 CREATE TABLE IF NOT EXISTS public.email_notification_templates (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     name text UNIQUE NOT NULL,
+    template_type text NOT NULL,
     subject text NOT NULL,
     body_html text NOT NULL,
     body_text text,
@@ -178,13 +219,15 @@ COMMENT ON TABLE public.email_notification_templates IS 'Reusable email template
 
 -- ============================================
 
-INSERT INTO public.email_notification_templates (name, subject, body_html, body_text, from_email, description)
+INSERT INTO public.email_notification_templates (name, template_type, subject, body_html, body_text, from_email, description)
 
 VALUES
 
 (
 
     'welcome_email',
+
+    'welcome',
 
     'Welcome to scai.co!',
 
@@ -199,6 +242,8 @@ VALUES
 ),
 
 (
+
+    'password_reset',
 
     'password_reset',
 
@@ -218,11 +263,13 @@ VALUES
 
     'email_verification',
 
+    'email_verification',
+
     'Verify Your Email Address',
 
-    '<h1>Verify Your Email</h1><p>Please click the link below to verify your email address:</p><p><a href="{{verification_link}}">Verify Email</a></p>',
+    '<h1>Verify Your Email</h1><p>Your verification code is: <strong>{{verification_code}}</strong></p><p>This code will expire in 5 minutes.</p>',
 
-    'Please verify your email address by clicking this link: {{verification_link}}',
+    'Verify Your Email. Your verification code is: {{verification_code}}. This code will expire in 5 minutes.',
 
     'noreply@scai.co',
 
@@ -240,54 +287,41 @@ ON CONFLICT (name) DO NOTHING;
 
 -- Run this to verify everything is set up correctly
 
+-- Check domain slugs
 SELECT
-
     'domain_slugs' as table_name,
-
     domain,
-
     noreply,
-
     support,
-
     hello,
-
     contact,
-
     info
-
 FROM public.domain_slugs
-
 WHERE domain = 'scai.co';
 
 -- Count email messages (should be 0 initially)
-
 SELECT
-
     'email_messages' as table_name,
-
     COUNT(*) as total_messages,
-
     COUNT(*) FILTER (WHERE direction = 'inbound') as inbound_count,
-
     COUNT(*) FILTER (WHERE direction = 'outgoing') as outgoing_count
-
 FROM public.email_messages;
 
--- List email templates
-
+-- Count verification codes (should be 0 initially)
 SELECT
+    'verification_codes' as table_name,
+    COUNT(*) as total_codes,
+    COUNT(*) FILTER (WHERE expires_at > now()) as active_codes
+FROM public.verification_codes;
 
+-- List email templates
+SELECT
     'email_templates' as table_name,
-
     name,
-
+    template_type,
     subject,
-
     from_email
-
 FROM public.email_notification_templates
-
 ORDER BY name;
 
 -- ============================================
