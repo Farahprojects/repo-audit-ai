@@ -64,9 +64,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
           onClick={() => handleNavClick('landing')}
           className="flex items-center gap-2 cursor-pointer group z-50 relative"
         >
-          <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center">
-            <img src="/favicon-32x32.png" alt="SCAI Logo" className="w-6 h-6" />
-          </div>
+          <img src="/favicon-32x32.png" alt="SCAI Logo" className="w-8 h-8" />
           <span className="text-foreground font-bold text-lg tracking-tight">SCAI</span>
         </div>
 
