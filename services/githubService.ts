@@ -44,8 +44,8 @@ export const fetchRepoStats = async (
     if (data.error.includes('rate limit')) {
       throw new Error('GitHub API rate limit exceeded. Please try again later.');
     }
-    // Detect private repo specifically
-    if (data.error.includes('404') || data.error.includes('Not Found')) {
+    // Detect private repo specifically (404 = Not Found, 401 = Unauthorized/Private)
+    if (data.error.includes('404') || data.error.includes('401') || data.error.includes('Not Found')) {
       throw new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
     }
     throw new Error(data.error);
