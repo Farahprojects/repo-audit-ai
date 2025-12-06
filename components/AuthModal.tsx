@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, Github, Mail, ArrowRight, Loader2, Apple, Linkedin } from 'lucide-react';
 import { supabase } from '../src/integrations/supabase/client';
-import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -16,7 +15,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { signInWithGitHub, isConnecting, error: githubError } = useGitHubAuth();
 
   if (!isOpen) return null;
 
@@ -62,7 +60,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const signInWithProvider = async (provider: 'google' | 'apple') => {
+  const signInWithProvider = async (provider: 'google' | 'github' | 'apple') => {
     setLoading(true);
     setError(null);
     try {
