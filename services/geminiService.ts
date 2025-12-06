@@ -61,6 +61,9 @@ export const generateAuditReport = async (
       topVulnerabilities: data.topVulnerabilities,
       exposedSecrets: data.exposedSecrets,
       rlsProblems: data.rlsProblems,
+      // Multi-agent specific data
+      multiAgent: data.multiAgent,
+      additionalInsights: data.additionalInsights,
     }
   };
 };
