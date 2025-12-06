@@ -1,0 +1,149 @@
+// @ts-nocheck - Deno runtime
+// GitHub OAuth Start - Secure Server-Side OAuth Initiation
+// Returns OAuth URL with CSRF-protected state token
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const ENV = {
+  SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
+  SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  GITHUB_CLIENT_ID: Deno.env.get('GITHUB_CLIENT_ID')!,
+  GITHUB_OAUTH_CALLBACK_URL:
+    Deno.env.get('GITHUB_OAUTH_CALLBACK_URL') ||
+    `${Deno.env.get('SUPABASE_URL')}/functions/v1/github-oauth-callback`,
+};
+
+// Validate required env vars
+if (!ENV.SUPABASE_URL || !ENV.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Missing Supabase environment variables');
+}
+if (!ENV.GITHUB_CLIENT_ID) {
+  throw new Error('Missing GITHUB_CLIENT_ID environment variable');
+}
+
+const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
+
+Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS });
+  }
+
+  try {
+    // Get auth token from request
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Extract JWT token from Bearer header
+    const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+
+    // Decode JWT to get user_id (gateway already validated it if verify_jwt=true)
+    // JWT format: header.payload.signature
+    let userId: string | null = null;
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        // Decode base64url payload (second part)
+        // Base64URL uses - and _ instead of + and /, and no padding
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        // Add padding if needed
+        while (base64.length % 4) {
+          base64 += '=';
+        }
+        const decoded = atob(base64);
+        const payload = JSON.parse(decoded);
+        userId = payload.sub; // 'sub' is the user ID in Supabase JWT
+      }
+    } catch (e) {
+      console.error('[github-oauth-start] Failed to decode JWT:', e);
+      return new Response(JSON.stringify({ error: 'Invalid token format' }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'Could not extract user ID from token' }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('[github-oauth-start] User ID extracted from token:', userId);
+
+    // Generate secure CSRF state with timestamp
+    const timestamp = Date.now();
+    const randomToken = crypto.randomUUID();
+    const state = `user_id:${userId}:${timestamp}:${randomToken}`;
+
+    // Store CSRF state in database with expiry (10 minutes)
+    const expiresAt = new Date(timestamp + 10 * 60 * 1000).toISOString();
+
+    // Clean up old states first (older than 10 minutes)
+    await supabase
+      .from('oauth_csrf_states')
+      .delete()
+      .lt('expires_at', new Date().toISOString());
+
+    // Store new state
+    const { error: storeError } = await supabase
+      .from('oauth_csrf_states')
+      .insert({
+        state_token: state,
+        user_id: userId,
+        expires_at: expiresAt,
+      });
+
+    if (storeError) {
+      console.error('[github-oauth-start] Failed to store CSRF state:', storeError);
+      return new Response(JSON.stringify({ error: 'Failed to generate OAuth state' }), {
+        status: 500,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Construct OAuth URL server-side
+    const scope = 'read:user repo';
+    const authUrl = new URL('https://github.com/login/oauth/authorize');
+    authUrl.searchParams.set('client_id', ENV.GITHUB_CLIENT_ID);
+    authUrl.searchParams.set('redirect_uri', ENV.GITHUB_OAUTH_CALLBACK_URL);
+    authUrl.searchParams.set('scope', scope);
+    authUrl.searchParams.set('state', state);
+
+    console.log(`[github-oauth-start] Generated OAuth URL for user ${userId}`);
+
+    // Return OAuth URL to frontend
+    return new Response(
+      JSON.stringify({
+        url: authUrl.toString(),
+        state: state,
+      }),
+      {
+        status: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error) {
+    console.error('Error in github-oauth-start:', error);
+    return new Response(
+      JSON.stringify({
+        error: 'Internal server error',
+        message: error.message,
+      }),
+      {
+        status: 500,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      }
+    );
+  }
+});

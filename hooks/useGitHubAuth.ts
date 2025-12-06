@@ -1,12 +1,25 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../src/integrations/supabase/client';
 import { useAuth } from './useAuth';
+
+interface GitHubAccount {
+    id: string;
+    user_id: string;
+    github_user_id: number;
+    login: string;
+    avatar_url: string | null;
+    html_url: string | null;
+    access_token_encrypted: string;
+    created_at: string;
+    updated_at: string;
+}
 
 interface GitHubAuthState {
     isConnected: boolean;
     isConnecting: boolean;
     token: string | null;
     error: string | null;
+    account: GitHubAccount | null;
 }
 
 export function useGitHubAuth() {
@@ -16,61 +29,215 @@ export function useGitHubAuth() {
         isConnecting: false,
         token: null,
         error: null,
+        account: null,
     });
 
-    // Check if user has GitHub connected by looking at provider_token
-    const isGitHubConnected = !!session?.provider_token && session?.user?.app_metadata?.provider === 'github';
+    // Fetch GitHub account data
+    const fetchGitHubAccount = useCallback(async () => {
+        if (!session?.user?.id) return;
 
-    // Get GitHub token from session
-    const getGitHubToken = useCallback((): string | null => {
-        if (session?.provider_token && session?.user?.app_metadata?.provider === 'github') {
-            return session.provider_token;
+        try {
+            const { data, error } = await supabase
+                .from('github_accounts')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .single();
+
+            if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+                console.error('Error fetching GitHub account:', error);
+                return;
+            }
+
+            if (data) {
+                setState(prev => ({
+                    ...prev,
+                    isConnected: true,
+                    account: data,
+                }));
+            } else {
+                setState(prev => ({
+                    ...prev,
+                    isConnected: false,
+                    account: null,
+                    token: null,
+                }));
+            }
+        } catch (err) {
+            console.error('Error in fetchGitHubAccount:', err);
         }
-        return null;
-    }, [session]);
+    }, [session?.user?.id]);
 
-    // Sign in with GitHub OAuth - request repo scope for private repos
+    // Fetch account on mount and when session changes
+    useEffect(() => {
+        fetchGitHubAccount();
+    }, [fetchGitHubAccount]);
+
+    // Get decrypted GitHub token
+    const getGitHubToken = useCallback(async (): Promise<string | null> => {
+        if (!state.account?.access_token_encrypted) return null;
+
+        try {
+            // Call edge function to decrypt token
+            const { data, error } = await supabase.functions.invoke('decrypt-github-token', {
+                body: { encryptedToken: state.account.access_token_encrypted }
+            });
+
+            if (error) {
+                console.error('Error decrypting GitHub token:', error);
+                return null;
+            }
+
+            return data.token;
+        } catch (err) {
+            console.error('Error getting GitHub token:', err);
+            return null;
+        }
+    }, [state.account]);
+
+    // Sign in with GitHub OAuth using popup flow
     const signInWithGitHub = useCallback(async (redirectTo?: string) => {
         setState(prev => ({ ...prev, isConnecting: true, error: null }));
 
         try {
-            const { data, error } = await supabase.auth.signInWithOAuth({
-                provider: 'github',
-                options: {
-                    scopes: 'repo read:org', // repo includes read access to private repos
-                    redirectTo: redirectTo || `${window.location.origin}/`,
-                },
-            });
+            // Call edge function to get OAuth URL
+            const { data, error: invokeError } = await supabase.functions.invoke('github-oauth-start');
 
-            if (error) {
-                setState(prev => ({ ...prev, isConnecting: false, error: error.message }));
-                return { success: false, error: error.message };
+            if (invokeError) {
+                console.error('Error starting GitHub OAuth:', invokeError);
+                const errorMsg = 'Failed to initiate GitHub connection';
+                setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                return { success: false, error: errorMsg };
             }
 
-            // OAuth redirect will happen, state update won't persist
-            return { success: true, url: data.url };
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to connect GitHub';
-            setState(prev => ({ ...prev, isConnecting: false, error: message }));
-            return { success: false, error: message };
-        }
-    }, []);
+            if (!data?.url || !data?.state) {
+                const errorMsg = 'Invalid response from OAuth service';
+                setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                return { success: false, error: errorMsg };
+            }
 
-    // Disconnect GitHub (sign out if GitHub is the only auth method)
+            const authUrl = data.url;
+            const stateToken = data.state;
+
+            // Store state in sessionStorage for verification
+            sessionStorage.setItem('github_oauth_state', stateToken);
+
+            // Open in popup window
+            const width = 600;
+            const height = 700;
+            const left = window.screen.width / 2 - width / 2;
+            const top = window.screen.height / 2 - height / 2;
+
+            const popup = window.open(
+                authUrl,
+                'github-oauth',
+                `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes,location=no,directories=no,status=no`
+            );
+
+            if (!popup) {
+                const errorMsg = 'Popup blocked. Please allow popups for this site.';
+                setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                return { success: false, error: errorMsg };
+            }
+
+            // Listen for popup to close or receive message
+            const checkClosed = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(checkClosed);
+                    // Check if connection was successful by refetching GitHub account
+                    fetchGitHubAccount().then(() => {
+                        setState(prev => ({ ...prev, isConnecting: false }));
+                    });
+                }
+            }, 500);
+
+            // Also listen for postMessage from popup
+            const messageHandler = (event: MessageEvent) => {
+                if (
+                    event.data?.type === 'github-oauth-success' ||
+                    event.data?.type === 'github-oauth-error'
+                ) {
+                    clearInterval(checkClosed);
+                    popup.close();
+                    window.removeEventListener('message', messageHandler);
+
+                    if (event.data.type === 'github-oauth-success') {
+                        // Refetch GitHub account
+                        fetchGitHubAccount().then(() => {
+                            setState(prev => ({ ...prev, isConnecting: false, error: null }));
+                        });
+                    } else {
+                        const errorMsg = event.data.message || 'Failed to connect GitHub account';
+                        setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                    }
+                }
+            };
+
+            window.addEventListener('message', messageHandler);
+
+            // Cleanup after 5 minutes if still open
+            setTimeout(
+                () => {
+                    if (!popup.closed) {
+                        popup.close();
+                        clearInterval(checkClosed);
+                        window.removeEventListener('message', messageHandler);
+                        setState(prev => ({ ...prev, isConnecting: false }));
+                    }
+                },
+                5 * 60 * 1000
+            );
+
+            return { success: true };
+        } catch (err) {
+            console.error('Error in GitHub OAuth:', err);
+            const errorMsg = 'Failed to connect to GitHub';
+            setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+            return { success: false, error: errorMsg };
+        }
+    }, [fetchGitHubAccount]);
+
+    // Disconnect GitHub
     const disconnectGitHub = useCallback(async () => {
-        // For now, just clear the state - user would need to re-auth
-        setState({
-            isConnected: false,
-            isConnecting: false,
-            token: null,
-            error: null,
-        });
-    }, []);
+        if (!state.account) return false;
+
+        if (!confirm('Are you sure you want to disconnect your GitHub account? You will need to reconnect to access repositories.')) {
+            return false;
+        }
+
+        try {
+            const { error } = await supabase
+                .from('github_accounts')
+                .delete()
+                .eq('user_id', state.account.user_id);
+
+            if (error) {
+                console.error('Failed to disconnect GitHub account:', error);
+                setState(prev => ({ ...prev, error: 'Failed to disconnect GitHub account' }));
+                return false;
+            }
+
+            setState(prev => ({
+                ...prev,
+                isConnected: false,
+                account: null,
+                token: null,
+                error: null,
+            }));
+
+            return true;
+        } catch (err) {
+            console.error('Error disconnecting GitHub account:', err);
+            const errorMsg = err instanceof Error ? err.message : 'Failed to disconnect GitHub account';
+            setState(prev => ({ ...prev, error: errorMsg }));
+            return false;
+        }
+    }, [state.account]);
 
     return {
-        isGitHubConnected,
+        isGitHubConnected: state.isConnected,
         isConnecting: state.isConnecting,
         error: state.error,
+        account: state.account,
         getGitHubToken,
         signInWithGitHub,
         disconnectGitHub,

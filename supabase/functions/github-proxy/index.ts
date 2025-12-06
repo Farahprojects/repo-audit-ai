@@ -22,10 +22,107 @@ serve(async (req) => {
       );
     }
 
-    // Prefer user's OAuth token for private repos, fallback to server token for public
-    const GITHUB_TOKEN = userToken || Deno.env.get('GITHUB_TOKEN');
+    // For private repos, require user token (will be validated server-side)
+    let GITHUB_TOKEN = userToken;
+
+    // If no user token provided, try to get it from the user's GitHub account
+    if (!GITHUB_TOKEN && owner) {
+      try {
+        // Get auth token from request to identify user
+        const authHeader = req.headers.get('authorization');
+        if (authHeader) {
+          const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+
+          // Decode JWT to get user_id
+          let userId: string | null = null;
+          try {
+            const parts = token.split('.');
+            if (parts.length === 3) {
+              const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+              const paddedBase64 = base64 + '='.repeat((4 - base64.length % 4) % 4);
+              const decoded = atob(paddedBase64);
+              const payload = JSON.parse(decoded);
+              userId = payload.sub;
+            }
+          } catch (e) {
+            console.error('Failed to decode JWT for user lookup');
+          }
+
+          if (userId) {
+            // Import Supabase client
+            const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+            const supabase = createClient(
+              Deno.env.get('SUPABASE_URL')!,
+              Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+            );
+
+            // Get user's GitHub account
+            const { data: githubAccount, error } = await supabase
+              .from('github_accounts')
+              .select('access_token_encrypted')
+              .eq('user_id', userId)
+              .single();
+
+            if (!error && githubAccount) {
+              // Decrypt token server-side
+              const encryptedToken = githubAccount.access_token_encrypted;
+              const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+              // Simple decryption logic (same as in decrypt-github-token function)
+              try {
+                const encoder = new TextEncoder();
+                const decoder = new TextDecoder();
+                const combined = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
+                const salt = combined.slice(0, 16);
+                const iv = combined.slice(16, 28);
+                const encrypted = combined.slice(28);
+
+                const keyMaterial = await crypto.subtle.importKey(
+                  'raw',
+                  encoder.encode(secret),
+                  'PBKDF2',
+                  false,
+                  ['deriveBits', 'deriveKey']
+                );
+
+                const key = await crypto.subtle.deriveKey(
+                  {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                  },
+                  keyMaterial,
+                  { name: 'AES-GCM', length: 256 },
+                  false,
+                  ['decrypt']
+                );
+
+                const decrypted = await crypto.subtle.decrypt(
+                  { name: 'AES-GCM', iv: iv },
+                  key,
+                  encrypted
+                );
+
+                GITHUB_TOKEN = decoder.decode(decrypted);
+              } catch (decryptError) {
+                console.error('Failed to decrypt GitHub token:', decryptError);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error retrieving user GitHub token:', error);
+      }
+    }
+
+    // Fallback to server token for public repos only
     if (!GITHUB_TOKEN) {
-      throw new Error('No GitHub token available. User token or GITHUB_TOKEN required.');
+      GITHUB_TOKEN = Deno.env.get('GITHUB_TOKEN');
+    }
+
+    if (!GITHUB_TOKEN) {
+      throw new Error('No GitHub token available. Please connect your GitHub account or provide a user token.');
     }
 
     const headers = {
