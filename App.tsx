@@ -20,6 +20,7 @@ import { useAuth } from './hooks/useAuth';
 const App: React.FC = () => {
   const { user, signOut } = useAuth();
   const [view, setView] = useState<ViewState>('landing');
+  const [previousView, setPreviousView] = useState<ViewState>('landing'); // Track where user came from
   const [repoUrl, setRepoUrl] = useState('');
   const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
   const [reportData, setReportData] = useState<RepoReport | null>(null);
@@ -34,6 +35,7 @@ const App: React.FC = () => {
 
   const handleAnalyze = (url: string) => {
     setRepoUrl(url);
+    setPreviousView('landing');
     setView('preflight');
   };
 
@@ -178,7 +180,7 @@ const App: React.FC = () => {
               <PreflightModal
                 repoUrl={repoUrl}
                 onConfirm={handleConfirmAudit}
-                onCancel={() => setView('landing')}
+                onCancel={() => setView(previousView)}
               />
             )}
           </>
@@ -196,6 +198,7 @@ const App: React.FC = () => {
             onViewReport={handleViewHistoricalReport}
             onStartAudit={(url, tier) => {
               setRepoUrl(url);
+              setPreviousView('dashboard');
               setView('preflight');
             }}
           />
@@ -211,6 +214,7 @@ const App: React.FC = () => {
             onRunTier={(tier, url) => {
               // For upsells, go through preflight to reload stats
               setRepoUrl(url);
+              setPreviousView('report');
               setView('preflight');
             }}
           />

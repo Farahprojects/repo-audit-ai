@@ -1,25 +1,10 @@
 import { AuditStats } from '../types';
-
-const GITHUB_API_BASE = 'https://api.github.com';
-
-// In production, this should be an endpoint to your backend (e.g., /api/github/fetch)
-// to hide the token and handle rate limiting.
-const GITHUB_TOKEN = import.meta.env.VITE_GITHUB_TOKEN || ''; 
+import { supabase } from '../src/integrations/supabase/client';
 
 interface FileContent {
   path: string;
   content: string;
 }
-
-const getHeaders = () => {
-  const headers: HeadersInit = {
-    'Accept': 'application/vnd.github.v3+json',
-  };
-  if (GITHUB_TOKEN) {
-    headers['Authorization'] = `token ${GITHUB_TOKEN}`;
-  }
-  return headers;
-};
 
 export const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
   try {
@@ -29,99 +14,115 @@ export const parseGitHubUrl = (url: string): { owner: string; repo: string } | n
       return { owner: parts[0], repo: parts[1] };
     }
   } catch (e) {
+    // Try parsing as owner/repo format
     const parts = url.split('/');
     if (parts.length === 2) return { owner: parts[0], repo: parts[1] };
   }
   return null;
 };
 
+/**
+ * Fetch repository stats via Supabase github-proxy edge function
+ */
 export const fetchRepoStats = async (owner: string, repo: string): Promise<AuditStats> => {
-  const repoRes = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, { headers: getHeaders() });
-  
-  if (!repoRes.ok) {
-    if (repoRes.status === 403) throw new Error("GitHub API Rate Limit Exceeded");
-    if (repoRes.status === 404) throw new Error("Repository not found or private");
-    throw new Error('Failed to fetch repository metadata');
+  // Call github-proxy edge function
+  const { data, error } = await supabase.functions.invoke('github-proxy', {
+    body: { owner, repo, action: 'stats' }
+  });
+
+  if (error) {
+    console.error('GitHub proxy error:', error);
+    throw new Error(error.message || 'Failed to fetch repository');
   }
-  
-  const repoData = await repoRes.json();
-  
-  const langRes = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/languages`, { headers: getHeaders() });
-  const langData = await langRes.json();
-  
-  const languages = Object.keys(langData);
-  const primaryLang = languages.length > 0 ? languages[0] : 'Unknown';
-  
-  const totalBytes = Object.values(langData).reduce((a: any, b: any) => a + b, 0) as number;
-  const primaryBytes = (langData[primaryLang] as number) || 0;
-  const languagePercent = totalBytes > 0 ? Math.round((primaryBytes / totalBytes) * 100) : 0;
 
-  const estTokens = Math.round((repoData.size * 1024) / 4); 
-  const tokenDisplay = estTokens > 1000000 
-    ? `${(estTokens / 1000000).toFixed(1)}M` 
-    : `${(estTokens / 1000).toFixed(1)}k`;
+  if (data?.error) {
+    if (data.error.includes('rate limit')) {
+      throw new Error('GitHub API rate limit exceeded. Please try again later.');
+    }
+    if (data.error.includes('404')) {
+      throw new Error('Repository not found or private.');
+    }
+    throw new Error(data.error);
+  }
 
-  // Heuristic for files: size in KB / 5KB avg file size
-  let fileCount = Math.round(repoData.size / 5); 
-
-  return {
-    files: fileCount,
-    tokens: tokenDisplay,
-    language: primaryLang,
-    languagePercent
-  };
+  return data as AuditStats;
 };
 
+/**
+ * Fetch repository files via Supabase github-proxy edge function
+ */
 export const fetchRepoFiles = async (owner: string, repo: string): Promise<FileContent[]> => {
-  try {
-    // 1. Get default branch
-    const repoRes = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, { headers: getHeaders() });
-    const repoData = await repoRes.json();
-    const defaultBranch = repoData.default_branch || 'main';
+  // Step 1: Get file tree
+  const { data: treeData, error: treeError } = await supabase.functions.invoke('github-proxy', {
+    body: { owner, repo }
+  });
 
-    // 2. Fetch Tree
-    const treeRes = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`, { headers: getHeaders() });
-    const treeData = await treeRes.json();
+  if (treeError) {
+    console.error('GitHub proxy tree error:', treeError);
+    throw new Error(treeError.message || 'Failed to fetch repository tree');
+  }
 
-    if (!treeData.tree) return [];
+  if (treeData?.error) {
+    throw new Error(treeData.error);
+  }
 
-    // 3. Filter Strategy
-    const allFiles = treeData.tree.filter((f: any) => f.type === 'blob');
-    
-    // Prioritize high-value config files
-    const configFiles = allFiles.filter((f: any) => 
-      f.path.endsWith('package.json') || 
-      f.path.endsWith('requirements.txt') ||
-      f.path.endsWith('Dockerfile') ||
-      f.path.endsWith('docker-compose.yml')
-    );
+  if (!treeData?.tree || treeData.tree.length === 0) {
+    throw new Error('No code files found in repository');
+  }
 
-    // Prioritize source code
-    const sourceFiles = allFiles.filter((f: any) => 
-      (f.path.includes('src/') || f.path.includes('lib/') || f.path.includes('app/') || f.path.includes('components/')) &&
-      (f.path.endsWith('.ts') || f.path.endsWith('.js') || f.path.endsWith('.py') || f.path.endsWith('.tsx') || f.path.endsWith('.jsx'))
-    ).slice(0, 6); // Fetch 6 source files max to keep request latency low for demo
+  // Step 2: Prioritize files for analysis
+  const allFiles = treeData.tree;
 
-    const filesToFetch = [...configFiles, ...sourceFiles].slice(0, 8); // Cap at 8 total files
+  // Config files (always include)
+  const configFiles = allFiles.filter((f: any) =>
+    f.path.endsWith('package.json') ||
+    f.path.endsWith('requirements.txt') ||
+    f.path.endsWith('Dockerfile') ||
+    f.path.endsWith('docker-compose.yml') ||
+    f.path.endsWith('tsconfig.json')
+  );
 
-    const contents = await Promise.all(filesToFetch.map(async (file: any) => {
-      const contentRes = await fetch(file.url, { headers: getHeaders() });
-      const contentData = await contentRes.json();
-      try {
-        const decodedContent = atob(contentData.content.replace(/\n/g, ''));
-        return {
-          path: file.path,
-          content: decodedContent
-        };
-      } catch (e) {
+  // Source files (prioritize src/, lib/, app/, components/)
+  const sourceFiles = allFiles.filter((f: any) =>
+    (f.path.includes('src/') || f.path.includes('lib/') || f.path.includes('app/') || f.path.includes('components/') || f.path.includes('pages/')) &&
+    (f.path.endsWith('.ts') || f.path.endsWith('.tsx') || f.path.endsWith('.js') || f.path.endsWith('.jsx') || f.path.endsWith('.py'))
+  ).slice(0, 10);
+
+  // Supabase/Edge functions
+  const supabaseFiles = allFiles.filter((f: any) =>
+    f.path.includes('supabase/') && f.path.endsWith('.ts')
+  ).slice(0, 5);
+
+  const filesToFetch = [...configFiles, ...sourceFiles, ...supabaseFiles].slice(0, 15);
+
+  // Step 3: Fetch file contents via proxy
+  const contents = await Promise.all(filesToFetch.map(async (file: any) => {
+    try {
+      const { data: fileData, error: fileError } = await supabase.functions.invoke('github-proxy', {
+        body: { owner, repo, filePath: file.path }
+      });
+
+      if (fileError || fileData?.error) {
+        console.warn(`Failed to fetch ${file.path}:`, fileError || fileData?.error);
         return null;
       }
-    }));
 
-    return contents.filter(Boolean) as FileContent[];
+      return {
+        path: file.path,
+        content: fileData.content
+      };
+    } catch (e) {
+      console.warn(`Error fetching ${file.path}:`, e);
+      return null;
+    }
+  }));
 
-  } catch (error) {
-    console.error("Failed to fetch repo files", error);
-    throw error;
+  const validContents = contents.filter(Boolean) as FileContent[];
+
+  if (validContents.length === 0) {
+    throw new Error('Could not fetch any files from repository');
   }
+
+  console.log(`📁 Fetched ${validContents.length} files via Supabase proxy`);
+  return validContents;
 };
