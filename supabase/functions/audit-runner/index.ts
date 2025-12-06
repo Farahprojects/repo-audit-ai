@@ -384,7 +384,8 @@ ${fileContext}`;
           repo_url: repoUrl,
           health_score: healthScore,
           summary: summary,
-          issues: issues
+          issues: issues,
+          tier: selectedTier  // Track which audit type was run
         });
         await supabase
           .from('profiles')

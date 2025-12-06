@@ -190,13 +190,29 @@ const App: React.FC = () => {
       case 'contact':
         return <Contact />;
       case 'dashboard':
-        return <Dashboard onNavigate={setView} onViewReport={handleViewHistoricalReport} />;
+        return (
+          <Dashboard
+            onNavigate={setView}
+            onViewReport={handleViewHistoricalReport}
+            onStartAudit={(url, tier) => {
+              setRepoUrl(url);
+              setView('preflight');
+            }}
+          />
+        );
       case 'scanning':
         return <Scanner logs={scannerLogs} progress={scannerProgress} />;
       case 'report':
         const displayData = reportData || historicalReportData;
         return displayData ? (
-          <ReportDashboard data={displayData} onRestart={handleRestart} />
+          <ReportDashboard
+            data={displayData}
+            onRestart={handleRestart}
+            onRunTier={(tier, url) => {
+              setRepoUrl(url);
+              handleConfirmAudit(tier, auditStats!);
+            }}
+          />
         ) : null;
       default:
         return <Hero onAnalyze={handleAnalyze} />;
