@@ -209,8 +209,9 @@ const App: React.FC = () => {
             data={displayData}
             onRestart={handleRestart}
             onRunTier={(tier, url) => {
+              // For upsells, go through preflight to reload stats
               setRepoUrl(url);
-              handleConfirmAudit(tier, auditStats!);
+              setView('preflight');
             }}
           />
         ) : null;
