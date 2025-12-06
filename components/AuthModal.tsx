@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Github, Mail, ArrowRight, Loader2, Apple, Linkedin } from 'lucide-react';
 import { supabase } from '../src/integrations/supabase/client';
+import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { signInWithGitHub, isConnecting, error: githubError } = useGitHubAuth();
 
   if (!isOpen) return null;
 
@@ -60,7 +62,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const signInWithProvider = async (provider: 'google' | 'github' | 'apple') => {
+  const signInWithProvider = async (provider: 'google' | 'apple') => {
     setLoading(true);
     setError(null);
     try {
@@ -122,11 +124,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               {loading ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <GoogleIcon />}
             </button>
             <button
-              onClick={() => signInWithProvider('github')}
-              disabled={loading}
+              onClick={async () => {
+                setLoading(true);
+                setError(null);
+                const result = await signInWithGitHub(window.location.href);
+                if (!result?.success) {
+                  setError(githubError || 'GitHub authentication failed');
+                  setLoading(false);
+                } else {
+                  onClose(); // Close modal on successful auth start
+                }
+              }}
+              disabled={loading || isConnecting}
               className="flex items-center justify-center py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <Github className="w-5 h-5 text-slate-900" />}
+              {loading || isConnecting ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <Github className="w-5 h-5 text-slate-900" />}
             </button>
             <button
               onClick={() => signInWithProvider('apple')}
