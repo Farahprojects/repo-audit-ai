@@ -9,9 +9,10 @@ interface NavbarProps {
   onSignInClick: () => void;
   user: SupabaseUser | null;
   onSignOut: () => void;
+  onLogoClick?: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick, user, onSignOut }) => {
+const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick, user, onSignOut, onLogoClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -61,7 +62,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
 
         {/* Logo */}
         <div
-          onClick={() => handleNavClick('landing')}
+          onClick={() => onLogoClick ? onLogoClick() : handleNavClick('landing')}
           className="flex items-center gap-2 cursor-pointer group z-50 relative"
         >
           <img src="/favicon-32x32.png" alt="SCAI Logo" className="w-8 h-8" />

@@ -23,6 +23,11 @@ const App: React.FC = () => {
   const { getGitHubToken } = useGitHubAuth();
   const [view, setView] = useState<ViewState>('landing');
   const [previousView, setPreviousView] = useState<ViewState>('landing'); // Track where user came from
+
+  // Ensure users can always access the landing page
+  const navigateToLanding = () => {
+    setView('landing');
+  };
   const [repoUrl, setRepoUrl] = useState('');
   const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
   const [reportData, setReportData] = useState<RepoReport | null>(null);
@@ -253,6 +258,7 @@ const App: React.FC = () => {
           onSignInClick={() => setIsAuthOpen(true)}
           user={user}
           onSignOut={signOut}
+          onLogoClick={navigateToLanding}
         />
       )}
 
