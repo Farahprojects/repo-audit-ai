@@ -29,7 +29,7 @@ function estimateTokens(content: string): number {
 }
 
 // ============================================================================
-// Chunking Logic (inline for edge function)
+// Chunking Logic
 // ============================================================================
 interface FileInfo {
   path: string;
@@ -153,7 +153,7 @@ function createChunks(
   }
 
   chunks.sort((a, b) => b.priority - a.priority);
-  console.log(`📦 Created ${chunks.length} chunks`);
+  console.log(`📦 Created ${chunks.length} chunks for parallel processing`);
   return chunks;
 }
 
@@ -204,6 +204,97 @@ Category: security. Include CWE references.`,
 };
 
 // ============================================================================
+// Coordinator Synthesis (for multi-chunk repos)
+// ============================================================================
+async function callCoordinator(workerFindings: any[], tier: string, repoUrl: string): Promise<any> {
+  console.log(`🎯 Calling Coordinator to synthesize ${workerFindings.length} worker findings...`);
+  
+  const SYNTHESIS_PROMPT = `You are the COORDINATOR AGENT synthesizing a multi-agent code audit.
+
+Worker agents have analyzed different chunks of this codebase.
+Your job is to:
+1. Review all worker findings
+2. Resolve any conflicts or contradictions
+3. Generate a unified executive summary
+4. Assign a final health score (0-100)
+
+Consider:
+- Weight scores by chunk size and confidence
+- Critical issues should heavily impact the final score
+- Cross-file flags indicate systemic issues
+- Uncertainties should add slight negative bias
+
+Return ONLY valid JSON:
+{
+  "healthScore": <number 0-100>,
+  "summary": "<2-3 sentence executive summary covering all workers>",
+  "topStrengths": ["<strength 1>", "<strength 2>", ...],
+  "topIssues": ["<issue 1>", "<issue 2>", ...],
+  "conflictsResolved": ["<any contradictions you resolved>"],
+  "additionalInsights": ["<patterns visible only across chunks>"],
+  "productionReady": <boolean>,
+  "riskLevel": "<critical|high|medium|low>"
+}`;
+
+  // Build findings summary for coordinator
+  const findingsSummary = workerFindings.map((f: any) => `
+## Chunk: ${f.chunkName} (${f.tokensAnalyzed.toLocaleString()} tokens)
+- Local Score: ${f.localScore}/100 (confidence: ${f.confidence})
+- Issues Found: ${f.issues?.length || 0}
+${f.issues?.slice(0, 5).map((i: any) => `  - [${i.severity}] ${i.title}`).join('\n') || '  None'}
+- Cross-File Flags: ${f.crossFileFlags?.join(', ') || 'None'}
+- Uncertainties: ${f.uncertainties?.join(', ') || 'None'}
+`).join('\n');
+
+  const userPrompt = `Repository: ${repoUrl}
+Audit Tier: ${tier}
+Total Chunks Analyzed: ${workerFindings.length}
+
+WORKER FINDINGS:
+${findingsSummary}
+
+Generate the final synthesis.`;
+
+  try {
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${ENV.GEMINI_MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': ENV.GEMINI_API_KEY!
+        },
+        body: JSON.stringify({
+          contents: [
+            { role: 'user', parts: [{ text: SYNTHESIS_PROMPT + '\n\n' + userPrompt }] }
+          ],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 4096,
+          }
+        })
+      }
+    );
+
+    if (!geminiResponse.ok) {
+      console.error('[Coordinator] Gemini error:', geminiResponse.status);
+      return null;
+    }
+
+    const geminiData = await geminiResponse.json();
+    let responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    const result = JSON.parse(responseText);
+    console.log(`✅ Coordinator synthesis complete: healthScore=${result.healthScore}, riskLevel=${result.riskLevel}`);
+    return result;
+  } catch (e) {
+    console.error('[Coordinator] Error:', e);
+    return null;
+  }
+}
+
+// ============================================================================
 // Main Handler
 // ============================================================================
 serve(async (req) => {
@@ -239,14 +330,27 @@ serve(async (req) => {
     const creditCost = TIER_CREDITS[selectedTier] || 2;
     const workerPrompt = TIER_PROMPTS[selectedTier] || TIER_PROMPTS['shape'];
 
-    console.log(`🚀 Starting multi-agent ${selectedTier} audit for: ${repoUrl}`);
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🚀 MULTI-AGENT ${selectedTier.toUpperCase()} AUDIT`);
+    console.log(`📁 Repository: ${repoUrl}`);
+    console.log(`📄 Files: ${files.length}`);
+    console.log(`${'='.repeat(60)}\n`);
 
-    // Step 1: Create chunks
+    // Step 1: Create chunks for parallel processing
     const chunks = createChunks(files);
-    console.log(`📦 Dispatching ${chunks.length} workers`);
+    const isMultiChunk = chunks.length > 1;
+    
+    console.log(`\n🤖 AGENT DISPATCH:`);
+    chunks.forEach((chunk, i) => {
+      console.log(`   Worker ${i + 1}: ${chunk.name} (${chunk.files.length} files, ${chunk.totalTokens.toLocaleString()} tokens)`);
+    });
+    console.log('');
 
-    // Step 2: Call workers in parallel
-    const workerPromises = chunks.map(async (chunk) => {
+    // Step 2: Dispatch workers in parallel
+    const workerPromises = chunks.map(async (chunk, index) => {
+      const startTime = Date.now();
+      console.log(`⚡ [Worker ${index + 1}/${chunks.length}] Starting analysis of "${chunk.name}"...`);
+      
       const fileContext = chunk.files
         .map(f => `--- ${f.path} ---\n${f.content}`)
         .join('\n\n');
@@ -257,14 +361,14 @@ Files: ${chunk.files.length}
 
 ${fileContext}`;
 
-      // Direct Gemini call (inline worker for now)
+      // Direct Gemini call (inline worker)
       const geminiResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${ENV.GEMINI_MODEL}:generateContent`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-goog-api-key': ENV.GEMINI_API_KEY
+            'x-goog-api-key': ENV.GEMINI_API_KEY!
           },
           body: JSON.stringify({
             contents: [
@@ -278,17 +382,21 @@ ${fileContext}`;
         }
       );
 
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
       if (!geminiResponse.ok) {
-        console.error(`[Worker ${chunk.id}] Failed:`, geminiResponse.status);
+        console.error(`❌ [Worker ${index + 1}] Failed after ${elapsed}s:`, geminiResponse.status);
         return {
           chunkId: chunk.id,
           chunkName: chunk.name,
           tokensAnalyzed: chunk.totalTokens,
+          filesAnalyzed: chunk.files.length,
           localScore: 50,
           confidence: 0.3,
           issues: [],
           crossFileFlags: [`Worker ${chunk.id} failed`],
           uncertainties: [],
+          duration: elapsed,
         };
       }
 
@@ -298,36 +406,69 @@ ${fileContext}`;
 
       try {
         const result = JSON.parse(responseText);
-        console.log(`✅ [${chunk.id}] Score: ${result.localScore}, Issues: ${result.issues?.length || 0}`);
+        console.log(`✅ [Worker ${index + 1}] Completed in ${elapsed}s → Score: ${result.localScore}, Issues: ${result.issues?.length || 0}`);
         return {
           chunkId: chunk.id,
           chunkName: chunk.name,
           tokensAnalyzed: chunk.totalTokens,
+          filesAnalyzed: chunk.files.length,
+          duration: elapsed,
           ...result,
         };
       } catch {
-        console.error(`[Worker ${chunk.id}] Parse error`);
+        console.error(`⚠️ [Worker ${index + 1}] Parse error after ${elapsed}s`);
         return {
           chunkId: chunk.id,
           chunkName: chunk.name,
           tokensAnalyzed: chunk.totalTokens,
+          filesAnalyzed: chunk.files.length,
           localScore: 50,
           confidence: 0.3,
           issues: [],
           crossFileFlags: [`Worker ${chunk.id} parse error`],
           uncertainties: [],
+          duration: elapsed,
         };
       }
     });
 
     const workerFindings = await Promise.all(workerPromises);
-    console.log(`📊 All ${workerFindings.length} workers complete`);
+    console.log(`\n📊 All ${workerFindings.length} workers complete`);
 
     // Step 3: Synthesize findings
+    let healthScore: number;
+    let summary: string;
+    let coordinatorInsights: any = null;
+
+    // Collect all issues from workers
     const allIssues = workerFindings.flatMap(f => f.issues || []);
-    const avgScore = workerFindings.reduce((sum, f) => sum + (f.localScore || 50), 0) / workerFindings.length;
     const totalTokens = workerFindings.reduce((sum, f) => sum + f.tokensAnalyzed, 0);
     const crossFileFlags = [...new Set(workerFindings.flatMap(f => f.crossFileFlags || []))];
+
+    // If multi-chunk, use Coordinator for AI-powered synthesis
+    if (isMultiChunk) {
+      console.log(`\n🎯 COORDINATOR SYNTHESIS (multi-chunk repo)`);
+      coordinatorInsights = await callCoordinator(workerFindings, selectedTier, repoUrl);
+    }
+
+    if (coordinatorInsights) {
+      // Use coordinator's synthesized score and summary
+      healthScore = coordinatorInsights.healthScore;
+      summary = coordinatorInsights.summary;
+      console.log(`✅ Coordinator score: ${healthScore}/100`);
+    } else {
+      // Fallback: simple weighted average
+      const avgScore = workerFindings.reduce((sum, f) => sum + (f.localScore || 50), 0) / workerFindings.length;
+      healthScore = Math.round(avgScore);
+      healthScore -= Math.min(crossFileFlags.length * 2, 10); // Cross-file penalty
+      healthScore = Math.max(0, Math.min(100, healthScore));
+      
+      summary = `Multi-agent analysis across ${chunks.length} code regions found ${allIssues.length} issues. ` +
+        `Health score: ${healthScore}/100. ` +
+        (allIssues.filter(i => i.severity === 'critical').length > 0
+          ? `${allIssues.filter(i => i.severity === 'critical').length} critical issues require immediate attention.`
+          : 'No critical issues found.');
+    }
 
     // Deduplicate issues
     const issueMap = new Map();
@@ -340,13 +481,8 @@ ${fileContext}`;
     const uniqueIssues = Array.from(issueMap.values());
 
     // Sort by severity
-    const severityOrder = { critical: 0, warning: 1, info: 2 };
+    const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
     uniqueIssues.sort((a, b) => (severityOrder[a.severity] || 2) - (severityOrder[b.severity] || 2));
-
-    // Calculate final score with penalties
-    let healthScore = Math.round(avgScore);
-    healthScore -= Math.min(crossFileFlags.length * 2, 10); // Cross-file penalty
-    healthScore = Math.max(0, Math.min(100, healthScore));
 
     // Transform issues for frontend
     const issues = uniqueIssues.map((issue, index) => ({
@@ -362,12 +498,6 @@ ${fileContext}`;
       badCode: issue.badCode || '',
       fixedCode: issue.fixedCode || '',
     }));
-
-    const summary = `Multi-agent analysis across ${chunks.length} code regions found ${issues.length} issues. ` +
-      `Health score: ${healthScore}/100. ` +
-      (issues.filter(i => i.severity === 'Critical').length > 0
-        ? `${issues.filter(i => i.severity === 'Critical').length} critical issues require immediate attention.`
-        : 'No critical issues found.');
 
     // Save to DB
     if (userId && ENV.SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY) {
@@ -385,17 +515,21 @@ ${fileContext}`;
           health_score: healthScore,
           summary: summary,
           issues: issues,
-          tier: selectedTier  // Track which audit type was run
         });
         await supabase
           .from('profiles')
           .update({ credits: profile.credits - creditCost })
           .eq('id', userId);
-        console.log(`💾 Saved, credits: ${profile.credits} → ${profile.credits - creditCost}`);
+        console.log(`💾 Saved to DB, credits: ${profile.credits} → ${profile.credits - creditCost}`);
       }
     }
 
-    console.log(`✅ Audit complete: ${healthScore}/100, ${issues.length} issues`);
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`✅ AUDIT COMPLETE`);
+    console.log(`   Score: ${healthScore}/100`);
+    console.log(`   Issues: ${issues.length}`);
+    console.log(`   Mode: ${isMultiChunk ? 'Multi-Agent' : 'Single-Agent'}`);
+    console.log(`${'='.repeat(60)}\n`);
 
     return new Response(
       JSON.stringify({
@@ -404,11 +538,30 @@ ${fileContext}`;
         issues,
         filesAnalyzed: files.length,
         tier: selectedTier,
+        // Multi-agent metadata
         multiAgent: {
+          enabled: true,
           chunksAnalyzed: chunks.length,
           totalTokensAnalyzed: totalTokens,
           crossFileFlags,
+          workerDetails: workerFindings.map(w => ({
+            chunk: w.chunkName,
+            files: w.filesAnalyzed,
+            tokens: w.tokensAnalyzed,
+            score: w.localScore,
+            issues: w.issues?.length || 0,
+            duration: w.duration,
+          })),
+          coordinatorUsed: !!coordinatorInsights,
         },
+        // Coordinator insights if available
+        ...(coordinatorInsights ? {
+          topStrengths: coordinatorInsights.topStrengths,
+          topIssues: coordinatorInsights.topIssues,
+          additionalInsights: coordinatorInsights.additionalInsights,
+          productionReady: coordinatorInsights.productionReady,
+          riskLevel: coordinatorInsights.riskLevel,
+        } : {}),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
