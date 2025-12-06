@@ -1,23 +1,21 @@
+// @ts-nocheck
 // Worker Agent - Analyzes a single chunk of code
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ENV = {
-    GEMINI_API_KEY: Deno.env.get('GEMINI_API_KEY'),
-    GEMINI_MODEL: 'gemini-2.0-flash-exp',
-};
-
-serve(async (req) => {
+Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
 
     try {
-        if (!ENV.GEMINI_API_KEY) {
+        const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+        const GEMINI_MODEL = 'gemini-2.0-flash-exp';
+
+        if (!GEMINI_API_KEY) {
             throw new Error('GEMINI_API_KEY is not configured');
         }
 
@@ -50,12 +48,12 @@ ${fileContext}`;
 
         // Call Gemini API
         const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${ENV.GEMINI_MODEL}:generateContent`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
             {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-goog-api-key': ENV.GEMINI_API_KEY
+                    'x-goog-api-key': GEMINI_API_KEY
                 },
                 body: JSON.stringify({
                     contents: [

@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     server: {
-      port: 8081,
+      port: 8080,
       host: '::',
     },
     plugins: [
