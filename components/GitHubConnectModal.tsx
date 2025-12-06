@@ -1,5 +1,5 @@
 import React from 'react';
-import { Github, Shield, Eye, Trash2 } from 'lucide-react';
+import { Github, Shield, Eye, Trash2, Lock } from 'lucide-react';
 
 interface GitHubConnectModalProps {
     repoUrl: string;
@@ -18,103 +18,68 @@ const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
     const repoName = repoUrl.split('/').slice(-2).join('/');
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-300">
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl shadow-slate-200 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">
+            <div className="bg-white w-full max-w-[380px] rounded-2xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all">
 
-                {/* Header */}
-                <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-8 py-10 text-center relative overflow-hidden">
-                    {/* Subtle grid pattern */}
-                    <div className="absolute inset-0 opacity-10" style={{
-                        backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-                        backgroundSize: '24px 24px'
-                    }}></div>
+                <div className="p-8 flex flex-col items-center text-center">
+                    {/* Minimal Icon */}
+                    <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center mb-5 shadow-lg shadow-slate-900/20">
+                        <Github className="w-6 h-6" />
+                    </div>
 
-                    <div className="relative">
-                        <div className="w-16 h-16 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-5 ring-1 ring-white/20">
-                            <Github className="w-8 h-8 text-white" />
-                        </div>
-                        <h2 className="text-xl font-bold text-white mb-2">Private Repository Detected</h2>
-                        <p className="text-slate-400 text-sm font-mono bg-slate-800/50 px-3 py-1 rounded-full inline-block">
+                    <h2 className="text-xl font-bold text-slate-900 mb-2">Connect GitHub</h2>
+
+                    <div className="bg-slate-50 border border-slate-100 px-3 py-1 rounded-full mb-6 max-w-full truncate">
+                        <p className="text-xs font-semibold text-slate-500 font-mono">
                             {repoName}
                         </p>
                     </div>
-                </div>
 
-                {/* Content */}
-                <div className="px-8 py-8">
-                    <p className="text-slate-600 text-center mb-8 leading-relaxed">
-                        Connect your GitHub account to grant <strong className="text-slate-900">one-time read access</strong> for this audit.
+                    <p className="text-sm text-slate-500 mb-8 leading-relaxed px-2">
+                        This repository is private. Grant one-time <strong className="text-slate-900">read access</strong> to generate your audit.
                     </p>
 
-                    {/* Trust Signals */}
-                    <div className="space-y-3 mb-8">
-                        <div className="flex items-start gap-3 text-sm">
-                            <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Eye className="w-4 h-4 text-emerald-600" />
-                            </div>
-                            <div>
-                                <p className="font-medium text-slate-900">Read-only access</p>
-                                <p className="text-slate-500 text-xs">We only request permission to read repository contents</p>
-                            </div>
+                    {/* Compact Trust Grid */}
+                    <div className="grid grid-cols-3 gap-2 w-full mb-8">
+                        <div className="flex flex-col items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                            <Eye className="w-5 h-5 text-slate-400" />
+                            <span className="text-[10px] font-medium text-slate-500">Read-only</span>
                         </div>
-
-                        <div className="flex items-start gap-3 text-sm">
-                            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Trash2 className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div>
-                                <p className="font-medium text-slate-900">Nothing stored</p>
-                                <p className="text-slate-500 text-xs">Your code is analyzed in memory and immediately discarded</p>
-                            </div>
+                        <div className="flex flex-col items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                            <Trash2 className="w-5 h-5 text-slate-400" />
+                            <span className="text-[10px] font-medium text-slate-500">Ephemeral</span>
                         </div>
-
-                        <div className="flex items-start gap-3 text-sm">
-                            <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Shield className="w-4 h-4 text-purple-600" />
-                            </div>
-                            <div>
-                                <p className="font-medium text-slate-900">Secure & ephemeral</p>
-                                <p className="text-slate-500 text-xs">Token expires automatically. Revoke anytime in GitHub settings.</p>
-                            </div>
+                        <div className="flex flex-col items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                            <Lock className="w-5 h-5 text-slate-400" />
+                            <span className="text-[10px] font-medium text-slate-500">Secure</span>
                         </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="space-y-3">
+                    <div className="w-full space-y-3">
                         <button
                             onClick={onConnect}
                             disabled={isConnecting}
-                            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20"
+                            className="w-full py-3 bg-slate-900 hover:bg-black text-white text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
                         >
                             {isConnecting ? (
                                 <>
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                                     Connecting...
                                 </>
                             ) : (
-                                <>
-                                    <Github className="w-5 h-5" />
-                                    Connect GitHub
-                                </>
+                                'Authorize Access'
                             )}
                         </button>
 
                         <button
                             onClick={onCancel}
                             disabled={isConnecting}
-                            className="w-full py-3 text-slate-500 hover:text-slate-900 font-medium transition-colors"
+                            className="w-full py-2.5 text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors"
                         >
-                            Try a different repository
+                            Cancel
                         </button>
                     </div>
-                </div>
-
-                {/* Footer */}
-                <div className="px-8 py-4 bg-slate-50 border-t border-slate-100">
-                    <p className="text-xs text-slate-400 text-center">
-                        By connecting, you agree to our{' '}
-                        <a href="#" className="text-slate-600 hover:text-slate-900 underline">Privacy Policy</a>
-                    </p>
                 </div>
             </div>
         </div>
