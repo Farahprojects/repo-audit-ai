@@ -124,7 +124,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white pt-24 pb-12">
+      <div className="min-h-screen bg-white pt-32 pb-12">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-center py-20">
             <RefreshCw className="w-8 h-8 animate-spin text-slate-400" />
@@ -137,7 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
 
   if (error) {
     return (
-      <div className="min-h-screen bg-white pt-24 pb-12">
+      <div className="min-h-screen bg-white pt-32 pb-12">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-center py-20">
             <AlertCircle className="w-8 h-8 text-red-500" />

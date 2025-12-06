@@ -62,7 +62,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
   };
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col md:flex-row print:bg-white text-foreground font-sans pt-16">
+    <div className="min-h-screen bg-surface flex flex-col md:flex-row print:bg-white text-foreground font-sans pt-32">
 
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-background border-r border-border p-5 flex flex-col sticky top-16 h-[calc(100vh-4rem)] print:hidden z-20">

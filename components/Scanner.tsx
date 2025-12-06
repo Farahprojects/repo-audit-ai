@@ -13,7 +13,7 @@ const Scanner: React.FC<ScannerProps> = ({ logs, progress }) => {
   }, [logs]);
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 relative">
+    <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 relative pt-32">
       {/* Top Progress Bar */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-slate-100">
         <div 

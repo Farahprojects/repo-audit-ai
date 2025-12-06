@@ -16,7 +16,7 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze }) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-background pt-32 md:pt-0">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-background pt-32">
 
       {/* Subtle Background */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-100/50 via-background to-background -z-10"></div>
