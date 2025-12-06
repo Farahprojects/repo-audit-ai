@@ -1,5 +1,5 @@
 
-export type ViewState = 'landing' | 'pricing' | 'about' | 'contact' | 'preflight' | 'scanning' | 'report';
+export type ViewState = 'landing' | 'pricing' | 'about' | 'contact' | 'dashboard' | 'preflight' | 'scanning' | 'report';
 
 export type Severity = 'Critical' | 'Warning' | 'Info' | 'Clean';
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Github, Twitter, Linkedin, Shield } from 'lucide-react';
+import { Github, Twitter, Linkedin } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface FooterProps {
@@ -13,10 +13,12 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         <div className="grid md:grid-cols-4 gap-12 mb-16">
           
           <div className="col-span-1 md:col-span-1">
-            <div className="flex items-center gap-2 mb-6">
-              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                <Shield className="w-4 h-4 text-white" />
-              </div>
+            <div className="flex items-center gap-3 mb-6">
+              <img
+                src="/favicon-192x192.png"
+                alt="SCAI Logo"
+                className="w-8 h-8"
+              />
               <span className="text-slate-900 font-bold text-lg">SCAI</span>
             </div>
             <p className="text-slate-500 text-sm leading-relaxed mb-6">

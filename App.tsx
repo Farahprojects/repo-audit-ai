@@ -3,6 +3,7 @@ import Hero from './components/Hero';
 import PreflightModal from './components/PreflightModal';
 import Scanner from './components/Scanner';
 import ReportDashboard from './components/ReportDashboard';
+import Dashboard from './components/Dashboard';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Pricing from './components/Pricing';
@@ -10,7 +11,8 @@ import About from './components/About';
 import Contact from './components/Contact';
 import AuthModal from './components/AuthModal';
 import SEO from './components/SEO';
-import { ViewState, AuditStats, RepoReport } from './types';
+import { ViewState, AuditStats, RepoReport, Issue } from './types';
+import { Tables } from './src/integrations/supabase/types';
 import { generateAuditReport } from './services/geminiService';
 import { fetchRepoFiles, parseGitHubUrl } from './services/githubService';
 import { useAuth } from './hooks/useAuth';
@@ -21,6 +23,7 @@ const App: React.FC = () => {
   const [repoUrl, setRepoUrl] = useState('');
   const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
   const [reportData, setReportData] = useState<RepoReport | null>(null);
+  const [historicalReportData, setHistoricalReportData] = useState<RepoReport | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   
   // Real-time Scanner State
@@ -87,11 +90,37 @@ const App: React.FC = () => {
     setView('landing');
     setRepoUrl('');
     setReportData(null);
+    setHistoricalReportData(null);
+    setAuditStats(null);
     setScannerLogs([]);
     setScannerProgress(0);
   };
 
-  const isPublicPage = ['landing', 'pricing', 'about', 'contact', 'preflight'].includes(view);
+  const handleViewHistoricalReport = (audit: Tables<'audits'>) => {
+    const issues: Issue[] = Array.isArray(audit.issues) ? audit.issues : [];
+    const repoName = audit.repo_url.split('/').slice(-2).join('/'); // Extract owner/repo format
+
+    // Create basic stats if not available
+    const stats: AuditStats = {
+      files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
+      tokens: 'N/A',
+      language: 'Mixed',
+      languagePercent: 100
+    };
+
+    const report: RepoReport = {
+      repoName,
+      healthScore: audit.health_score || 0,
+      issues,
+      summary: audit.summary || 'No summary available',
+      stats
+    };
+
+    setHistoricalReportData(report);
+    setView('report');
+  };
+
+  const isPublicPage = ['landing', 'pricing', 'about', 'contact', 'preflight', 'dashboard', 'report'].includes(view);
 
   // SEO Strategy Configuration
   const getSEO = () => {
@@ -159,11 +188,14 @@ const App: React.FC = () => {
         return <About />;
       case 'contact':
         return <Contact />;
+      case 'dashboard':
+        return <Dashboard onNavigate={setView} onViewReport={handleViewHistoricalReport} />;
       case 'scanning':
         return <Scanner logs={scannerLogs} progress={scannerProgress} />;
       case 'report':
-        return reportData ? (
-          <ReportDashboard data={reportData} onRestart={handleRestart} />
+        const displayData = reportData || historicalReportData;
+        return displayData ? (
+          <ReportDashboard data={displayData} onRestart={handleRestart} />
         ) : null;
       default:
         return <Hero onAnalyze={handleAnalyze} />;

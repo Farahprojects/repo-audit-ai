@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Menu, X, User, LogOut } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Menu, X, User, LogOut, ChevronDown } from 'lucide-react';
 import { ViewState } from '../types';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -13,6 +13,8 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick, user, onSignOut }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isMenuOpen) {
@@ -25,11 +27,26 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
     };
   }, [isMenuOpen]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const navItems: { id: ViewState; label: string }[] = [
     { id: 'landing', label: 'Home' },
     { id: 'pricing', label: 'Pricing' },
     { id: 'about', label: 'Mission' },
     { id: 'contact', label: 'Contact' },
+  ];
+
+  const userNavItems: { id: ViewState; label: string; requiresAuth: boolean }[] = [
+    { id: 'dashboard', label: 'Dashboard', requiresAuth: true },
   ];
 
   const handleNavClick = (view: ViewState) => {
@@ -44,13 +61,15 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
         
         {/* Logo */}
-        <div 
+        <div
           onClick={() => handleNavClick('landing')}
-          className="flex items-center gap-2 cursor-pointer group z-50 relative"
+          className="flex items-center gap-3 cursor-pointer group z-50 relative"
         >
-          <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-105 transition-transform">
-            <Shield className="w-5 h-5 text-white" />
-          </div>
+          <img
+            src="/favicon-192x192.png"
+            alt="SCAI Logo"
+            className="w-8 h-8 group-hover:scale-105 transition-transform"
+          />
           <span className="text-slate-900 font-bold text-xl tracking-tight">SCAI</span>
         </div>
 
@@ -74,21 +93,44 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-4">
           {user ? (
-            <>
-              <div className="flex items-center gap-2 text-slate-600 text-sm">
-                <User className="w-4 h-4" />
-                <span className="font-medium truncate max-w-[150px]">{user.email}</span>
-              </div>
-              <button 
-                onClick={onSignOut}
-                className="text-slate-500 hover:text-slate-900 text-sm font-medium px-3 py-2 flex items-center gap-1.5"
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"
               >
-                <LogOut className="w-4 h-4" />
-                Sign out
+                <User className="w-4 h-4" />
+                <span className="font-medium truncate max-w-[120px]">{user.email}</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
-            </>
+
+              {isDropdownOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-2 z-50">
+                  <button
+                    onClick={() => {
+                      onNavigate('dashboard');
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <User className="w-4 h-4" />
+                    Dashboard
+                  </button>
+                  <div className="border-t border-slate-100 my-1"></div>
+                  <button
+                    onClick={() => {
+                      onSignOut();
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
-            <button 
+            <button
                onClick={onSignInClick}
                className="text-slate-600 hover:text-slate-900 text-sm font-medium px-4"
             >

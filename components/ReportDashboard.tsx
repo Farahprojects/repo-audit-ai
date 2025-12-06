@@ -63,13 +63,15 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart }) =>
       
       {/* Sidebar */}
       <aside className="w-full md:w-72 bg-white border-r border-slate-200 p-6 flex flex-col sticky top-0 h-auto md:h-screen print:hidden shadow-sm z-20">
-        <div 
+        <div
           onClick={onRestart}
-          className="text-xl font-bold text-slate-900 mb-10 flex items-center gap-2 cursor-pointer"
+          className="text-xl font-bold text-slate-900 mb-10 flex items-center gap-3 cursor-pointer"
         >
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-             <div className="w-3 h-3 bg-white rounded-full"></div>
-          </div>
+          <img
+            src="/favicon-192x192.png"
+            alt="SCAI Logo"
+            className="w-8 h-8"
+          />
           SCAI
         </div>
 
