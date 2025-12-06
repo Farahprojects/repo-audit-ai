@@ -16,9 +16,11 @@ import { Tables } from './src/integrations/supabase/types';
 import { generateAuditReport } from './services/geminiService';
 import { fetchRepoFiles, parseGitHubUrl } from './services/githubService';
 import { useAuth } from './hooks/useAuth';
+import { useGitHubAuth } from './hooks/useGitHubAuth';
 
 const App: React.FC = () => {
   const { user, signOut } = useAuth();
+  const { getGitHubToken } = useGitHubAuth();
   const [view, setView] = useState<ViewState>('landing');
   const [previousView, setPreviousView] = useState<ViewState>('landing'); // Track where user came from
   const [repoUrl, setRepoUrl] = useState('');
@@ -59,7 +61,9 @@ const App: React.FC = () => {
       await new Promise(r => setTimeout(r, 500));
 
       addLog(`[Network] Downloading source tree...`);
-      const fileContents = await fetchRepoFiles(repoInfo.owner, repoInfo.repo);
+      // Pass GitHub token for private repo access
+      const githubToken = getGitHubToken();
+      const fileContents = await fetchRepoFiles(repoInfo.owner, repoInfo.repo, githubToken || undefined);
 
       addLog(`[Success] Retrieved ${fileContents.length} critical source files.`);
       setScannerProgress(40);
@@ -173,17 +177,26 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (view) {
       case 'landing':
+        return <Hero onAnalyze={handleAnalyze} />;
       case 'preflight':
+        // If coming from report (upsell), show report in background
+        const BackgroundContent = previousView === 'report' && (reportData || historicalReportData)
+          ? <ReportDashboard
+            data={(reportData || historicalReportData)!}
+            onRestart={handleRestart}
+            // No-op for actions in background
+            onRunTier={() => { }}
+          />
+          : <Hero onAnalyze={handleAnalyze} />;
+
         return (
           <>
-            <Hero onAnalyze={handleAnalyze} />
-            {view === 'preflight' && (
-              <PreflightModal
-                repoUrl={repoUrl}
-                onConfirm={handleConfirmAudit}
-                onCancel={() => setView(previousView)}
-              />
-            )}
+            {BackgroundContent}
+            <PreflightModal
+              repoUrl={repoUrl}
+              onConfirm={handleConfirmAudit}
+              onCancel={() => setView(previousView)}
+            />
           </>
         );
       case 'pricing':

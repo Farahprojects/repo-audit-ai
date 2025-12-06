@@ -13,18 +13,19 @@ serve(async (req) => {
   }
 
   try {
-    const GITHUB_TOKEN = Deno.env.get('GITHUB_TOKEN');
-    if (!GITHUB_TOKEN) {
-      throw new Error('GITHUB_TOKEN is not configured');
-    }
-
-    const { owner, repo, branch, filePath, action } = await req.json();
+    const { owner, repo, branch, filePath, action, userToken } = await req.json();
 
     if (!owner || !repo) {
       return new Response(
         JSON.stringify({ error: 'Missing required parameters: owner and repo' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Prefer user's OAuth token for private repos, fallback to server token for public
+    const GITHUB_TOKEN = userToken || Deno.env.get('GITHUB_TOKEN');
+    if (!GITHUB_TOKEN) {
+      throw new Error('No GitHub token available. User token or GITHUB_TOKEN required.');
     }
 
     const headers = {
@@ -49,12 +50,12 @@ serve(async (req) => {
         if (remaining === '0') {
           return new Response(
             JSON.stringify({ error: 'GitHub API rate limit exceeded' }),
-            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         return new Response(
           JSON.stringify({ error: `Repository not found: ${repoRes.status}` }),
-          { status: repoRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -109,7 +110,7 @@ serve(async (req) => {
         console.error('GitHub file fetch error:', fileResponse.status, errorText);
         return new Response(
           JSON.stringify({ error: `Failed to fetch file: ${fileResponse.status}` }),
-          { status: fileResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -141,12 +142,12 @@ serve(async (req) => {
       if (remaining === '0') {
         return new Response(
           JSON.stringify({ error: 'GitHub API rate limit exceeded' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       return new Response(
         JSON.stringify({ error: `Repository not found: ${repoRes.status}` }),
-        { status: repoRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -168,13 +169,13 @@ serve(async (req) => {
       if (remaining === '0') {
         return new Response(
           JSON.stringify({ error: 'GitHub API rate limit exceeded. Please try again later.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
         JSON.stringify({ error: `Failed to fetch repository: ${treeResponse.status}` }),
-        { status: treeResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

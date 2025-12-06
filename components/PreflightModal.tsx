@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle, Zap, AlertTriangle, Lock, ArrowRight, Mail } from 'lucide-react';
 import { AuditStats } from '../types';
 import { parseGitHubUrl, fetchRepoStats } from '../services/githubService';
+import GitHubConnectModal from './GitHubConnectModal';
+import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
 interface PreflightModalProps {
   repoUrl: string;
@@ -9,39 +11,72 @@ interface PreflightModalProps {
   onCancel: () => void;
 }
 
-type ModalStep = 'analysis' | 'selection' | 'auth';
+type ModalStep = 'analysis' | 'selection' | 'auth' | 'github-connect';
 
 const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onCancel }) => {
   const [step, setStep] = useState<ModalStep>('analysis');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPrivateRepo, setIsPrivateRepo] = useState(false);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [selectedTier, setSelectedTier] = useState<'lite' | 'deep' | 'ultra'>('lite');
   const [email, setEmail] = useState('');
 
+  const { isGitHubConnected, getGitHubToken, signInWithGitHub, isConnecting } = useGitHubAuth();
+
+  const loadStats = async (token?: string) => {
+    setLoading(true);
+    setError(null);
+    setIsPrivateRepo(false);
+
+    const repoInfo = parseGitHubUrl(repoUrl);
+
+    if (!repoInfo) {
+      setError("Invalid GitHub URL format");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const data = await fetchRepoStats(repoInfo.owner, repoInfo.repo, token);
+      setStats(data);
+      setStep('selection');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+
+      // Check if this is a private repo error
+      if (message.startsWith('PRIVATE_REPO:')) {
+        setIsPrivateRepo(true);
+        setError(message.replace('PRIVATE_REPO:', ''));
+        setStep('github-connect');
+      } else {
+        setError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadStats = async () => {
-      const repoInfo = parseGitHubUrl(repoUrl);
-
-      if (!repoInfo) {
-        setError("Invalid GitHub URL format");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const data = await fetchRepoStats(repoInfo.owner, repoInfo.repo);
-        setStats(data);
-        setStep('selection');
-      } catch (err) {
-        setError("Could not access repository. It might be private.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadStats();
+    // On mount, try with existing GitHub token if connected
+    const token = getGitHubToken();
+    loadStats(token || undefined);
   }, [repoUrl]);
+
+  // After GitHub OAuth completes, retry with the new token
+  useEffect(() => {
+    if (isGitHubConnected && step === 'github-connect') {
+      const token = getGitHubToken();
+      if (token) {
+        loadStats(token);
+      }
+    }
+  }, [isGitHubConnected, step]);
+
+  const handleGitHubConnect = async () => {
+    // Store current URL to return after OAuth
+    await signInWithGitHub(window.location.href);
+  };
 
   const handleTierSelect = (tier: 'lite' | 'deep' | 'ultra') => {
     if (tier === 'lite') {
@@ -71,14 +106,27 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     );
   }
 
-  if (error) {
+  // GitHub Connect Modal for private repos
+  if (step === 'github-connect' && isPrivateRepo) {
+    return (
+      <GitHubConnectModal
+        repoUrl={repoUrl}
+        onConnect={handleGitHubConnect}
+        onCancel={onCancel}
+        isConnecting={isConnecting}
+      />
+    );
+  }
+
+  // Generic error (not private repo)
+  if (error && !isPrivateRepo) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
         <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Access Denied</h3>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">Unable to Access Repository</h3>
           <p className="text-slate-500 mb-8">{error}</p>
           <button
             onClick={onCancel}

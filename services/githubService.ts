@@ -23,11 +23,16 @@ export const parseGitHubUrl = (url: string): { owner: string; repo: string } | n
 
 /**
  * Fetch repository stats via Supabase github-proxy edge function
+ * @param accessToken - Optional GitHub OAuth token for private repos
  */
-export const fetchRepoStats = async (owner: string, repo: string): Promise<AuditStats> => {
+export const fetchRepoStats = async (
+  owner: string,
+  repo: string,
+  accessToken?: string
+): Promise<AuditStats> => {
   // Call github-proxy edge function
   const { data, error } = await supabase.functions.invoke('github-proxy', {
-    body: { owner, repo, action: 'stats' }
+    body: { owner, repo, action: 'stats', userToken: accessToken }
   });
 
   if (error) {
@@ -39,8 +44,9 @@ export const fetchRepoStats = async (owner: string, repo: string): Promise<Audit
     if (data.error.includes('rate limit')) {
       throw new Error('GitHub API rate limit exceeded. Please try again later.');
     }
-    if (data.error.includes('404')) {
-      throw new Error('Repository not found or private.');
+    // Detect private repo specifically
+    if (data.error.includes('404') || data.error.includes('Not Found')) {
+      throw new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
     }
     throw new Error(data.error);
   }
@@ -48,13 +54,19 @@ export const fetchRepoStats = async (owner: string, repo: string): Promise<Audit
   return data as AuditStats;
 };
 
+
 /**
  * Fetch repository files via Supabase github-proxy edge function
+ * @param accessToken - Optional GitHub OAuth token for private repos
  */
-export const fetchRepoFiles = async (owner: string, repo: string): Promise<FileContent[]> => {
+export const fetchRepoFiles = async (
+  owner: string,
+  repo: string,
+  accessToken?: string
+): Promise<FileContent[]> => {
   // Step 1: Get file tree
   const { data: treeData, error: treeError } = await supabase.functions.invoke('github-proxy', {
-    body: { owner, repo }
+    body: { owner, repo, userToken: accessToken }
   });
 
   if (treeError) {
@@ -99,7 +111,7 @@ export const fetchRepoFiles = async (owner: string, repo: string): Promise<FileC
   const contents = await Promise.all(filesToFetch.map(async (file: any) => {
     try {
       const { data: fileData, error: fileError } = await supabase.functions.invoke('github-proxy', {
-        body: { owner, repo, filePath: file.path }
+        body: { owner, repo, filePath: file.path, userToken: accessToken }
       });
 
       if (fileError || fileData?.error) {
