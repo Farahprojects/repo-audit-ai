@@ -52,6 +52,138 @@ export type Database = {
           },
         ]
       }
+      domain_slugs: {
+        Row: {
+          admin: boolean | null
+          billing: boolean | null
+          contact: boolean | null
+          created_at: string
+          dev: boolean | null
+          domain: string
+          hello: boolean | null
+          help: boolean | null
+          hr: boolean | null
+          id: string
+          info: boolean | null
+          legal: boolean | null
+          marketing: boolean | null
+          media: boolean | null
+          noreply: boolean | null
+          support: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          admin?: boolean | null
+          billing?: boolean | null
+          contact?: boolean | null
+          created_at?: string
+          dev?: boolean | null
+          domain: string
+          hello?: boolean | null
+          help?: boolean | null
+          hr?: boolean | null
+          id?: string
+          info?: boolean | null
+          legal?: boolean | null
+          marketing?: boolean | null
+          media?: boolean | null
+          noreply?: boolean | null
+          support?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          admin?: boolean | null
+          billing?: boolean | null
+          contact?: boolean | null
+          created_at?: string
+          dev?: boolean | null
+          domain?: string
+          hello?: boolean | null
+          help?: boolean | null
+          hr?: boolean | null
+          id?: string
+          info?: boolean | null
+          legal?: boolean | null
+          marketing?: boolean | null
+          media?: boolean | null
+          noreply?: boolean | null
+          support?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_messages: {
+        Row: {
+          body: string | null
+          created_at: string
+          direction: string
+          from_email: string
+          id: string
+          raw_headers: Json | null
+          subject: string | null
+          to_email: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          direction: string
+          from_email: string
+          id?: string
+          raw_headers?: Json | null
+          subject?: string | null
+          to_email: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          direction?: string
+          from_email?: string
+          id?: string
+          raw_headers?: Json | null
+          subject?: string | null
+          to_email?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_notification_templates: {
+        Row: {
+          body_html: string
+          body_text: string | null
+          created_at: string
+          description: string | null
+          from_email: string
+          id: string
+          name: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          body_html: string
+          body_text?: string | null
+          created_at?: string
+          description?: string | null
+          from_email: string
+          id?: string
+          name: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          body_html?: string
+          body_text?: string | null
+          created_at?: string
+          description?: string | null
+          from_email?: string
+          id?: string
+          name?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           converted: boolean
