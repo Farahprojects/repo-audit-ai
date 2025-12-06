@@ -15,8 +15,8 @@ const ENV = {
   GEMINI_MODEL: 'gemini-2.0-flash-exp',
 };
 
-// Tier credit costs (multi-agent uses more)
-const TIER_CREDITS: Record<string, number> = {
+// Default tier credit costs (fallback if DB fetch fails)
+const DEFAULT_TIER_CREDITS: Record<string, number> = {
   'shape': 2,
   'conventions': 4,
   'performance': 6,
@@ -158,9 +158,39 @@ function createChunks(
 }
 
 // ============================================================================
-// Worker Prompts
+// Fetch System Prompt from Database
 // ============================================================================
-const WORKER_BASE = `You are a WORKER AGENT in a multi-agent code audit system.
+interface SystemPrompt {
+  tier: string;
+  name: string;
+  prompt: string;
+  credit_cost: number;
+}
+
+async function fetchSystemPrompt(supabase: any, tier: string): Promise<SystemPrompt | null> {
+  try {
+    const { data, error } = await supabase
+      .from('system_prompts')
+      .select('tier, name, prompt, credit_cost')
+      .eq('tier', tier)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      console.error(`[DB] Failed to fetch prompt for tier "${tier}":`, error.message);
+      return null;
+    }
+
+    console.log(`✅ [DB] Loaded prompt for tier "${tier}" (${data.name})`);
+    return data;
+  } catch (e) {
+    console.error(`[DB] Error fetching prompt:`, e);
+    return null;
+  }
+}
+
+// Fallback prompts (used if DB fetch fails)
+const FALLBACK_WORKER_BASE = `You are a WORKER AGENT in a multi-agent code audit system.
 You are analyzing ONE CHUNK of a larger codebase.
 
 OUTPUT FORMAT (return ONLY valid JSON):
@@ -185,20 +215,20 @@ OUTPUT FORMAT (return ONLY valid JSON):
   "uncertainties": ["<things you couldn't determine from this chunk alone>"]
 }`;
 
-const TIER_PROMPTS: Record<string, string> = {
-  'shape': WORKER_BASE + `\n\n## FOCUS: STRUCTURAL SHAPE
+const FALLBACK_TIER_PROMPTS: Record<string, string> = {
+  'shape': FALLBACK_WORKER_BASE + `\n\n## FOCUS: STRUCTURAL SHAPE
 Check: folder organization, dependency hygiene, naming conventions, AI-generated indicators, red flags.
 Categories: maintainability | best-practices | security`,
 
-  'conventions': WORKER_BASE + `\n\n## FOCUS: SENIOR CRAFTSMANSHIP
+  'conventions': FALLBACK_WORKER_BASE + `\n\n## FOCUS: SENIOR CRAFTSMANSHIP
 Check: type safety, error handling, code organization, naming, documentation, performance awareness.
 Categories: maintainability | best-practices | performance | security`,
 
-  'performance': WORKER_BASE + `\n\n## FOCUS: PERFORMANCE DEEP DIVE
+  'performance': FALLBACK_WORKER_BASE + `\n\n## FOCUS: PERFORMANCE DEEP DIVE
 Check: N+1 patterns, React re-renders, memory leaks, async anti-patterns, bundle issues, AI sins.
 Category: performance`,
 
-  'security': WORKER_BASE + `\n\n## FOCUS: SECURITY VULNERABILITIES
+  'security': FALLBACK_WORKER_BASE + `\n\n## FOCUS: SECURITY VULNERABILITIES
 Check: auth/authz, RLS policies, input validation, secrets, data exposure, edge function security.
 Category: security. Include CWE references.`,
 };
@@ -333,11 +363,13 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
+    // Create supabase client for DB operations (used throughout)
+    const supabase = createClient(ENV.SUPABASE_URL!, ENV.SUPABASE_SERVICE_ROLE_KEY!);
+    
     // Auth
     const authHeader = req.headers.get('Authorization');
     let userId: string | null = null;
-    if (authHeader && ENV.SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY) {
-      const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
+    if (authHeader) {
       const token = authHeader.replace('Bearer ', '');
       const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id || null;
@@ -353,8 +385,17 @@ serve(async (req) => {
     }
 
     const selectedTier = tier.toLowerCase();
-    const creditCost = TIER_CREDITS[selectedTier] || 2;
-    const workerPrompt = TIER_PROMPTS[selectedTier] || TIER_PROMPTS['shape'];
+    
+    // Fetch prompt from database
+    const systemPromptData = await fetchSystemPrompt(supabase, selectedTier);
+    
+    // Use DB values or fallback
+    const workerPrompt = systemPromptData?.prompt || FALLBACK_TIER_PROMPTS[selectedTier] || FALLBACK_TIER_PROMPTS['shape'];
+    const creditCost = systemPromptData?.credit_cost || DEFAULT_TIER_CREDITS[selectedTier] || 2;
+    const tierName = systemPromptData?.name || selectedTier;
+
+    console.log(`📝 Using prompt: ${systemPromptData ? 'FROM DATABASE' : 'FALLBACK'} (${tierName})`);
+    console.log(`💳 Credit cost: ${creditCost}`);
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 MULTI-AGENT ${selectedTier.toUpperCase()} AUDIT`);
@@ -526,8 +567,7 @@ ${fileContext}`;
     }));
 
     // Save to DB - ALWAYS save audits (even without credits)
-    if (ENV.SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY) {
-      const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
+    {
       
       // Always save the audit with token count
       const { error: insertError } = await supabase.from('audits').insert({

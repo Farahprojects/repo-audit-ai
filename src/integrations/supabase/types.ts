@@ -244,6 +244,42 @@ export type Database = {
         }
         Relationships: []
       }
+      system_prompts: {
+        Row: {
+          created_at: string
+          credit_cost: number
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          prompt: string
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credit_cost?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          prompt: string
+          tier: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credit_cost?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          prompt?: string
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
