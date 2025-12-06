@@ -38,7 +38,7 @@ export function useGitHubAuth() {
                 provider: 'github',
                 options: {
                     scopes: 'repo read:org', // repo includes read access to private repos
-                    redirectTo: redirectTo || window.location.origin + window.location.pathname,
+                    redirectTo: redirectTo || `${window.location.origin}/`,
                 },
             });
 
