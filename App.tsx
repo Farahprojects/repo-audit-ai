@@ -67,7 +67,7 @@ const App: React.FC = () => {
 
       addLog(`[Network] Downloading source tree...`);
       // Pass GitHub token for private repo access
-      const githubToken = getGitHubToken();
+      const githubToken = await getGitHubToken();
       const fileContents = await fetchRepoFiles(repoInfo.owner, repoInfo.repo, githubToken || undefined);
 
       addLog(`[Success] Retrieved ${fileContents.length} critical source files.`);

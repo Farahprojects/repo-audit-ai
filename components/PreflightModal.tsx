@@ -59,18 +59,24 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
   useEffect(() => {
     // On mount, try with existing GitHub token if connected
-    const token = getGitHubToken();
-    loadStats(token || undefined);
+    const initLoad = async () => {
+      const token = await getGitHubToken();
+      loadStats(token || undefined);
+    };
+    initLoad();
   }, [repoUrl]);
 
   // After GitHub OAuth completes, retry with the new token
   useEffect(() => {
-    if (isGitHubConnected && step === 'github-connect') {
-      const token = getGitHubToken();
-      if (token) {
-        loadStats(token);
+    const retryWithToken = async () => {
+      if (isGitHubConnected && step === 'github-connect') {
+        const token = await getGitHubToken();
+        if (token) {
+          loadStats(token);
+        }
       }
-    }
+    };
+    retryWithToken();
   }, [isGitHubConnected, step]);
 
   const handleGitHubConnect = async () => {
