@@ -357,7 +357,15 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
             ) : (
               filteredIssues.map((issue) => (
                 <div key={issue.id} className="break-inside-avoid">
-                  <IssueCard issue={issue} />
+                  <IssueCard issue={{
+                    ...issue,
+                    // TODO: Remove this mock data after verification
+                    sections: issue.sections && issue.sections.length > 0 ? issue.sections : [
+                      { label: "Explanation", content: issue.description },
+                      { label: "Impact", content: "This is a mock impact section to verify the UI rendering of the new design blocks." },
+                      { label: "Recommendation", content: "This is a mock recommendation section." }
+                    ]
+                  }} />
                 </div>
               ))
             )}

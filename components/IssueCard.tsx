@@ -82,9 +82,24 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
       {expanded && (
         <div className="px-5 pb-5 pt-0 animate-slide-up">
           <div className="pl-8">
-            <p className="text-sm text-slate-600 leading-relaxed max-w-3xl mb-6">
-              {issue.description}
-            </p>
+            {issue.sections && issue.sections.length > 0 ? (
+              <div className="space-y-6 mb-6">
+                {issue.sections.map((section, idx) => (
+                  <div key={idx}>
+                    <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      {section.label}
+                    </h5>
+                    <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
+                      {section.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600 leading-relaxed max-w-3xl mb-6">
+                {issue.description}
+              </p>
+            )}
 
             <div className="rounded-lg overflow-hidden border border-slate-200 bg-slate-900 shadow-sm">
               {/* Minimal Toolbar */}
@@ -93,8 +108,8 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                   <button
                     onClick={() => setShowFix(false)}
                     className={`px-3 py-1 text-[11px] font-medium rounded-md transition-all ${!showFix
-                        ? 'bg-slate-700 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
                       }`}
                   >
                     Original
@@ -102,8 +117,8 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                   <button
                     onClick={() => setShowFix(true)}
                     className={`px-3 py-1 text-[11px] font-medium rounded-md transition-all flex items-center gap-1.5 ${showFix
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
                       }`}
                   >
                     Fix <Wand2 className="w-3 h-3" />

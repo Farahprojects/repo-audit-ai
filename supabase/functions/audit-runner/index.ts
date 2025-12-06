@@ -187,7 +187,7 @@ async function fetchSystemPrompt(supabase: any, tier: string): Promise<SystemPro
 // ============================================================================
 async function callCoordinator(workerFindings: any[], tier: string, repoUrl: string): Promise<any> {
   console.log(`🎯 Calling Coordinator to synthesize ${workerFindings.length} worker findings...`);
-  
+
   const SYNTHESIS_PROMPT = `You are the COORDINATOR AGENT synthesizing a multi-agent code audit.
 
 Worker agents have analyzed different chunks of this codebase. Your job is to generate a COMPREHENSIVE, SENIOR-LEVEL audit report.
@@ -314,7 +314,7 @@ serve(async (req) => {
 
     // Create supabase client for DB operations (used throughout)
     const supabase = createClient(ENV.SUPABASE_URL!, ENV.SUPABASE_SERVICE_ROLE_KEY!);
-    
+
     // Auth
     const authHeader = req.headers.get('Authorization');
     let userId: string | null = null;
@@ -334,7 +334,7 @@ serve(async (req) => {
     }
 
     const selectedTier = tier.toLowerCase();
-    
+
     // Validate tier
     if (!VALID_TIERS.includes(selectedTier)) {
       return new Response(
@@ -342,10 +342,10 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     // Fetch prompt from database (fail fast if not found)
     const systemPromptData = await fetchSystemPrompt(supabase, selectedTier);
-    
+
     const workerPrompt = systemPromptData.prompt;
     const creditCost = systemPromptData.credit_cost;
     const tierName = systemPromptData.name;
@@ -362,7 +362,7 @@ serve(async (req) => {
     // Step 1: Create chunks for parallel processing
     const chunks = createChunks(files);
     const isMultiChunk = chunks.length > 1;
-    
+
     console.log(`\n🤖 AGENT DISPATCH:`);
     chunks.forEach((chunk, i) => {
       console.log(`   Worker ${i + 1}: ${chunk.name} (${chunk.files.length} files, ${chunk.totalTokens.toLocaleString()} tokens)`);
@@ -373,7 +373,7 @@ serve(async (req) => {
     const workerPromises = chunks.map(async (chunk, index) => {
       const startTime = Date.now();
       console.log(`⚡ [Worker ${index + 1}/${chunks.length}] Starting analysis of "${chunk.name}"...`);
-      
+
       const fileContext = chunk.files
         .map(f => `--- ${f.path} ---\n${f.content}`)
         .join('\n\n');
@@ -485,7 +485,7 @@ ${fileContext}`;
       healthScore = Math.round(avgScore);
       healthScore -= Math.min(crossFileFlags.length * 2, 10); // Cross-file penalty
       healthScore = Math.max(0, Math.min(100, healthScore));
-      
+
       summary = `Multi-agent analysis across ${chunks.length} code regions found ${allIssues.length} issues. ` +
         `Health score: ${healthScore}/100. ` +
         (allIssues.filter(i => i.severity === 'critical').length > 0
@@ -520,11 +520,12 @@ ${fileContext}`;
       lineNumber: issue.line || 0,
       badCode: issue.badCode || '',
       fixedCode: issue.fixedCode || '',
+      sections: issue.sections || [],
     }));
 
     // Save to DB - ALWAYS save audits (even without credits)
     {
-      
+
       // Always save the audit with token count
       const { error: insertError } = await supabase.from('audits').insert({
         user_id: userId, // can be null for anonymous users
@@ -534,13 +535,13 @@ ${fileContext}`;
         issues: issues,
         total_tokens: totalTokens,
       });
-      
+
       if (insertError) {
         console.error(`❌ Failed to save audit:`, insertError);
       } else {
         console.log(`💾 Audit saved (${totalTokens.toLocaleString()} tokens)`);
       }
-      
+
       // Deduct credits separately (only if user is authenticated and has credits)
       if (userId) {
         const { data: profile } = await supabase

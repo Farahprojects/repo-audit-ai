@@ -5,6 +5,11 @@ export type Severity = 'Critical' | 'Warning' | 'Info' | 'Clean';
 
 export type Category = 'Security' | 'Performance' | 'Architecture';
 
+export interface IssueSection {
+  label: string;
+  content: string;
+}
+
 export interface Issue {
   id: string;
   title: string;
@@ -15,6 +20,7 @@ export interface Issue {
   lineNumber: number;
   badCode: string;
   fixedCode: string;
+  sections?: IssueSection[];
 }
 
 export interface AuditStats {
