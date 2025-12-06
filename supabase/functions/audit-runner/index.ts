@@ -499,28 +499,43 @@ ${fileContext}`;
       fixedCode: issue.fixedCode || '',
     }));
 
-    // Save to DB
-    if (userId && ENV.SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY) {
+    // Save to DB - ALWAYS save audits (even without credits)
+    if (ENV.SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY) {
       const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('credits')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (profile && profile.credits >= creditCost) {
-        await supabase.from('audits').insert({
-          user_id: userId,
-          repo_url: repoUrl,
-          health_score: healthScore,
-          summary: summary,
-          issues: issues,
-        });
-        await supabase
+      
+      // Always save the audit with token count
+      const { error: insertError } = await supabase.from('audits').insert({
+        user_id: userId, // can be null for anonymous users
+        repo_url: repoUrl,
+        health_score: healthScore,
+        summary: summary,
+        issues: issues,
+        total_tokens: totalTokens,
+      });
+      
+      if (insertError) {
+        console.error(`❌ Failed to save audit:`, insertError);
+      } else {
+        console.log(`💾 Audit saved (${totalTokens.toLocaleString()} tokens)`);
+      }
+      
+      // Deduct credits separately (only if user is authenticated and has credits)
+      if (userId) {
+        const { data: profile } = await supabase
           .from('profiles')
-          .update({ credits: profile.credits - creditCost })
-          .eq('id', userId);
-        console.log(`💾 Saved to DB, credits: ${profile.credits} → ${profile.credits - creditCost}`);
+          .select('credits')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (profile && profile.credits >= creditCost) {
+          await supabase
+            .from('profiles')
+            .update({ credits: profile.credits - creditCost })
+            .eq('id', userId);
+          console.log(`💳 Credits deducted: ${profile.credits} → ${profile.credits - creditCost}`);
+        } else {
+          console.log(`⚠️ Insufficient credits (has: ${profile?.credits || 0}, needs: ${creditCost})`);
+        }
       }
     }
 
@@ -536,6 +551,7 @@ ${fileContext}`;
         healthScore,
         summary,
         issues,
+        totalTokens, // Top-level token count for easy access
         filesAnalyzed: files.length,
         tier: selectedTier,
         // Multi-agent metadata
