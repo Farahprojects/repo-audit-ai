@@ -22,7 +22,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   useEffect(() => {
     const loadStats = async () => {
       const repoInfo = parseGitHubUrl(repoUrl);
-      
+
       if (!repoInfo) {
         setError("Invalid GitHub URL format");
         setLoading(false);
@@ -63,38 +63,38 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-xl">
         <div className="flex flex-col items-center">
-            <div className="w-16 h-16 border-4 border-slate-100 border-t-primary rounded-full animate-spin mb-6"></div>
-            <p className="text-slate-900 font-bold text-lg">Scanning Structure...</p>
-            <p className="text-slate-500 text-sm">Fetching manifest files</p>
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-primary rounded-full animate-spin mb-6"></div>
+          <p className="text-slate-900 font-bold text-lg">Scanning Structure...</p>
+          <p className="text-slate-500 text-sm">Fetching manifest files</p>
         </div>
       </div>
     );
   }
 
   if (error) {
-     return (
-       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
-            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-8 h-8 text-red-500" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Access Denied</h3>
-            <p className="text-slate-500 mb-8">{error}</p>
-            <button 
-              onClick={onCancel}
-              className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-medium transition-colors shadow-lg"
-            >
-              Try Another Repo
-            </button>
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
+        <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
-       </div>
-     );
+          <h3 className="text-xl font-bold text-slate-900 mb-2">Access Denied</h3>
+          <p className="text-slate-500 mb-8">{error}</p>
+          <button
+            onClick={onCancel}
+            className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-medium transition-colors shadow-lg"
+          >
+            Try Another Repo
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/10 backdrop-blur-lg p-4 animate-in fade-in zoom-in duration-300">
       <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl shadow-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-        
+
         {/* Header */}
         <div className="bg-slate-50 p-6 md:p-8 flex justify-between items-center border-b border-slate-100">
           <div>
@@ -128,50 +128,63 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
         {/* Content Area */}
         <div className="p-8 md:p-10 flex-1 overflow-y-auto bg-white">
-          
+
           {step === 'selection' && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
               <h3 className="text-slate-900 text-center mb-10 text-xl font-semibold">Select Audit Depth</h3>
-              <div className="grid md:grid-cols-3 gap-6">
-                
-                {/* Lite Tier */}
-                <div className="border border-slate-200 rounded-3xl p-6 hover:border-slate-300 transition-all flex flex-col items-center text-center">
-                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full mb-4">FREE</span>
-                  <h4 className="text-lg font-bold text-slate-900 mb-2">Quick Scan</h4>
-                  <p className="text-sm text-slate-500 mb-8 flex-1">Basic manifest check for known CVEs.</p>
-                  <button 
+              <div className="grid md:grid-cols-4 gap-4">
+
+                {/* Tier 1: Shape Check (Free) */}
+                <div className="border border-slate-200 rounded-3xl p-5 hover:border-slate-300 transition-all flex flex-col items-center text-center">
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mb-4">FREE</span>
+                  <h4 className="text-lg font-bold text-slate-900 mb-2">Shape Check</h4>
+                  <p className="text-sm text-slate-500 mb-6 flex-1">Repo structure, folder hygiene, missing files.</p>
+                  <button
                     onClick={() => handleTierSelect('lite')}
                     className="w-full py-3 border border-slate-200 text-slate-600 rounded-full hover:bg-slate-50 font-medium transition-colors"
                   >
-                    Run Lite
+                    Run Free
                   </button>
                 </div>
 
-                {/* Deep Tier */}
-                <div className="border-2 border-primary bg-white rounded-3xl p-6 relative shadow-xl shadow-primary/10 flex flex-col items-center text-center scale-105 z-10">
-                  <div className="absolute -top-3 bg-primary text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
-                    RECOMMENDED
+                {/* Tier 2: Conventions Check */}
+                <div className="border-2 border-primary bg-white rounded-3xl p-5 relative shadow-xl shadow-primary/10 flex flex-col items-center text-center scale-[1.02] z-10">
+                  <div className="absolute -top-3 bg-primary text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                    POPULAR
                   </div>
-                  <h4 className="text-lg font-bold text-slate-900 mb-2 mt-2">Senior Audit</h4>
-                  <p className="text-sm text-slate-500 mb-8 flex-1">Deep analysis of logic, architecture, and performance.</p>
-                  <button 
+                  <h4 className="text-lg font-bold text-slate-900 mb-2 mt-2">Senior Check</h4>
+                  <p className="text-sm text-slate-500 mb-6 flex-1">Craftsmanship, types, tests, docs.</p>
+                  <button
                     onClick={() => handleTierSelect('deep')}
                     className="w-full py-3 bg-primary text-white font-bold rounded-full hover:bg-blue-600 transition-colors shadow-lg shadow-primary/25"
                   >
-                    Run Deep Audit
+                    Run Deep
                   </button>
                 </div>
 
-                {/* Ultra Tier */}
-                <div className="border border-slate-200 rounded-3xl p-6 hover:border-purple-200 transition-all flex flex-col items-center text-center group">
-                  <span className="text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-full mb-4 group-hover:bg-purple-100 transition-colors">PRO</span>
-                  <h4 className="text-lg font-bold text-slate-900 mb-2">CTO Grade</h4>
-                  <p className="text-sm text-slate-500 mb-8 flex-1">Cross-file logic analysis with fix PRs.</p>
-                  <button 
-                    onClick={() => handleTierSelect('ultra')}
+                {/* Tier 3: Performance Check */}
+                <div className="border border-slate-200 rounded-3xl p-5 hover:border-orange-200 transition-all flex flex-col items-center text-center group">
+                  <span className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full mb-4 group-hover:bg-orange-100 transition-colors">PRO</span>
+                  <h4 className="text-lg font-bold text-slate-900 mb-2">Perf Audit</h4>
+                  <p className="text-sm text-slate-500 mb-6 flex-1">N+1, leaks, re-renders, AI sins.</p>
+                  <button
+                    onClick={() => onConfirm('performance' as any, stats!)}
                     className="w-full py-3 border border-slate-200 text-slate-600 rounded-full hover:bg-slate-50 font-medium transition-colors"
                   >
-                    Run Ultra
+                    Run Perf
+                  </button>
+                </div>
+
+                {/* Tier 4: Security Audit */}
+                <div className="border border-slate-200 rounded-3xl p-5 hover:border-red-200 transition-all flex flex-col items-center text-center group">
+                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full mb-4 group-hover:bg-red-100 transition-colors">PREMIUM</span>
+                  <h4 className="text-lg font-bold text-slate-900 mb-2">Security</h4>
+                  <p className="text-sm text-slate-500 mb-6 flex-1">RLS, secrets, auth, vulnerabilities.</p>
+                  <button
+                    onClick={() => handleTierSelect('ultra')}
+                    className="w-full py-3 border border-red-200 text-red-600 rounded-full hover:bg-red-50 font-bold transition-colors"
+                  >
+                    Run Security
                   </button>
                 </div>
 
@@ -181,42 +194,42 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
           {step === 'auth' && (
             <div className="max-w-md mx-auto animate-in fade-in slide-in-from-right-4 duration-300 text-center">
-               <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                 <Lock className="w-8 h-8 text-primary" />
-               </div>
-               <h3 className="text-2xl font-bold text-slate-900 mb-3">Unlock Report</h3>
-               <p className="text-slate-500 mb-8">
-                 We need your email to securely deliver the 
-                 <span className="text-slate-900 font-bold"> {selectedTier === 'deep' ? 'Senior' : 'CTO'} Audit</span> results.
-               </p>
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Lock className="w-8 h-8 text-primary" />
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-3">Unlock Report</h3>
+              <p className="text-slate-500 mb-8">
+                We need your email to securely deliver the
+                <span className="text-slate-900 font-bold"> {selectedTier === 'deep' ? 'Senior' : 'CTO'} Audit</span> results.
+              </p>
 
-               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                 <div className="relative">
-                   <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
-                   <input 
-                      type="email" 
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="work@company.com"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-full py-3 pl-12 pr-6 text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                   />
-                 </div>
-                 
-                 <button 
-                   type="submit" 
-                   className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-                 >
-                   Start Agents <ArrowRight className="w-4 h-4" />
-                 </button>
-               </form>
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                <div className="relative">
+                  <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="work@company.com"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-full py-3 pl-12 pr-6 text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  />
+                </div>
 
-               <button 
-                 onClick={() => setStep('selection')}
-                 className="mt-6 text-slate-400 hover:text-slate-600 text-sm font-medium transition-colors"
-               >
-                 Back to plans
-               </button>
+                <button
+                  type="submit"
+                  className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+                >
+                  Start Agents <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+
+              <button
+                onClick={() => setStep('selection')}
+                className="mt-6 text-slate-400 hover:text-slate-600 text-sm font-medium transition-colors"
+              >
+                Back to plans
+              </button>
             </div>
           )}
 
