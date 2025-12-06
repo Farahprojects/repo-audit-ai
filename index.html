@@ -43,22 +43,84 @@
         theme: {
           extend: {
             colors: {
-              background: '#ffffff', 
-              surface: '#f8fafc', // slate-50
-              border: '#e2e8f0', // slate-200
-              primary: '#2563eb', // Blue-600
-              critical: '#ef4444', // Red-500
-              warning: '#f59e0b', // Amber-500
-              success: '#10b981', // Emerald-500
-              foreground: '#0f172a', // Slate-900
+              background: '#ffffff',
+              foreground: '#0a0a0a', // Almost black, softer than #000
+              surface: '#fafafa',    // Very light gray for backgrounds
+              
+              // Neutral Scale (Vercel-ish)
+              slate: {
+                50: '#fafafa',
+                100: '#f5f5f5',
+                200: '#e5e5e5',
+                300: '#d4d4d4',
+                400: '#a3a3a3',
+                500: '#737373',
+                600: '#525252',
+                700: '#404040',
+                800: '#262626',
+                900: '#171717',
+                950: '#0a0a0a',
+              },
+
+              // Semantic Mapping
+              border: '#e5e5e5',
+              'border-hover': '#a3a3a3',
+              
+              primary: {
+                DEFAULT: '#000000',
+                foreground: '#ffffff',
+                hover: '#333333',
+              },
+              
+              secondary: {
+                DEFAULT: '#ffffff',
+                foreground: '#000000',
+                border: '#e5e5e5',
+                hover: '#fafafa',
+              },
+
+              // Functional Colors
+              success: '#0070f3', // Vercel Blue (using as success/info primary)
+              warning: '#f5a623',
+              error: '#e00000',   // Sharp Red
             },
             fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+              sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+              mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', 'monospace'],
+            },
+            letterSpacing: {
+              tighter: '-0.04em',
+              tight: '-0.02em',
+              normal: '-0.01em',
+              wide: '0.02em',
             },
             borderRadius: {
-              '4xl': '2rem',
-              '5xl': '2.5rem',
+              lg: '0.5rem',    // 8px
+              xl: '0.75rem',   // 12px
+              '2xl': '1rem',   // 16px
+            },
+            boxShadow: {
+              'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+              'sm': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+              'md': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+              'lg': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+              'xl': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              'card': '0 0 0 1px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
+              'card-hover': '0 0 0 1px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.08)',
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-out',
+              'slide-up': 'slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(10px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              }
             }
           },
         },
@@ -67,7 +129,7 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <!-- PrismJS for Code Highlighting -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
@@ -95,37 +157,56 @@
     </script>
 
     <style>
+      :root {
+        --selection-color: #0070f3; /* Vercel Blue */
+      }
+      
       body {
         background-color: #ffffff;
-        color: #0f172a;
-        font-family: 'Inter', sans-serif;
+        color: #0a0a0a;
+        font-family: 'Inter', -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
       }
-      /* Custom scrollbar */
+
+      /* Selection */
+      ::selection {
+        background-color: var(--selection-color);
+        color: white;
+      }
+      
+      /* Custom scrollbar - Minimal */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
       }
       ::-webkit-scrollbar-track {
-        background: #f1f5f9;
+        background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
+        background: #e5e5e5;
+        border: 2px solid #ffffff; /* Gives it a floating look */
         border-radius: 99px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
+        background: #a3a3a3;
       }
+
       .code-font {
         font-family: 'JetBrains Mono', monospace;
       }
-      /* Keep code blocks dark for contrast */
+
+      /* Prism Overrides - Clean & Flat */
       pre[class*="language-"] {
-        background: #0f172a !important;
+        background: #0a0a0a !important; /* Match foreground950 */
         text-shadow: none !important;
-        border: none !important;
+        border: 1px solid #262626 !important;
         margin: 0 !important;
-        padding: 0 !important;
-        border-radius: 1rem !important;
+        padding: 1rem !important;
+        border-radius: 0.75rem !important; /* xl */
+        font-size: 0.875rem !important;
+        line-height: 1.5 !important;
       }
       code[class*="language-"] {
         font-family: 'JetBrains Mono', monospace !important;

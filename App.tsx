@@ -100,7 +100,8 @@ const App: React.FC = () => {
   };
 
   const handleViewHistoricalReport = (audit: Tables<'audits'>) => {
-    const issues: Issue[] = Array.isArray(audit.issues) ? audit.issues : [];
+    // Explicitly cast the JSON data to the Issue[] type
+    const issues = (audit.issues as unknown as Issue[]) || [];
     const repoName = audit.repo_url.split('/').slice(-2).join('/'); // Extract owner/repo format
 
     // Create basic stats if not available
@@ -225,7 +226,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="bg-background min-h-screen text-slate-900 font-sans selection:bg-primary/20 selection:text-primary">
+    <div className="bg-background min-h-screen text-foreground font-sans antialiased tracking-tight">
       <SEO
         title={seoData.title}
         description={seoData.description}

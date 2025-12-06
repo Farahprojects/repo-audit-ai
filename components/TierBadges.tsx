@@ -148,65 +148,55 @@ export const TierUpsellPanel: React.FC<TierUpsellPanelProps> = ({
 
     if (unlockedTiers.length === 0) {
         return (
-            <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
-                <div className="flex items-center gap-2 text-emerald-700 font-semibold text-sm">
-                    <Check className="w-4 h-4" />
-                    All Audits Complete
+            <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-100/50 flex flex-col items-center text-center">
+                <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center mb-2">
+                    <Check className="w-4 h-4 text-emerald-600" />
                 </div>
-                <p className="text-xs text-emerald-600 mt-1">
-                    You've unlocked all insights for this repo.
-                </p>
+                <p className="text-xs font-medium text-emerald-900">All Audits Complete</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                Unlock More Insights
-            </h4>
+        <div className="bg-gradient-to-b from-slate-50 to-white rounded-xl p-4 border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 bg-slate-900 rounded-md flex items-center justify-center">
+                    <Lock className="w-3 h-3 text-white" />
+                </div>
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    Available Upgrades
+                </h4>
+            </div>
+
             <div className="space-y-2">
                 {TIERS.map((tier) => {
                     const isCompleted = completedTiers.includes(tier.id);
+                    // Don't show completed tiers in the upsell list to reduce noise, 
+                    // or show them very subtly. Let's hide them to be "intuitive" and focus on what's next.
+                    if (isCompleted) return null;
+
                     const Icon = tier.icon;
-
                     return (
-                        <div
+                        <button
                             key={tier.id}
-                            className={`
-                flex items-center justify-between p-3 rounded-xl
-                ${isCompleted
-                                    ? `${tier.bgColor} ${tier.borderColor} border`
-                                    : 'bg-white border border-slate-200'}
-              `}
+                            onClick={() => onRunTier(tier.id)}
+                            className="w-full group flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs transition-all text-left"
                         >
-                            <div className="flex items-center gap-2">
-                                {isCompleted ? (
-                                    <Check className={`w-4 h-4 ${tier.color}`} />
-                                ) : (
-                                    <Icon className="w-4 h-4 text-slate-400" />
-                                )}
-                                <span className={`text-sm font-medium ${isCompleted ? tier.color : 'text-slate-700'}`}>
-                                    {tier.shortName}
-                                </span>
+                            <div className="flex items-center gap-2.5">
+                                <Icon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                                <div>
+                                    <div className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">
+                                        {tier.shortName}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-medium">
+                                        {tier.price === 'Free' ? 'Free Check' : `Unlock for ${tier.price}`}
+                                    </div>
+                                </div>
                             </div>
-
-                            {isCompleted ? (
-                                <span className={`text-xs ${tier.color}`}>Done</span>
-                            ) : (
-                                <button
-                                    onClick={() => onRunTier(tier.id)}
-                                    className={`
-                    text-xs font-semibold px-3 py-1.5 rounded-full
-                    ${tier.id === 'shape'
-                                            ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                                            : 'bg-slate-900 text-white hover:bg-slate-800'}
-                  `}
-                                >
-                                    {tier.price === 'Free' ? 'Run Free' : `Run ${tier.price}`}
-                                </button>
-                            )}
-                        </div>
+                            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white transition-colors">
+                                <TrendingUp className="w-3 h-3" />
+                            </div>
+                        </button>
                     );
                 })}
             </div>
