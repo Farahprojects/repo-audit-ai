@@ -15,13 +15,8 @@ const ENV = {
   GEMINI_MODEL: 'gemini-2.0-flash-exp',
 };
 
-// Default tier credit costs (fallback if DB fetch fails)
-const DEFAULT_TIER_CREDITS: Record<string, number> = {
-  'shape': 2,
-  'conventions': 4,
-  'performance': 6,
-  'security': 10,
-};
+// Valid tiers for validation
+const VALID_TIERS = ['shape', 'conventions', 'performance', 'security'];
 
 // Token estimation: ~4 chars per token
 function estimateTokens(content: string): number {
@@ -167,71 +162,25 @@ interface SystemPrompt {
   credit_cost: number;
 }
 
-async function fetchSystemPrompt(supabase: any, tier: string): Promise<SystemPrompt | null> {
-  try {
-    const { data, error } = await supabase
-      .from('system_prompts')
-      .select('tier, name, prompt, credit_cost')
-      .eq('tier', tier)
-      .eq('is_active', true)
-      .single();
+async function fetchSystemPrompt(supabase: any, tier: string): Promise<SystemPrompt> {
+  const { data, error } = await supabase
+    .from('system_prompts')
+    .select('tier, name, prompt, credit_cost')
+    .eq('tier', tier)
+    .eq('is_active', true)
+    .single();
 
-    if (error) {
-      console.error(`[DB] Failed to fetch prompt for tier "${tier}":`, error.message);
-      return null;
-    }
-
-    console.log(`✅ [DB] Loaded prompt for tier "${tier}" (${data.name})`);
-    return data;
-  } catch (e) {
-    console.error(`[DB] Error fetching prompt:`, e);
-    return null;
+  if (error) {
+    throw new Error(`Failed to fetch system prompt for tier "${tier}": ${error.message}`);
   }
+
+  if (!data) {
+    throw new Error(`No active system prompt found for tier "${tier}"`);
+  }
+
+  console.log(`✅ [DB] Loaded prompt for tier "${tier}" (${data.name})`);
+  return data;
 }
-
-// Fallback prompts (used if DB fetch fails)
-const FALLBACK_WORKER_BASE = `You are a WORKER AGENT in a multi-agent code audit system.
-You are analyzing ONE CHUNK of a larger codebase.
-
-OUTPUT FORMAT (return ONLY valid JSON):
-{
-  "localScore": <number 0-100>,
-  "confidence": <number 0.0-1.0>,
-  "issues": [
-    {
-      "id": "<unique_id>",
-      "severity": "critical" | "warning" | "info",
-      "category": "<category>",
-      "title": "<short title>",
-      "description": "<detailed finding>",
-      "file": "<file path>",
-      "line": <line number or null>,
-      "badCode": "<problematic code snippet if applicable>",
-      "fixedCode": "<corrected code if applicable>",
-      "suggestion": "<actionable fix>"
-    }
-  ],
-  "crossFileFlags": ["<dependency or concern that affects other chunks>"],
-  "uncertainties": ["<things you couldn't determine from this chunk alone>"]
-}`;
-
-const FALLBACK_TIER_PROMPTS: Record<string, string> = {
-  'shape': FALLBACK_WORKER_BASE + `\n\n## FOCUS: STRUCTURAL SHAPE
-Check: folder organization, dependency hygiene, naming conventions, AI-generated indicators, red flags.
-Categories: maintainability | best-practices | security`,
-
-  'conventions': FALLBACK_WORKER_BASE + `\n\n## FOCUS: SENIOR CRAFTSMANSHIP
-Check: type safety, error handling, code organization, naming, documentation, performance awareness.
-Categories: maintainability | best-practices | performance | security`,
-
-  'performance': FALLBACK_WORKER_BASE + `\n\n## FOCUS: PERFORMANCE DEEP DIVE
-Check: N+1 patterns, React re-renders, memory leaks, async anti-patterns, bundle issues, AI sins.
-Category: performance`,
-
-  'security': FALLBACK_WORKER_BASE + `\n\n## FOCUS: SECURITY VULNERABILITIES
-Check: auth/authz, RLS policies, input validation, secrets, data exposure, edge function security.
-Category: security. Include CWE references.`,
-};
 
 // ============================================================================
 // Coordinator Synthesis (for multi-chunk repos)
@@ -386,15 +335,22 @@ serve(async (req) => {
 
     const selectedTier = tier.toLowerCase();
     
-    // Fetch prompt from database
+    // Validate tier
+    if (!VALID_TIERS.includes(selectedTier)) {
+      return new Response(
+        JSON.stringify({ error: `Invalid tier "${selectedTier}". Valid tiers: ${VALID_TIERS.join(', ')}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Fetch prompt from database (fail fast if not found)
     const systemPromptData = await fetchSystemPrompt(supabase, selectedTier);
     
-    // Use DB values or fallback
-    const workerPrompt = systemPromptData?.prompt || FALLBACK_TIER_PROMPTS[selectedTier] || FALLBACK_TIER_PROMPTS['shape'];
-    const creditCost = systemPromptData?.credit_cost || DEFAULT_TIER_CREDITS[selectedTier] || 2;
-    const tierName = systemPromptData?.name || selectedTier;
+    const workerPrompt = systemPromptData.prompt;
+    const creditCost = systemPromptData.credit_cost;
+    const tierName = systemPromptData.name;
 
-    console.log(`📝 Using prompt: ${systemPromptData ? 'FROM DATABASE' : 'FALLBACK'} (${tierName})`);
+    console.log(`📝 Using prompt from DB: ${tierName}`);
     console.log(`💳 Credit cost: ${creditCost}`);
 
     console.log(`\n${'='.repeat(60)}`);
