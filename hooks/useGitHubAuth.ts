@@ -37,11 +37,11 @@ export function useGitHubAuth() {
         if (!session?.user?.id) return;
 
         try {
-            const { data, error } = await supabase
-                .from('github_accounts')
+            const { data, error } = await (supabase
+                .from('github_accounts' as any)
                 .select('*')
                 .eq('user_id', session.user.id)
-                .single();
+                .single() as unknown as Promise<{ data: GitHubAccount | null; error: any }>);
 
             if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
                 console.error('Error fetching GitHub account:', error);
@@ -52,7 +52,7 @@ export function useGitHubAuth() {
                 setState(prev => ({
                     ...prev,
                     isConnected: true,
-                    account: data,
+                    account: data as GitHubAccount,
                 }));
             } else {
                 setState(prev => ({
@@ -205,10 +205,10 @@ export function useGitHubAuth() {
         }
 
         try {
-            const { error } = await supabase
-                .from('github_accounts')
+            const { error } = await (supabase
+                .from('github_accounts' as any)
                 .delete()
-                .eq('user_id', state.account.user_id);
+                .eq('user_id', state.account.user_id) as unknown as Promise<{ error: any }>);
 
             if (error) {
                 console.error('Failed to disconnect GitHub account:', error);

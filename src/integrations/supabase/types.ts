@@ -187,6 +187,42 @@ export type Database = {
         }
         Relationships: []
       }
+      github_accounts: {
+        Row: {
+          access_token_encrypted: string
+          avatar_url: string | null
+          created_at: string | null
+          github_user_id: number
+          html_url: string | null
+          id: string
+          login: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          avatar_url?: string | null
+          created_at?: string | null
+          github_user_id: number
+          html_url?: string | null
+          id?: string
+          login: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          avatar_url?: string | null
+          created_at?: string | null
+          github_user_id?: number
+          html_url?: string | null
+          id?: string
+          login?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           converted: boolean
@@ -211,6 +247,30 @@ export type Database = {
           id?: string
           repo_scanned?: string | null
           tier_interest?: string | null
+        }
+        Relationships: []
+      }
+      oauth_csrf_states: {
+        Row: {
+          created_at: string | null
+          expires_at: string
+          id: string
+          state_token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          state_token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          state_token?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -285,7 +345,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_oauth_csrf_states: { Args: never; Returns: number }
     }
     Enums: {
       [_ in never]: never
