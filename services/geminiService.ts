@@ -45,25 +45,19 @@ export const generateAuditReport = async (
     healthScore: data.healthScore,
     summary: data.summary,
     issues: data.issues,
+    // Enhanced report fields from coordinator
+    topStrengths: data.topStrengths,
+    topIssues: data.topIssues,
+    suspiciousFiles: data.suspiciousFiles,
+    categoryAssessments: data.categoryAssessments,
+    seniorDeveloperAssessment: data.seniorDeveloperAssessment,
+    overallVerdict: data.overallVerdict,
+    productionReady: data.productionReady,
+    riskLevel: data.riskLevel,
     // Include tier-specific metadata
     tierData: {
       tier: data.tier,
-      maturityAssessment: data.maturityAssessment,
-      topStrengths: data.topStrengths,
-      topIssues: data.topIssues,
-      craftGrade: data.craftGrade,
-      seniorSignals: data.seniorSignals,
-      productionReady: data.productionReady,
-      productionSafe: data.productionSafe,
-      riskLevel: data.riskLevel,
-      topPerformanceRisks: data.topPerformanceRisks,
-      aiAntiPatterns: data.aiAntiPatterns,
-      topVulnerabilities: data.topVulnerabilities,
-      exposedSecrets: data.exposedSecrets,
-      rlsProblems: data.rlsProblems,
-      // Multi-agent specific data
       multiAgent: data.multiAgent,
-      additionalInsights: data.additionalInsights,
     }
   };
 };

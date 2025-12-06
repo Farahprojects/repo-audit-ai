@@ -211,37 +211,62 @@ async function callCoordinator(workerFindings: any[], tier: string, repoUrl: str
   
   const SYNTHESIS_PROMPT = `You are the COORDINATOR AGENT synthesizing a multi-agent code audit.
 
-Worker agents have analyzed different chunks of this codebase.
-Your job is to:
-1. Review all worker findings
-2. Resolve any conflicts or contradictions
-3. Generate a unified executive summary
-4. Assign a final health score (0-100)
+Worker agents have analyzed different chunks of this codebase. Your job is to generate a COMPREHENSIVE, SENIOR-LEVEL audit report.
 
-Consider:
-- Weight scores by chunk size and confidence
-- Critical issues should heavily impact the final score
-- Cross-file flags indicate systemic issues
-- Uncertainties should add slight negative bias
-
-Return ONLY valid JSON:
+Return ONLY valid JSON with this EXACT structure:
 {
   "healthScore": <number 0-100>,
-  "summary": "<2-3 sentence executive summary covering all workers>",
-  "topStrengths": ["<strength 1>", "<strength 2>", ...],
-  "topIssues": ["<issue 1>", "<issue 2>", ...],
-  "conflictsResolved": ["<any contradictions you resolved>"],
-  "additionalInsights": ["<patterns visible only across chunks>"],
+  "summary": "<2-3 sentence executive summary that sounds like a senior developer wrote it>",
+  
+  "topStrengths": [
+    {"title": "<strength name>", "detail": "<1-2 sentence explanation>"}
+  ],
+  
+  "topIssues": [
+    {"title": "<issue name>", "detail": "<1-2 sentence explanation>"}
+  ],
+  
+  "suspiciousFiles": {
+    "present": ["<files that exist but are concerning - with brief reason>"],
+    "missing": ["<expected files that are missing - like .env.example, README, etc>"]
+  },
+  
+  "categoryAssessments": {
+    "architecture": "<1-2 sentence assessment of folder structure and organization>",
+    "codeQuality": "<1-2 sentence assessment of TypeScript usage, patterns, readability>",
+    "security": "<1-2 sentence assessment of auth, RLS, secrets, vulnerabilities>",
+    "dependencies": "<1-2 sentence assessment of package.json, outdated/vulnerable deps>",
+    "database": "<1-2 sentence assessment of schema, migrations, data modeling>",
+    "documentation": "<1-2 sentence assessment of README, comments, docs>",
+    "deployment": "<1-2 sentence assessment of build setup, CI/CD, hosting config>",
+    "maintenance": "<1-2 sentence assessment of code debt, TODOs, test coverage>"
+  },
+  
+  "seniorDeveloperAssessment": {
+    "isSeniorLevel": <boolean - does this look like senior-level work?>,
+    "justification": "<2-3 sentences explaining why this is/isn't senior-level code>"
+  },
+  
+  "overallVerdict": "<3-4 sentence closing statement summarizing the repo's production-readiness and key recommendations>",
   "productionReady": <boolean>,
-  "riskLevel": "<critical|high|medium|low>"
-}`;
+  "riskLevel": "critical" | "high" | "medium" | "low"
+}
+
+GUIDELINES:
+- Be specific and actionable, not generic
+- Reference actual patterns/files from the worker findings
+- topStrengths should have 3-5 items highlighting genuinely good practices
+- topIssues should have 3-5 items focusing on the most impactful problems
+- For small/simple repos, it's OK to have fewer items
+- The seniorDeveloperAssessment should be honest - junior code is OK, just explain why
+- Health score: 90+ exceptional, 80+ professional, 70+ acceptable, 60+ needs work, <60 concerning`;
 
   // Build findings summary for coordinator
   const findingsSummary = workerFindings.map((f: any) => `
 ## Chunk: ${f.chunkName} (${f.tokensAnalyzed.toLocaleString()} tokens)
 - Local Score: ${f.localScore}/100 (confidence: ${f.confidence})
 - Issues Found: ${f.issues?.length || 0}
-${f.issues?.slice(0, 5).map((i: any) => `  - [${i.severity}] ${i.title}`).join('\n') || '  None'}
+${f.issues?.slice(0, 8).map((i: any) => `  - [${i.severity}] ${i.title}: ${i.description?.slice(0, 100) || ''}`).join('\n') || '  None'}
 - Cross-File Flags: ${f.crossFileFlags?.join(', ') || 'None'}
 - Uncertainties: ${f.uncertainties?.join(', ') || 'None'}
 `).join('\n');
@@ -249,11 +274,12 @@ ${f.issues?.slice(0, 5).map((i: any) => `  - [${i.severity}] ${i.title}`).join('
   const userPrompt = `Repository: ${repoUrl}
 Audit Tier: ${tier}
 Total Chunks Analyzed: ${workerFindings.length}
+Total Issues Across Workers: ${workerFindings.reduce((sum: number, f: any) => sum + (f.issues?.length || 0), 0)}
 
 WORKER FINDINGS:
 ${findingsSummary}
 
-Generate the final synthesis.`;
+Generate the comprehensive audit report.`;
 
   try {
     const geminiResponse = await fetch(
@@ -270,7 +296,7 @@ Generate the final synthesis.`;
           ],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 4096,
+            maxOutputTokens: 8192,
           }
         })
       }
@@ -286,7 +312,7 @@ Generate the final synthesis.`;
     responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
     const result = JSON.parse(responseText);
-    console.log(`✅ Coordinator synthesis complete: healthScore=${result.healthScore}, riskLevel=${result.riskLevel}`);
+    console.log(`✅ Coordinator synthesis complete: healthScore=${result.healthScore}, riskLevel=${result.riskLevel}, seniorLevel=${result.seniorDeveloperAssessment?.isSeniorLevel}`);
     return result;
   } catch (e) {
     console.error('[Coordinator] Error:', e);
@@ -574,7 +600,10 @@ ${fileContext}`;
         ...(coordinatorInsights ? {
           topStrengths: coordinatorInsights.topStrengths,
           topIssues: coordinatorInsights.topIssues,
-          additionalInsights: coordinatorInsights.additionalInsights,
+          suspiciousFiles: coordinatorInsights.suspiciousFiles,
+          categoryAssessments: coordinatorInsights.categoryAssessments,
+          seniorDeveloperAssessment: coordinatorInsights.seniorDeveloperAssessment,
+          overallVerdict: coordinatorInsights.overallVerdict,
           productionReady: coordinatorInsights.productionReady,
           riskLevel: coordinatorInsights.riskLevel,
         } : {}),
