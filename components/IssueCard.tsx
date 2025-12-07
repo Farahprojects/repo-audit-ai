@@ -31,7 +31,23 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
   const handleCopyPrompt = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const prompt = `Fix this issue: ${issue.title}\n\n${issue.description}\n\nFile: ${issue.filePath}:${issue.lineNumber}\n\nCode Context:\n${issue.badCode}\n\nmore ai please issue and look for others that have similar pattens or something like that`;
+
+    // Build prompt dynamically to avoid empty fields
+    let prompt = `Fix this issue: ${issue.title}\n\n${issue.description}`;
+
+    // Only add file info if it points to a specific location
+    if (issue.filePath && issue.filePath !== 'Repository-wide') {
+      prompt += `\n\nFile: ${issue.filePath}:${issue.lineNumber}`;
+    }
+
+    // Only add code context if valid code exists
+    if (issue.badCode && issue.badCode.trim().length > 0) {
+      prompt += `\n\nCode Context:\n${issue.badCode}`;
+    }
+
+    // The User's "Signature Move" (Polished)
+    prompt += `\n\nPlease fix this issue. Also, analyze the codebase for similar patterns or occurrences of this anti-pattern.`;
+
     navigator.clipboard.writeText(prompt);
     setPromptCopied(true);
     setTimeout(() => setPromptCopied(false), 2000);
@@ -91,98 +107,31 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
       {expanded && (
         <div className="px-5 pb-5 pt-0 animate-slide-up">
           <div className="pl-8">
-            {issue.sections && issue.sections.length > 0 ? (
-              <div className="space-y-6 mb-6">
-                {issue.sections.map((section, idx) => (
-                  <div key={idx}>
-                    <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                      {section.label}
-                    </h5>
-                    <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-                      {section.content}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-600 leading-relaxed max-w-3xl mb-6">
-                {issue.description}
-              </p>
-            )}
+            <p className="text-sm text-slate-600 leading-relaxed max-w-3xl mb-6">
+              {issue.description}
+            </p>
 
-            <div className="rounded-lg overflow-hidden border border-slate-200 bg-slate-900 shadow-sm">
-              {/* Minimal Toolbar */}
-              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-950/50">
-                <div className="flex gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
-                  <button
-                    onClick={() => setShowFix(false)}
-                    className={`px-3 py-1 text-[11px] font-medium rounded-md transition-all ${!showFix
-                      ? 'bg-slate-700 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                  >
-                    Original
-                  </button>
-                  <button
-                    onClick={() => setShowFix(true)}
-                    className={`px-3 py-1 text-[11px] font-medium rounded-md transition-all flex items-center gap-1.5 ${showFix
-                      ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                  >
-                    Fix <Wand2 className="w-3 h-3" />
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 select-none hidden sm:block">
-                    {showFix ? 'Proposed Change' : 'Current State'}
-                  </span>
-
-                  {/* Copy for AI Button */}
-                  <button
-                    onClick={handleCopyPrompt}
-                    className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium rounded-md transition-all border ${promptCopied
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : 'text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-800 border-transparent hover:border-slate-700'
-                      }`}
-                    title="Copy Prompt for Cursor/Windsurf"
-                  >
-                    {promptCopied ? <Check className="w-3 h-3" /> : <Wand2 className="w-3 h-3" />}
-                    <span className="hidden sm:inline">{promptCopied ? 'Copied Workflow' : 'Copy for AI'}</span>
-                  </button>
-
-                  <div className="w-px h-3 bg-slate-800 mx-1"></div>
-
-                  <button
-                    onClick={handleCopy}
-                    className="p-1.5 text-slate-500 hover:text-white transition-colors rounded-md hover:bg-slate-800"
-                    title="Copy Code Only"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Code Area */}
-              <div className="relative bg-slate-950">
-                <div className="p-4 text-xs overflow-x-auto font-mono leading-relaxed custom-scrollbar">
-                  <pre style={{ margin: 0, padding: 0, background: 'transparent' }}>
-                    <code ref={codeRef} className="language-typescript text-slate-200">
-                      {showFix ? issue.fixedCode : issue.badCode}
-                    </code>
-                  </pre>
-                </div>
-              </div>
+            <div className="flex items-center gap-3 mt-4 border-t border-slate-100 pt-4">
+              {/* Copy for AI Button - Standalone */}
+              <button
+                onClick={handleCopyPrompt}
+                className={`group flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all border ${promptCopied
+                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-500/30 hover:bg-emerald-50/30 hover:text-emerald-700 hover:shadow-sm'
+                  }`}
+                title="Copy Prompt for Cursor/Windsurf"
+              >
+                {promptCopied ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <Wand2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition-colors" />
+                )}
+                <span>{promptCopied ? 'Copied Workflow' : 'Copy for AI'}</span>
+              </button>
             </div>
 
             {/* AI Context / Reasoning (Optional Polish) */}
-            {showFix && (
-              <div className="mt-3 flex items-start gap-2 text-xs text-emerald-700 bg-emerald-50/50 p-2.5 rounded-lg border border-emerald-100/50">
-                <Wand2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                <span>AI suggests this fix to resolve the {issue.severity.toLowerCase()} issue. Always review before applying.</span>
-              </div>
-            )}
+
 
           </div>
         </div>
