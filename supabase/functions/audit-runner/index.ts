@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Import Agents
+import { runPlanner } from '../_shared/agents/planner.ts';
 import { runScanner } from '../_shared/agents/scanner.ts';
 import { runExpander } from '../_shared/agents/expander.ts';
 import { runCorrelator } from '../_shared/agents/correlator.ts';
