@@ -116,8 +116,7 @@ serve(async (req) => {
       health_score: finalReport.healthScore || risks.securityScore || 0,
       summary: finalReport.summary,
       issues: dbIssues,
-      total_tokens: scanResult.metadata?.totalTokens || 0, // Approx
-      architecture_map: archMap, // Save the rich data too!
+      total_tokens: scanResult.metadata?.totalTokens || 0,
     });
 
     if (insertError) {
