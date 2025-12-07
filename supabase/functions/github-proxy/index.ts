@@ -116,20 +116,18 @@ serve(async (req) => {
       }
     }
 
-    // Fallback to server token for public repos only
-    if (!GITHUB_TOKEN) {
-      GITHUB_TOKEN = Deno.env.get('GITHUB_TOKEN');
-    }
-
-    if (!GITHUB_TOKEN) {
-      throw new Error('No GitHub token available. Please connect your GitHub account or provide a user token.');
-    }
-
-    const headers = {
-      'Authorization': `Bearer ${GITHUB_TOKEN}`,
+    // Prepare headers - only include Authorization if we have a token
+    const headers: Record<string, string> = {
       'Accept': 'application/vnd.github.v3+json',
       'User-Agent': 'SCAI'
     };
+
+    if (GITHUB_TOKEN) {
+      headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+      console.log('🔑 [github-proxy] Using authenticated request with user token');
+    } else {
+      console.log('🌐 [github-proxy] Making unauthenticated request (public repo access)');
+    }
 
     // =========================================================================
     // ACTION: stats - Fetch repository metadata and stats
