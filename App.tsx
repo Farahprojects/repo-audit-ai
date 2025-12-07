@@ -43,10 +43,14 @@ const App: React.FC = () => {
 
   // Supabase SDK handles OAuth callback automatically via onAuthStateChange in useAuth hook
 
-  // Close auth modal when user logs in (e.g., after OAuth redirect)
+  // Close auth modal and navigate to dashboard when user logs in
   useEffect(() => {
     if (user) {
       setIsAuthOpen(false);
+      // Navigate to dashboard if on landing page
+      if (view === 'landing') {
+        setView('dashboard');
+      }
     }
   }, [user]);
 
