@@ -192,14 +192,15 @@ export const fetchRepoFiles = async (
   const sourceFiles = allFiles.filter((f: any) =>
     (f.path.includes('src/') || f.path.includes('lib/') || f.path.includes('app/') || f.path.includes('components/') || f.path.includes('pages/')) &&
     (f.path.endsWith('.ts') || f.path.endsWith('.tsx') || f.path.endsWith('.js') || f.path.endsWith('.jsx') || f.path.endsWith('.py'))
-  ).slice(0, 10);
+  );
 
   // Supabase/Edge functions
   const supabaseFiles = allFiles.filter((f: any) =>
     f.path.includes('supabase/') && f.path.endsWith('.ts')
-  ).slice(0, 5);
+  );
 
-  const filesToFetch = [...configFiles, ...sourceFiles, ...supabaseFiles].slice(0, 15);
+  // Combine (UNLEASHED: No limits)
+  const filesToFetch = [...configFiles, ...sourceFiles, ...supabaseFiles];
 
   // Step 3: Fetch file contents via proxy
   const contents = await Promise.all(filesToFetch.map(async (file: any) => {
