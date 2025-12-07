@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RepoReport } from '../types';
-import { CATEGORIES } from '../constants';
+import { AUDIT_TYPES, CATEGORIES } from '../constants';
 import IssueCard from './IssueCard';
 import { Download, Share2, GitBranch, Check, FileText, Star, AlertTriangle, User, FileQuestion, Shield, Zap, Database, FileCode, Rocket, Wrench, FolderTree, ChevronRight } from 'lucide-react';
 import { TierUpsellPanel, AuditTier } from './TierBadges';
@@ -14,6 +14,7 @@ interface ReportDashboardProps {
 
 const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRunTier, completedTiers = [] }) => {
   const [activeCategory, setActiveCategory] = useState<string>('Overview');
+  const currentAuditType = data.tier || 'shape';
   const [copied, setCopied] = useState(false);
 
   const filteredIssues = activeCategory === 'Overview'
@@ -85,27 +86,43 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-background border-r border-border p-5 flex flex-col sticky top-16 h-[calc(100vh-4rem)] print:hidden z-20">
         <nav className="space-y-1 flex-1 mt-2">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${activeCategory === cat.id
-                ? 'bg-slate-100 text-foreground font-medium'
-                : 'text-slate-500 hover:text-foreground hover:bg-slate-50/80 font-normal'
+          <div className="text-xs font-semibold text-slate-500 mb-3 px-3">Audit Types</div>
+          {AUDIT_TYPES.map((auditType) => {
+            const isCompleted = completedTiers?.includes(auditType.id);
+            const isCurrent = data.tier === auditType.id;
+
+            return (
+              <button
+                key={auditType.id}
+                onClick={() => setActiveCategory(auditType.id)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
+                  auditType.id === currentAuditType
+                    ? 'bg-slate-100 text-foreground font-medium ring-1 ring-slate-200'
+                    : 'text-slate-500 hover:text-foreground hover:bg-slate-50/80 font-normal'
                 }`}
-            >
-              <div className="flex items-center gap-3">
-                <cat.icon className={`w-4 h-4 ${activeCategory === cat.id ? 'text-foreground' : 'text-slate-400'}`} />
-                {cat.label}
-              </div>
-              {cat.id !== 'Overview' && getCount(cat.id) > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${activeCategory === cat.id ? 'bg-white text-foreground shadow-sm ring-1 ring-slate-200' : 'text-slate-400'
-                  }`}>
-                  {getCount(cat.id)}
-                </span>
-              )}
-            </button>
-          ))}
+              >
+                <div className="flex items-center gap-3">
+                  <auditType.icon className={`w-4 h-4 ${auditType.id === currentAuditType ? 'text-foreground' : 'text-slate-400'}`} />
+                  <div className="flex flex-col items-start">
+                    <span>{auditType.label}</span>
+                    <span className="text-[10px] text-slate-400">{auditType.credits} credits</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {completedTiers?.includes(auditType.id) && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                      ✓
+                    </span>
+                  )}
+                  {!completedTiers?.includes(auditType.id) && auditType.id !== currentAuditType && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
+                      Not run
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </nav>
 
         <div className="mt-auto pt-6 border-t border-border space-y-6">
