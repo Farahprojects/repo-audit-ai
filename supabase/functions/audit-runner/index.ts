@@ -4,13 +4,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Import Agents
+// Import Agents
 import { runPlanner } from '../_shared/agents/planner.ts';
-import { runScanner } from '../_shared/agents/scanner.ts';
-import { runExpander } from '../_shared/agents/expander.ts';
-import { runCorrelator } from '../_shared/agents/correlator.ts';
-import { runEnricher } from '../_shared/agents/enricher.ts';
+import { runWorker } from '../_shared/agents/worker.ts';
 import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
-import { AuditContext } from '../_shared/agents/types.ts';
+import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -94,44 +92,42 @@ serve(async (req) => {
     console.log(`🗺️ File Map Size: ${files.length} entries`);
     console.log(`${'='.repeat(60)}\n`);
 
-    // --- PIPELINE EXECUTION ---
+    // --- SWARM PIPELINE EXECUTION ---
 
-    // 0. Pass Zero: Planner (The CEO)
-    // Decides effectively which files are relevant for this specific Audit Tier
+    // 1. MAP PHASE: The Planner (CEO)
     const { result: plan, usage: plannerUsage } = await runPlanner(context, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log(`🧠 CEO Plan: Focus on ${plan.focusArea}`);
-    console.log(`   Scanner Targets: ${plan.scannerTargets.length} files`);
-    console.log(`   Expander Targets: ${plan.expanderTargets.length} files`);
+    console.log(`🧠 Swarm Plan: ${plan.tasks.length} tasks. Focus: ${plan.focusArea}`);
 
-    // 1. Pass One: Scanner (The Scout)
-    // Scanner now receives the Map and decides what to fetch? 
-    // For V1 of this refactor, let's have the Scanner fetch the "Top 50" files by default to build the base map.
-    // Or better: The Scanner *Refines* the map. 
+    // 2. WORKER PHASE: The Swarm (Parallel Execution)
     const timeStart = Date.now();
-    const { result: scanResult, usage: scanUsage } = await runScanner(context, ENV.GEMINI_API_KEY, tierPrompt, plan.scannerTargets);
-    console.log(`✅ Pass 1 (Scanner) Complete. Keys: ${Object.keys(scanResult || {}).join(', ')}`);
-    if (!scanResult?.fileMap) console.warn('⚠️ Pass 1 Warning: No fileMap returned');
+    console.log(`🚀 Spawning ${plan.tasks.length} workers...`);
 
-    // ... rest of pipeline ...
+    const workerPromises = plan.tasks.map(async (task) => {
+      return runWorker(context, task, ENV.GEMINI_API_KEY);
+    });
 
-    // 2. Pass Two: Expander
-    const { result: archMap, usage: expanderUsage } = await runExpander(context, scanResult, ENV.GEMINI_API_KEY, tierPrompt, plan.expanderTargets);
-    console.log(`✅ Pass 2 (Expander) Complete. Keys: ${Object.keys(archMap || {}).join(', ')}`);
+    const workerOutputs = await Promise.all(workerPromises);
 
-    // 3. Pass Three: Correlator
-    const { result: correlation, usage: correlatorUsage } = await runCorrelator(context, archMap, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log(`✅ Pass 3 (Correlator) Complete. Issues Found: ${correlation?.potentialIssues?.length || 0}`);
+    // Aggregate Results & Token Usage
+    const swarmResults: WorkerResult[] = [];
+    let swarmTokenUsage = 0;
 
-    // 4. Pass Four: Enricher
-    const { result: risks, usage: enricherUsage } = await runEnricher(context, correlation, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log(`✅ Pass 4 (Enricher) Complete. Findings: ${risks?.findings?.length || 0}`);
+    workerOutputs.forEach(out => {
+      swarmResults.push(out.result);
+      swarmTokenUsage += out.usage.totalTokens;
+    });
 
-    // 5. Pass Five: Synthesizer
-    const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, risks, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log(`✅ Pass 5 (Synthesizer) Complete. Final Issues: ${finalReport?.issues?.length || 0}`);
+    console.log(`✅ Swarm Complete. Collected ${swarmResults.length} findings.`);
 
-    const totalTime = ((Date.now() - timeStart) / 1000).toFixed(1);
-    console.log(`🏁 Pipeline finished in ${totalTime}s`);
+    // 3. REDUCE PHASE: The Synthesizer (Editor)
+    const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, swarmResults, ENV.GEMINI_API_KEY, tierPrompt);
+    console.log(`📝 Final Report Generated. Health Score: ${finalReport.healthScore}`);
+
+    const timeEnd = Date.now();
+    const durationMs = timeEnd - timeStart;
+
+    // Total Tokens
+    const totalTokens = (plannerUsage?.totalTokens || 0) + swarmTokenUsage + (synthesizerUsage?.totalTokens || 0);
 
     // --- SAVE TO DB ---
 
@@ -140,7 +136,7 @@ serve(async (req) => {
     // We use the "issues" from finalReport which are filtered/prioritised
 
     // Fallback: If Synthesizer dropped everything, maybe rely on Enricher?
-    const rawIssues = (finalReport?.issues && finalReport.issues.length > 0) ? finalReport.issues : (risks?.findings || []);
+    const rawIssues = (finalReport?.issues && finalReport.issues.length > 0) ? finalReport.issues : (swarmResults || []);
 
     const dbIssues = rawIssues.map((issue: any, index: number) => ({
       id: issue.id || `issue-${index}`,
@@ -155,18 +151,17 @@ serve(async (req) => {
       cwe: issue.cwe
     }));
 
+
     console.log(`💾 Saving ${dbIssues.length} issues to DB...`);
 
-    const totalTokens = (plannerUsage?.totalTokens || 0) + (scanUsage?.totalTokens || 0) + (expanderUsage?.totalTokens || 0) +
-      (correlatorUsage?.totalTokens || 0) + (enricherUsage?.totalTokens || 0) +
-      (synthesizerUsage?.totalTokens || 0);
+    const totalTokens = (plannerUsage?.totalTokens || 0) + swarmTokenUsage + (synthesizerUsage?.totalTokens || 0);
 
     console.log(`💰 Total Tokens Used: ${totalTokens}`);
 
     const { error: insertError } = await supabase.from('audits').insert({
       user_id: userId,
       repo_url: repoUrl,
-      health_score: finalReport?.healthScore || risks?.securityScore || 0,
+      health_score: finalReport?.healthScore || 0,
       summary: finalReport?.summary || "No summary generated.",
       issues: dbIssues,
       total_tokens: totalTokens,
@@ -187,9 +182,8 @@ serve(async (req) => {
         riskLevel: finalReport.riskLevel,
         productionReady: finalReport.productionReady,
         meta: {
-          scan: scanResult,
-          architecture: archMap,
-          correlation: correlation,
+          planValues: plan,
+          swarmCount: swarmResults.length,
           duration: totalTime
         }
       }),

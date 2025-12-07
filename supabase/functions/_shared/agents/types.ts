@@ -3,6 +3,7 @@ export interface FileNode {
     type: 'file' | 'directory';
     size?: number;
     content?: string;
+    url?: string;
     language?: string;
 }
 
@@ -72,6 +73,26 @@ export interface RiskAssessment {
         remediation?: string;
         cwe?: string;
     }[];
+}
+
+// --- SWARM ARCHITECTURE TYPES ---
+
+export interface WorkerTask {
+    id: string;
+    role: string; // e.g. "Security Specialist", "Database Auditor"
+    instruction: string; // "Check RLS policies in schema.sql"
+    targetFiles: string[]; // List of file paths to fetch
+}
+
+export interface WorkerResult {
+    taskId: string;
+    findings: string; // Raw text/JSON analysis from the worker
+    tokenUsage: number;
+}
+
+export interface SwarmPlan {
+    tasks: WorkerTask[];
+    focusArea: string;
 }
 
 // Pass 5: Synthesis Output (Final Report)
