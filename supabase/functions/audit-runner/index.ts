@@ -52,6 +52,20 @@ serve(async (req) => {
       );
     }
 
+    // Fetch the tierPrompt from the database
+    const { data: promptData, error: promptError } = await supabase
+      .from('system_prompts')
+      .select('prompt')
+      .eq('tier', tier)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (promptError || !promptData) {
+      throw new Error(`Failed to load prompt for tier: ${tier}`);
+    }
+
+    const tierPrompt = promptData.prompt;
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 STARTING 5-PASS MAGIC ANALYSIS`);
     console.log(`📁 Repo: ${repoUrl}`);
@@ -69,23 +83,23 @@ serve(async (req) => {
 
     // 1. Pass One: Scanner
     const timeStart = Date.now();
-    const scanResult = await runScanner(context, ENV.GEMINI_API_KEY);
+    const { result: scanResult, usage: scanUsage } = await runScanner(context, ENV.GEMINI_API_KEY, tierPrompt);
     console.log('✅ Pass 1 (Scanner) Complete');
 
     // 2. Pass Two: Expander
-    const archMap = await runExpander(context, scanResult, ENV.GEMINI_API_KEY);
+    const { result: archMap, usage: expanderUsage } = await runExpander(context, scanResult, ENV.GEMINI_API_KEY, tierPrompt);
     console.log('✅ Pass 2 (Expander) Complete');
 
     // 3. Pass Three: Correlator
-    const correlation = await runCorrelator(context, archMap, ENV.GEMINI_API_KEY);
+    const { result: correlation, usage: correlatorUsage } = await runCorrelator(context, archMap, ENV.GEMINI_API_KEY, tierPrompt);
     console.log('✅ Pass 3 (Correlator) Complete');
 
     // 4. Pass Four: Enricher
-    const risks = await runEnricher(context, correlation, ENV.GEMINI_API_KEY);
+    const { result: risks, usage: enricherUsage } = await runEnricher(context, correlation, ENV.GEMINI_API_KEY, tierPrompt);
     console.log('✅ Pass 4 (Enricher) Complete');
 
-    // 5. Pass Five: Synthesis
-    const finalReport = await runSynthesizer(context, risks, ENV.GEMINI_API_KEY);
+    // 5. Pass Five: Synthesizer
+    const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, risks, ENV.GEMINI_API_KEY, tierPrompt);
     console.log('✅ Pass 5 (Synthesizer) Complete');
 
     const totalTime = ((Date.now() - timeStart) / 1000).toFixed(1);
@@ -110,13 +124,17 @@ serve(async (req) => {
       cwe: issue.cwe
     }));
 
+    const totalTokens = (scanUsage?.totalTokens || 0) + (expanderUsage?.totalTokens || 0) +
+                        (correlatorUsage?.totalTokens || 0) + (enricherUsage?.totalTokens || 0) +
+                        (synthesizerUsage?.totalTokens || 0);
+
     const { error: insertError } = await supabase.from('audits').insert({
       user_id: userId,
       repo_url: repoUrl,
       health_score: finalReport.healthScore || risks.securityScore || 0,
       summary: finalReport.summary,
       issues: dbIssues,
-      total_tokens: scanResult.metadata?.totalTokens || 0, // Approx
+      total_tokens: totalTokens,
       architecture_map: archMap, // Save the rich data too!
     });
 
