@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Lock, Zap, Shield, TrendingUp, Layers } from 'lucide-react';
+import { Check, Play, Zap, Shield, ChevronRight, Layers } from 'lucide-react';
 
 export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security';
 
@@ -161,10 +161,10 @@ export const TierUpsellPanel: React.FC<TierUpsellPanelProps> = ({
         <div className="bg-gradient-to-b from-slate-50 to-white rounded-xl p-4 border border-slate-200 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
                 <div className="w-6 h-6 bg-slate-900 rounded-md flex items-center justify-center">
-                    <Lock className="w-3 h-3 text-white" />
+                    <Play className="w-3 h-3 text-white" />
                 </div>
                 <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    Available Upgrades
+                    Run New Audit
                 </h4>
             </div>
 
@@ -189,12 +189,12 @@ export const TierUpsellPanel: React.FC<TierUpsellPanelProps> = ({
                                         {tier.shortName}
                                     </div>
                                     <div className="text-[10px] text-slate-400 font-medium">
-                                        {tier.price === 'Free' ? 'Free Check' : `Unlock for ${tier.price}`}
+                                        {tier.price === 'Free' ? 'Free Audit' : `${tier.price} • Run Now`}
                                     </div>
                                 </div>
                             </div>
                             <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white transition-colors">
-                                <TrendingUp className="w-3 h-3" />
+                                <ChevronRight className="w-3 h-3" />
                             </div>
                         </button>
                     );
