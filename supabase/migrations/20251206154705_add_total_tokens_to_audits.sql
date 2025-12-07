@@ -2,3 +2,4 @@
 
 ALTER TABLE public.audits ADD COLUMN total_tokens integer;
 
+

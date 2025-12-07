@@ -1,9 +1,11 @@
 import { AuditStats } from '../types';
 import { supabase } from '../src/integrations/supabase/client';
 
-interface FileContent {
+interface FileMapItem {
   path: string;
-  content: string;
+  size: number;
+  type: string; // 'file' | 'dir'
+  url?: string; // GitHub raw URL for fetching later
 }
 
 export const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
@@ -150,14 +152,13 @@ export const fetchRepoStats = async (
 
 
 /**
- * Fetch repository files via Supabase github-proxy edge function
- * @param accessToken - Optional GitHub OAuth token for private repos
+ * Fetch repository file map (metadata only) via Supabase github-proxy edge function
  */
-export const fetchRepoFiles = async (
+export const fetchRepoMap = async (
   owner: string,
   repo: string,
   accessToken?: string
-): Promise<FileContent[]> => {
+): Promise<FileMapItem[]> => {
   // Step 1: Get file tree
   const { data: treeData, error: treeError } = await supabase.functions.invoke('github-proxy', {
     body: { owner, repo, userToken: accessToken }
@@ -176,60 +177,16 @@ export const fetchRepoFiles = async (
     throw new Error('No code files found in repository');
   }
 
-  // Step 2: Prioritize files for analysis
-  const allFiles = treeData.tree;
+  // Step 2: Transform to lightweight map
+  const fileMap: FileMapItem[] = treeData.tree
+    .filter((f: any) => f.type === 'blob') // Only files, not dirs
+    .map((f: any) => ({
+      path: f.path,
+      size: f.size || 0,
+      type: 'file',
+      url: f.url // API URL
+    }));
 
-  // Config files (always include)
-  const configFiles = allFiles.filter((f: any) =>
-    f.path.endsWith('package.json') ||
-    f.path.endsWith('requirements.txt') ||
-    f.path.endsWith('Dockerfile') ||
-    f.path.endsWith('docker-compose.yml') ||
-    f.path.endsWith('tsconfig.json')
-  );
-
-  // Source files (prioritize src/, lib/, app/, components/)
-  const sourceFiles = allFiles.filter((f: any) =>
-    (f.path.includes('src/') || f.path.includes('lib/') || f.path.includes('app/') || f.path.includes('components/') || f.path.includes('pages/')) &&
-    (f.path.endsWith('.ts') || f.path.endsWith('.tsx') || f.path.endsWith('.js') || f.path.endsWith('.jsx') || f.path.endsWith('.py'))
-  );
-
-  // Supabase/Edge functions
-  const supabaseFiles = allFiles.filter((f: any) =>
-    f.path.includes('supabase/') && f.path.endsWith('.ts')
-  );
-
-  // Combine (UNLEASHED: No limits)
-  const filesToFetch = [...configFiles, ...sourceFiles, ...supabaseFiles];
-
-  // Step 3: Fetch file contents via proxy
-  const contents = await Promise.all(filesToFetch.map(async (file: any) => {
-    try {
-      const { data: fileData, error: fileError } = await supabase.functions.invoke('github-proxy', {
-        body: { owner, repo, filePath: file.path, userToken: accessToken }
-      });
-
-      if (fileError || fileData?.error) {
-        console.warn(`Failed to fetch ${file.path}:`, fileError || fileData?.error);
-        return null;
-      }
-
-      return {
-        path: file.path,
-        content: fileData.content
-      };
-    } catch (e) {
-      console.warn(`Error fetching ${file.path}:`, e);
-      return null;
-    }
-  }));
-
-  const validContents = contents.filter(Boolean) as FileContent[];
-
-  if (validContents.length === 0) {
-    throw new Error('Could not fetch any files from repository');
-  }
-
-  console.log(`📁 Fetched ${validContents.length} files via Supabase proxy`);
-  return validContents;
+  console.log(`🗺️ Generated map for ${fileMap.length} files`);
+  return fileMap;
 };

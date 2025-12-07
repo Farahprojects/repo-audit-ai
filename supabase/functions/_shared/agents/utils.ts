@@ -73,3 +73,14 @@ export async function callGemini(
         throw new Error('Invalid JSON response from Gemini');
     }
 }
+
+export async function fetchFileContent(url: string): Promise<string> {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+        return await res.text();
+    } catch (e) {
+        console.warn(`Fetch warning for ${url}:`, e);
+        return "";
+    }
+}

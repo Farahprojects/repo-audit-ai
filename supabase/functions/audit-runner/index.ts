@@ -72,25 +72,49 @@ serve(async (req) => {
     console.log(`📄 Files: ${files.length}`);
     console.log(`${'='.repeat(60)}\n`);
 
-    // Initialize Context
+    // Initialize Context (Metadata Only)
+    // Front-end now sends fileMap (path/size/url), no content
     const context: AuditContext = {
       repoUrl,
-      files: files.map(f => ({ path: f.path, type: 'file', content: f.content, size: f.content.length })),
+      files: files.map(f => ({
+        path: f.path,
+        type: 'file',
+        size: f.size,
+        // Content is explicitly undefined here, agents must fetch it
+        content: undefined,
+        url: f.url
+      })),
       tier
     };
 
-    // --- PIPELINE EXECUTION ---
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🚀 STARTING "CEO BRAIN" AUDIT`);
+    console.log(`📁 Repo: ${repoUrl}`);
+    console.log(`🗺️ File Map Size: ${files.length} entries`);
+    console.log(`${'='.repeat(60)}\n`);
 
     // --- PIPELINE EXECUTION ---
 
-    // 1. Pass One: Scanner
+    // 0. Pass Zero: Planner (The CEO)
+    // Decides effectively which files are relevant for this specific Audit Tier
+    const { result: plan, usage: plannerUsage } = await runPlanner(context, ENV.GEMINI_API_KEY, tierPrompt);
+    console.log(`🧠 CEO Plan: Focus on ${plan.focusArea}`);
+    console.log(`   Scanner Targets: ${plan.scannerTargets.length} files`);
+    console.log(`   Expander Targets: ${plan.expanderTargets.length} files`);
+
+    // 1. Pass One: Scanner (The Scout)
+    // Scanner now receives the Map and decides what to fetch? 
+    // For V1 of this refactor, let's have the Scanner fetch the "Top 50" files by default to build the base map.
+    // Or better: The Scanner *Refines* the map. 
     const timeStart = Date.now();
-    const { result: scanResult, usage: scanUsage } = await runScanner(context, ENV.GEMINI_API_KEY, tierPrompt);
+    const { result: scanResult, usage: scanUsage } = await runScanner(context, ENV.GEMINI_API_KEY, tierPrompt, plan.scannerTargets);
     console.log(`✅ Pass 1 (Scanner) Complete. Keys: ${Object.keys(scanResult || {}).join(', ')}`);
     if (!scanResult?.fileMap) console.warn('⚠️ Pass 1 Warning: No fileMap returned');
 
+    // ... rest of pipeline ...
+
     // 2. Pass Two: Expander
-    const { result: archMap, usage: expanderUsage } = await runExpander(context, scanResult, ENV.GEMINI_API_KEY, tierPrompt);
+    const { result: archMap, usage: expanderUsage } = await runExpander(context, scanResult, ENV.GEMINI_API_KEY, tierPrompt, plan.expanderTargets);
     console.log(`✅ Pass 2 (Expander) Complete. Keys: ${Object.keys(archMap || {}).join(', ')}`);
 
     // 3. Pass Three: Correlator
@@ -132,7 +156,7 @@ serve(async (req) => {
 
     console.log(`💾 Saving ${dbIssues.length} issues to DB...`);
 
-    const totalTokens = (scanUsage?.totalTokens || 0) + (expanderUsage?.totalTokens || 0) +
+    const totalTokens = (plannerUsage?.totalTokens || 0) + (scanUsage?.totalTokens || 0) + (expanderUsage?.totalTokens || 0) +
       (correlatorUsage?.totalTokens || 0) + (enricherUsage?.totalTokens || 0) +
       (synthesizerUsage?.totalTokens || 0);
 

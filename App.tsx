@@ -14,7 +14,7 @@ import SEO from './components/SEO';
 import { ViewState, AuditStats, RepoReport, Issue } from './types';
 import { Tables } from './src/integrations/supabase/types';
 import { generateAuditReport } from './services/geminiService';
-import { fetchRepoFiles, parseGitHubUrl } from './services/githubService';
+import { fetchRepoMap, parseGitHubUrl } from './services/githubService';
 import { useAuth } from './hooks/useAuth';
 import { useGitHubAuth } from './hooks/useGitHubAuth';
 import { supabase } from './src/integrations/supabase/client';
@@ -113,23 +113,24 @@ const App: React.FC = () => {
       addLog(`[Network] Connecting to GitHub API...`);
       await new Promise(r => setTimeout(r, 500));
 
-      addLog(`[Network] Downloading source tree...`);
+      addLog(`[Network] Downloading source tree (Map Only)...`);
       // Pass GitHub token for private repo access
       const githubToken = await getGitHubToken();
-      const fileContents = await fetchRepoFiles(repoInfo.owner, repoInfo.repo, githubToken || undefined);
+      // NEW: Fetch Map, NOT Content
+      const fileMap = await fetchRepoMap(repoInfo.owner, repoInfo.repo, githubToken || undefined);
 
-      addLog(`[Success] Retrieved ${fileContents.length} critical source files.`);
+      addLog(`[Success] Mapped ${fileMap.length} files.`);
       setScannerProgress(40);
 
       // Step 3: Parse
-      addLog(`[Agent: Parser] Analyzing ${stats.language} syntax AST...`);
+      addLog(`[Agent: Parser] Analyzing structure...`);
       await new Promise(r => setTimeout(r, 800)); // Simulate AST parsing time
       setScannerProgress(60);
 
       // Step 4: AI Audit (Real API)
-      addLog(`[Agent: Security] Sending code context to Gemini 1.5...`);
+      addLog(`[Agent: Security] Sending metadata to Brain...`);
       addLog(`[System] Running ${tier.toUpperCase()} audit tier...`);
-      const report = await generateAuditReport(repoInfo.repo, stats, fileContents, tier);
+      const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier);
 
       addLog(`[Success] Report generated successfully.`);
       addLog(`[System] Finalizing health score: ${report.healthScore}/100`);

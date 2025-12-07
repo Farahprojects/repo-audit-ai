@@ -15,7 +15,7 @@ const TIER_MAPPING: Record<string, string> = {
 export const generateAuditReport = async (
   repoName: string,
   stats: any,
-  fileContents: { path: string, content: string }[],
+  fileMap: any[], // Was fileContents
   tier: string = 'shape'
 ): Promise<RepoReport & { tierData?: any }> => {
 
@@ -26,7 +26,7 @@ export const generateAuditReport = async (
   const { data, error } = await supabase.functions.invoke('audit-runner', {
     body: {
       repoUrl: `https://github.com/${repoName}`,
-      files: fileContents,
+      files: fileMap, // Send the MAP, not the content
       tier: backendTier
     }
   });

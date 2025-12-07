@@ -295,3 +295,4 @@ OUTPUT FORMAT (return ONLY valid JSON):
 Check: auth/authz, RLS policies, input validation, secrets, data exposure, edge function security.
 
 Category: security. Include CWE references.');
+
