@@ -54,8 +54,13 @@ export async function callGemini(
     };
 
     try {
+        // CLEANUP: Extract JSON from Markdown code blocks if present
+        let cleanText = text.trim();
+        // Remove ```json ... ``` or just ``` ... ```
+        cleanText = cleanText.replace(/^```(json)?\s*/i, '').replace(/\s*```$/, '');
+
         return {
-            data: JSON.parse(text),
+            data: JSON.parse(cleanText),
             usage
         };
     } catch (e) {

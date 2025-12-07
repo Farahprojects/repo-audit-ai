@@ -16,7 +16,9 @@ Return JSON:
   "dataFlows": [
     {"source": "API Input", "sink": "DB", "data": "User Profile"}
   ]
-}`;
+}
+
+IMPORTANT: Return ONLY raw JSON. Do not use Markdown code blocks.`;
 
 export async function runExpander(context: AuditContext, scanResult: ScanResult, apiKey: string, tierPrompt: string): Promise<{ result: ArchitectureMap; usage: GeminiUsage }> {
   console.log('Running Pass 2: Expander...');
