@@ -21,13 +21,21 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [selectedTier, setSelectedTier] = useState<'lite' | 'deep' | 'ultra'>('lite');
   const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const { isGitHubConnected, getGitHubToken, signInWithGitHub, isConnecting } = useGitHubAuth();
 
   const loadStats = async (token?: string) => {
+    // Prevent double execution
+    if (isLoading) {
+      console.log('🚫 [PreflightModal] loadStats already running, skipping');
+      return;
+    }
+
     console.log('🚀 [PreflightModal] Starting loadStats for repo:', repoUrl);
     console.log('🚀 [PreflightModal] GitHub token available:', !!token);
 
+    setIsLoading(true);
     setLoading(true);
     setError(null);
     setIsPrivateRepo(false);
@@ -67,6 +75,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       }
     } finally {
       setLoading(false);
+      setIsLoading(false);
       console.log('🏁 [PreflightModal] loadStats completed');
     }
   };

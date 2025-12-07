@@ -149,6 +149,8 @@ serve(async (req) => {
       if (!repoRes.ok) {
         const remaining = repoRes.headers.get('X-RateLimit-Remaining');
         console.log(`🔍 [github-proxy] Rate limit remaining:`, remaining);
+        console.log(`🔍 [github-proxy] Response status:`, repoRes.status);
+        console.log(`🔍 [github-proxy] Response headers:`, Object.fromEntries(repoRes.headers.entries()));
 
         if (remaining === '0') {
           console.log(`⏱️ [github-proxy] Rate limit exceeded`);
@@ -158,9 +160,25 @@ serve(async (req) => {
           );
         }
 
-        console.log(`❌ [github-proxy] Repository not found or private - status:`, repoRes.status);
+        // Get the response body for better error details
         const errorText = await repoRes.text();
-        console.log(`❌ [github-proxy] GitHub API error response:`, errorText);
+        console.log(`❌ [github-proxy] GitHub API error response body:`, errorText);
+
+        // Try to parse as JSON for more details
+        let errorDetails = errorText;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorDetails = errorJson.message || errorText;
+          console.log(`❌ [github-proxy] Parsed error details:`, errorJson);
+        } catch (e) {
+          // Not JSON, use raw text
+        }
+
+        console.log(`❌ [github-proxy] Final status analysis:`, {
+          status: repoRes.status,
+          hasAuth: !!GITHUB_TOKEN,
+          errorDetails
+        });
 
         return new Response(
           JSON.stringify({ error: `Repository not found: ${repoRes.status}` }),
