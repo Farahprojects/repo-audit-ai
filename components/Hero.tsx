@@ -1,18 +1,36 @@
 import React, { useState } from 'react';
-import { Shield, Cpu, Layout, ArrowRight, Github } from 'lucide-react';
+import { Shield, Cpu, Layout, ArrowRight, Github, CheckCircle } from 'lucide-react';
 
 interface HeroProps {
   onAnalyze: (url: string) => void;
+  onSoftStart?: (url: string) => void;
 }
 
-const Hero: React.FC<HeroProps> = ({ onAnalyze }) => {
+const Hero: React.FC<HeroProps> = ({ onAnalyze, onSoftStart }) => {
   const [url, setUrl] = useState('');
+  const [acceptedUrl, setAcceptedUrl] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (url.trim().length > 0) {
-      onAnalyze(url);
+      if (onSoftStart) {
+        onSoftStart(url.trim());
+        setAcceptedUrl(url.trim());
+        setUrl(''); // Clear the input
+      } else {
+        onAnalyze(url);
+      }
     }
+  };
+
+  const handleRunAudit = () => {
+    if (acceptedUrl) {
+      onAnalyze(acceptedUrl);
+    }
+  };
+
+  const handleChangeUrl = () => {
+    setAcceptedUrl(null);
   };
 
   return (
@@ -38,28 +56,58 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze }) => {
           </p>
         </div>
 
-        {/* Input Section */}
-        <form onSubmit={handleSubmit} className="w-full max-w-lg mx-auto mt-12 relative group animate-slide-up" style={{ animationDelay: '100ms' }}>
-          <div className="relative flex items-center bg-white rounded-lg p-1.5 border border-border transition-all focus-within:ring-2 focus-within:ring-slate-100 focus-within:border-slate-300 shadow-sm hover:shadow-md">
-            <div className="pl-4 text-slate-400">
-              <Github className="w-5 h-5" />
+        {/* Input Section or Confirmation */}
+        {!acceptedUrl ? (
+          <form onSubmit={handleSubmit} className="w-full max-w-lg mx-auto mt-12 relative group animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <div className="relative flex items-center bg-white rounded-lg p-1.5 border border-border transition-all focus-within:ring-2 focus-within:ring-slate-100 focus-within:border-slate-300 shadow-sm hover:shadow-md">
+              <div className="pl-4 text-slate-400">
+                <Github className="w-5 h-5" />
+              </div>
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="github.com/username/repo"
+                className="flex-1 bg-transparent border-none text-foreground placeholder-slate-400 focus:ring-0 px-3 py-3 text-base outline-none w-full font-medium"
+              />
+              <button
+                type="submit"
+                className="bg-foreground hover:bg-slate-800 text-background px-6 py-2.5 rounded-md font-medium transition-all flex items-center gap-2 whitespace-nowrap"
+              >
+                Start Audit <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="github.com/username/repo"
-              className="flex-1 bg-transparent border-none text-foreground placeholder-slate-400 focus:ring-0 px-3 py-3 text-base outline-none w-full font-medium"
-            />
-            <button
-              type="submit"
-              className="bg-foreground hover:bg-slate-800 text-background px-6 py-2.5 rounded-md font-medium transition-all flex items-center gap-2 whitespace-nowrap"
-            >
-              Audit <ArrowRight className="w-4 h-4" />
-            </button>
+            <p className="text-center text-slate-400 text-xs mt-3">No credit card required for public repos.</p>
+          </form>
+        ) : (
+          <div className="w-full max-w-lg mx-auto mt-12 animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <div className="bg-white rounded-xl border border-border shadow-lg p-6">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Ready to Audit</h3>
+                <div className="bg-slate-50 rounded-lg p-3 mb-4">
+                  <p className="text-sm font-medium text-slate-700 font-mono">
+                    {acceptedUrl.split('/').slice(-2).join('/')}
+                  </p>
+                </div>
+                <button
+                  onClick={handleRunAudit}
+                  className="w-full bg-foreground hover:bg-slate-800 text-background px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 mb-3"
+                >
+                  Run Audit <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleChangeUrl}
+                  className="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  Change repository
+                </button>
+              </div>
+            </div>
           </div>
-          <p className="text-center text-slate-400 text-xs mt-3">No credit card required for public repos.</p>
-        </form>
+        )}
 
         {/* Value Props */}
         <div className="grid md:grid-cols-3 gap-6 text-left mt-24 px-4 animate-slide-up" style={{ animationDelay: '200ms' }}>

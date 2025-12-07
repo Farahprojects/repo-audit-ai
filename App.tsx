@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const [reportData, setReportData] = useState<RepoReport | null>(null);
   const [historicalReportData, setHistoricalReportData] = useState<RepoReport | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [pendingRepoUrl, setPendingRepoUrl] = useState<string | null>(null);
 
   // Real-time Scanner State
   const [scannerLogs, setScannerLogs] = useState<string[]>([]);
@@ -43,21 +44,54 @@ const App: React.FC = () => {
 
   // Supabase SDK handles OAuth callback automatically via onAuthStateChange in useAuth hook
 
+  // Restore pending repo URL from localStorage on app load
+  useEffect(() => {
+    const stored = localStorage.getItem('pendingRepoUrl');
+    if (stored) {
+      setPendingRepoUrl(stored);
+      localStorage.removeItem('pendingRepoUrl');
+    }
+  }, []);
+
   // Close auth modal and navigate to dashboard when user logs in
+  // Also auto-start audit if there's a pending repo URL
   useEffect(() => {
     if (user) {
       setIsAuthOpen(false);
+
+      // If there's a pending repo URL, start the audit automatically
+      if (pendingRepoUrl) {
+        setRepoUrl(pendingRepoUrl);
+        setPendingRepoUrl(null);
+        setPreviousView('landing');
+        setView('preflight');
+        return;
+      }
+
       // Navigate to dashboard if on landing page
       if (view === 'landing') {
         setView('dashboard');
       }
     }
-  }, [user]);
+  }, [user, pendingRepoUrl]);
 
   const handleAnalyze = (url: string) => {
     setRepoUrl(url);
     setPreviousView('landing');
     setView('preflight');
+  };
+
+  const handleSoftStart = (url: string) => {
+    // Check if user is authenticated
+    if (user) {
+      // If authenticated, start audit immediately
+      handleAnalyze(url);
+    } else {
+      // If not authenticated, store URL and show sign-in
+      localStorage.setItem('pendingRepoUrl', url);
+      setPendingRepoUrl(url);
+      setIsAuthOpen(true);
+    }
   };
 
   const handleConfirmAudit = async (tier: string, stats: AuditStats) => {
@@ -196,7 +230,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (view) {
       case 'landing':
-        return <Hero onAnalyze={handleAnalyze} />;
+        return <Hero onAnalyze={handleAnalyze} onSoftStart={handleSoftStart} />;
       case 'preflight':
         // If coming from report (upsell), show report in background
         const BackgroundContent = previousView === 'report' && (reportData || historicalReportData)
@@ -206,7 +240,7 @@ const App: React.FC = () => {
             // No-op for actions in background
             onRunTier={() => { }}
           />
-          : <Hero onAnalyze={handleAnalyze} />;
+          : <Hero onAnalyze={handleAnalyze} onSoftStart={handleSoftStart} />;
 
         return (
           <>
