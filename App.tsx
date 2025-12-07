@@ -41,22 +41,7 @@ const App: React.FC = () => {
 
   const addLog = (msg: string) => setScannerLogs(prev => [...prev, msg]);
 
-  // Handle OAuth callback - process tokens from URL hash after redirect
-  useEffect(() => {
-    const handleAuthCallback = async () => {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      
-      if (accessToken) {
-        // Let Supabase process the tokens from the URL
-        await supabase.auth.getSession();
-        // Clean up the URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    };
-    
-    handleAuthCallback();
-  }, []);
+  // Supabase SDK handles OAuth callback automatically via onAuthStateChange in useAuth hook
 
   // Close auth modal when user logs in (e.g., after OAuth redirect)
   useEffect(() => {
