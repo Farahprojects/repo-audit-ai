@@ -145,7 +145,6 @@ serve(async (req) => {
       summary: finalReport?.summary || "No summary generated.",
       issues: dbIssues,
       total_tokens: totalTokens,
-      architecture_map: archMap, // Save the rich data too!
     });
 
     if (insertError) {
