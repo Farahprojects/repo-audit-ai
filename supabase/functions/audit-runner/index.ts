@@ -81,26 +81,29 @@ serve(async (req) => {
 
     // --- PIPELINE EXECUTION ---
 
+    // --- PIPELINE EXECUTION ---
+
     // 1. Pass One: Scanner
     const timeStart = Date.now();
     const { result: scanResult, usage: scanUsage } = await runScanner(context, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log('✅ Pass 1 (Scanner) Complete');
+    console.log(`✅ Pass 1 (Scanner) Complete. Keys: ${Object.keys(scanResult || {}).join(', ')}`);
+    if (!scanResult?.fileMap) console.warn('⚠️ Pass 1 Warning: No fileMap returned');
 
     // 2. Pass Two: Expander
     const { result: archMap, usage: expanderUsage } = await runExpander(context, scanResult, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log('✅ Pass 2 (Expander) Complete');
+    console.log(`✅ Pass 2 (Expander) Complete. Keys: ${Object.keys(archMap || {}).join(', ')}`);
 
     // 3. Pass Three: Correlator
     const { result: correlation, usage: correlatorUsage } = await runCorrelator(context, archMap, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log('✅ Pass 3 (Correlator) Complete');
+    console.log(`✅ Pass 3 (Correlator) Complete. Issues Found: ${correlation?.potentialIssues?.length || 0}`);
 
     // 4. Pass Four: Enricher
     const { result: risks, usage: enricherUsage } = await runEnricher(context, correlation, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log('✅ Pass 4 (Enricher) Complete');
+    console.log(`✅ Pass 4 (Enricher) Complete. Findings: ${risks?.findings?.length || 0}`);
 
     // 5. Pass Five: Synthesizer
     const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, risks, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log('✅ Pass 5 (Synthesizer) Complete');
+    console.log(`✅ Pass 5 (Synthesizer) Complete. Final Issues: ${finalReport?.issues?.length || 0}`);
 
     const totalTime = ((Date.now() - timeStart) / 1000).toFixed(1);
     console.log(`🏁 Pipeline finished in ${totalTime}s`);
@@ -111,7 +114,10 @@ serve(async (req) => {
     // The Enricher/Synthesizer should return compatible issues, but let's standardise
     // We use the "issues" from finalReport which are filtered/prioritised
 
-    const dbIssues = (finalReport.issues || risks.findings || []).map((issue: any, index: number) => ({
+    // Fallback: If Synthesizer dropped everything, maybe rely on Enricher?
+    const rawIssues = (finalReport?.issues && finalReport.issues.length > 0) ? finalReport.issues : (risks?.findings || []);
+
+    const dbIssues = rawIssues.map((issue: any, index: number) => ({
       id: issue.id || `issue-${index}`,
       title: issue.title,
       description: issue.description,
@@ -124,15 +130,19 @@ serve(async (req) => {
       cwe: issue.cwe
     }));
 
+    console.log(`💾 Saving ${dbIssues.length} issues to DB...`);
+
     const totalTokens = (scanUsage?.totalTokens || 0) + (expanderUsage?.totalTokens || 0) +
-                        (correlatorUsage?.totalTokens || 0) + (enricherUsage?.totalTokens || 0) +
-                        (synthesizerUsage?.totalTokens || 0);
+      (correlatorUsage?.totalTokens || 0) + (enricherUsage?.totalTokens || 0) +
+      (synthesizerUsage?.totalTokens || 0);
+
+    console.log(`💰 Total Tokens Used: ${totalTokens}`);
 
     const { error: insertError } = await supabase.from('audits').insert({
       user_id: userId,
       repo_url: repoUrl,
-      health_score: finalReport.healthScore || risks.securityScore || 0,
-      summary: finalReport.summary,
+      health_score: finalReport?.healthScore || risks?.securityScore || 0,
+      summary: finalReport?.summary || "No summary generated.",
       issues: dbIssues,
       total_tokens: totalTokens,
       architecture_map: archMap, // Save the rich data too!
