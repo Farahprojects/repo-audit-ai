@@ -40,7 +40,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
   }, []);
 
   const navItems: { id: ViewState; label: string }[] = [
-    { id: 'landing', label: 'Home' },
+    { id: 'dashboard', label: 'Dash' },
     { id: 'pricing', label: 'Pricing' },
     { id: 'about', label: 'Mission' },
     { id: 'contact', label: 'Contact' },
@@ -62,7 +62,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
 
         {/* Logo */}
         <div
-          onClick={() => onLogoClick ? onLogoClick() : handleNavClick('landing')}
+          onClick={() => onLogoClick ? onLogoClick() : handleNavClick('dashboard')}
           className="flex items-center gap-2 cursor-pointer group z-50 relative"
         >
           <img src="/favicon-32x32.png" alt="SCAI Logo" className="w-8 h-8" />
