@@ -54,6 +54,8 @@ ${fileContext}`;
     // Revised System Prompt to ensure JSON compatibility with utils.ts
     // "Return JSON: { analysis: string, issues: [] }"
 
+    console.log(`✅ Worker [${task.role}] Finished. Cost: ${usage.totalTokens} tokens.`);
+
     return {
         result: {
             taskId: task.id,

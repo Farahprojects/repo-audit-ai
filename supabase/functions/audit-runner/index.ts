@@ -96,11 +96,15 @@ serve(async (req) => {
 
     // 1. MAP PHASE: The Planner (CEO)
     const { result: plan, usage: plannerUsage } = await runPlanner(context, ENV.GEMINI_API_KEY, tierPrompt);
-    console.log(`🧠 Swarm Plan: ${plan.tasks.length} tasks. Focus: ${plan.focusArea}`);
+    console.log(`🧠 CEO BRAIN PLAN: Focus on ${plan.focusArea}`);
+    console.log(`📋 Generated ${plan.tasks.length} Worker Assignments:`);
+    plan.tasks.forEach((t, i) => {
+      console.log(`   ${i + 1}. [${t.role}] 🎯 Goal: "${t.instruction.slice(0, 80)}..." (Files: ${t.targetFiles?.length || 0})`);
+    });
 
     // 2. WORKER PHASE: The Swarm (Parallel Execution)
     const timeStart = Date.now();
-    console.log(`🚀 Spawning ${plan.tasks.length} workers...`);
+    console.log(`\n🚀 releasing the swarm...`);
 
     const workerPromises = plan.tasks.map(async (task) => {
       return runWorker(context, task, ENV.GEMINI_API_KEY);

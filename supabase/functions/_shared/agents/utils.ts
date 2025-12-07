@@ -80,7 +80,8 @@ export async function fetchFileContent(url: string): Promise<string> {
         if (!res.ok) throw new Error(`Failed to fetch ${url}`);
         return await res.text();
     } catch (e) {
-        console.warn(`Fetch warning for ${url}:`, e);
+        // Silencing noisy network errors as requested by user
+        // console.debug(`Fetch failed: ${url}`); 
         return "";
     }
 }
