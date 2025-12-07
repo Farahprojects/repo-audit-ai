@@ -67,7 +67,7 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze, onSoftStart }) => {
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="github.com/username/repo"
+                placeholder="github.com/owner/repository-name"
                 className="flex-1 bg-transparent border-none text-foreground placeholder-slate-400 focus:ring-0 px-3 py-3 text-base outline-none w-full font-medium"
               />
               <button

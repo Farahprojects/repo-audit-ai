@@ -179,7 +179,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
                 type="text"
                 value={newRepoUrl}
                 onChange={(e) => setNewRepoUrl(e.target.value)}
-                placeholder="https://github.com/owner/repo"
+                placeholder="https://github.com/owner/repo-name"
                 className="w-full bg-slate-50 border border-slate-200 rounded-full py-3 pl-12 pr-6 text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 onKeyDown={(e) => e.key === 'Enter' && handleStartNewAudit()}
               />

@@ -9,11 +9,32 @@ interface FileContent {
 export const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
   console.log('🔗 [parseGitHubUrl] Parsing URL:', url);
 
+  if (!url || !url.trim()) {
+    console.log('❌ [parseGitHubUrl] Empty URL provided');
+    return null;
+  }
+
+  // Remove any trailing slashes
+  const cleanUrl = url.trim().replace(/\/+$/, '');
+  console.log('🔗 [parseGitHubUrl] Cleaned URL:', cleanUrl);
+
   try {
-    const urlObj = new URL(url);
+    const urlObj = new URL(cleanUrl);
     console.log('🔗 [parseGitHubUrl] Full URL detected, hostname:', urlObj.hostname);
+
+    // Check if it's a GitHub URL
+    if (!urlObj.hostname.includes('github.com')) {
+      console.log('❌ [parseGitHubUrl] Not a GitHub URL:', urlObj.hostname);
+      return null;
+    }
+
     const parts = urlObj.pathname.split('/').filter(Boolean);
     console.log('🔗 [parseGitHubUrl] Path parts:', parts);
+
+    if (parts.length === 1) {
+      console.log('❌ [parseGitHubUrl] Missing repository name - only owner provided:', parts[0]);
+      return null;
+    }
 
     if (parts.length >= 2) {
       const result = { owner: parts[0], repo: parts[1] };
@@ -22,9 +43,15 @@ export const parseGitHubUrl = (url: string): { owner: string; repo: string } | n
     }
   } catch (e) {
     console.log('🔄 [parseGitHubUrl] URL parsing failed, trying simple format');
-    // Try parsing as owner/repo format
-    const parts = url.split('/');
+    // Try parsing as owner/repo format (without https://github.com/)
+    const parts = cleanUrl.split('/').filter(Boolean);
     console.log('🔗 [parseGitHubUrl] Simple format parts:', parts);
+
+    if (parts.length === 1) {
+      console.log('❌ [parseGitHubUrl] Simple format missing repository name - only owner provided:', parts[0]);
+      return null;
+    }
+
     if (parts.length === 2) {
       const result = { owner: parts[0], repo: parts[1] };
       console.log('✅ [parseGitHubUrl] Successfully parsed simple format:', result);
@@ -32,7 +59,7 @@ export const parseGitHubUrl = (url: string): { owner: string; repo: string } | n
     }
   }
 
-  console.log('❌ [parseGitHubUrl] Failed to parse URL');
+  console.log('❌ [parseGitHubUrl] Failed to parse URL - invalid format');
   return null;
 };
 

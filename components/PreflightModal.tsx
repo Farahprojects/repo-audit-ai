@@ -38,7 +38,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
     if (!repoInfo) {
       console.log('❌ [PreflightModal] Invalid GitHub URL format');
-      setError("Invalid GitHub URL format");
+      setError("Please enter a complete GitHub repository URL (e.g., https://github.com/owner/repository-name)");
       setLoading(false);
       return;
     }
