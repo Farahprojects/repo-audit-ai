@@ -232,25 +232,12 @@ const App: React.FC = () => {
       case 'landing':
         return <Hero onAnalyze={handleAnalyze} onSoftStart={handleSoftStart} />;
       case 'preflight':
-        // If coming from report (upsell), show report in background
-        const BackgroundContent = previousView === 'report' && (reportData || historicalReportData)
-          ? <ReportDashboard
-            data={(reportData || historicalReportData)!}
-            onRestart={handleRestart}
-            // No-op for actions in background
-            onRunTier={() => { }}
-          />
-          : <Hero onAnalyze={handleAnalyze} onSoftStart={handleSoftStart} />;
-
         return (
-          <>
-            {BackgroundContent}
-            <PreflightModal
-              repoUrl={repoUrl}
-              onConfirm={handleConfirmAudit}
-              onCancel={() => setView(previousView)}
-            />
-          </>
+          <PreflightModal
+            repoUrl={repoUrl}
+            onConfirm={handleConfirmAudit}
+            onCancel={() => setView(previousView)}
+          />
         );
       case 'pricing':
         return <Pricing />;
