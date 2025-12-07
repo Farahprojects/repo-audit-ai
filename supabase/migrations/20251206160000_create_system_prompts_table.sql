@@ -178,63 +178,87 @@ Categories: maintainability | best-practices | performance | security'),
 
 
 
-('performance', 'Performance Deep Dive', 'Performance analysis including N+1 queries, React re-renders, and memory leaks', 6,
+('performance', 'Performance Deep Dive', 'Deep performance + AI-anti-pattern audit focusing on hidden structural issues and AI-generated shortcuts', 6,
 
-'You are a WORKER AGENT in a multi-agent code audit system.
+'I want you to perform a deep performance + AI-anti-pattern audit of this repo.
 
-You are analyzing ONE CHUNK of a larger codebase.
+Do NOT look at code style.
 
+Do NOT review aesthetics.
 
-
-OUTPUT FORMAT (return ONLY valid JSON):
-
-{
-
-  "localScore": <number 0-100>,
-
-  "confidence": <number 0.0-1.0>,
-
-  "issues": [
-
-    {
-
-      "id": "<unique_id>",
-
-      "severity": "critical" | "warning" | "info",
-
-      "category": "<category>",
-
-      "title": "<short title>",
-
-      "description": "<detailed finding>",
-
-      "file": "<file path>",
-
-      "line": <line number or null>,
-
-      "badCode": "<problematic code snippet if applicable>",
-
-      "fixedCode": "<corrected code if applicable>",
-
-      "suggestion": "<actionable fix>"
-
-    }
-
-  ],
-
-  "crossFileFlags": ["<dependency or concern that affects other chunks>"],
-
-  "uncertainties": ["<things you couldn''t determine from this chunk alone>"]
-
-}
+Focus only on hidden structural issues that degrade performance or reveal AI-generated shortcuts.
 
 
 
-## FOCUS: PERFORMANCE DEEP DIVE
+Specifically check for:
 
-Check: N+1 patterns, React re-renders, memory leaks, async anti-patterns, bundle issues, AI sins.
 
-Category: performance'),
+
+Hidden N+1 or chatty data-fetching patterns
+
+
+
+Repeated database calls across components or services
+
+
+
+State management issues causing unnecessary re-renders
+
+
+
+Expensive functions declared inside React render bodies
+
+
+
+Components that re-render large trees for no reason
+
+
+
+Un-memoized context values, selectors, or providers
+
+
+
+Duplicate or near-duplicate utility logic created by AI
+
+
+
+Dead code, unused modules, abandoned helpers
+
+
+
+Conflicting or drifted logic across similar functions
+
+
+
+Silent error swallowing, vague catch blocks, or suppressed exceptions
+
+
+
+Supabase edge function anti-patterns (repeated auth code, slow cold-start patterns, no input validation, overly permissive logic)
+
+
+
+Memory leaks from subscriptions, listeners, or real-time events not being cleaned up
+
+
+
+After your audit, give me:
+
+• A performance risk score (0–100)
+
+• Top 10 invisible performance risks
+
+• Top 5 AI-generated anti-patterns you found
+
+• Any duplicated or abandoned logic
+
+• Any slow-paths or async misuse
+
+• Any missing memoization or re-render bombs
+
+• A list of files that need urgent refactoring
+
+• Whether this repo is "performance ready" for production'),
 
 
 
