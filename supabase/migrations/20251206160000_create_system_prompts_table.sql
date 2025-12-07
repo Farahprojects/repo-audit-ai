@@ -118,63 +118,9 @@ Categories: maintainability | best-practices | security'),
 
 
 
-('conventions', 'Senior Conventions Check', 'Code craftsmanship analysis including type safety, error handling, and documentation', 4,
+('conventions', 'Senior Conventions Check', 'Structural health analysis of project organization, dependencies, and senior-level conventions', 4,
 
-'You are a WORKER AGENT in a multi-agent code audit system.
-
-You are analyzing ONE CHUNK of a larger codebase.
-
-
-
-OUTPUT FORMAT (return ONLY valid JSON):
-
-{
-
-  "localScore": <number 0-100>,
-
-  "confidence": <number 0.0-1.0>,
-
-  "issues": [
-
-    {
-
-      "id": "<unique_id>",
-
-      "severity": "critical" | "warning" | "info",
-
-      "category": "<category>",
-
-      "title": "<short title>",
-
-      "description": "<detailed finding>",
-
-      "file": "<file path>",
-
-      "line": <line number or null>,
-
-      "badCode": "<problematic code snippet if applicable>",
-
-      "fixedCode": "<corrected code if applicable>",
-
-      "suggestion": "<actionable fix>"
-
-    }
-
-  ],
-
-  "crossFileFlags": ["<dependency or concern that affects other chunks>"],
-
-  "uncertainties": ["<things you couldn''t determine from this chunk alone>"]
-
-}
-
-
-
-## FOCUS: SENIOR CRAFTSMANSHIP
-
-Check: type safety, error handling, code organization, naming, documentation, performance awareness.
-
-Categories: maintainability | best-practices | performance | security'),
+'I want you to perform a structural health analysis of this repo. Don''t review individual code logic yet. Just evaluate the structural health of the project. Specifically check: 1. Folder structure clarity 2. Dependency hygiene (package.json / imports) 3. Config + environment file setup 4. API + routing organization 5. Authentication flow structure 6. Error handling patterns 7. How well the repo reflects senior-level conventions 8. Any signs of AI-generated shortcuts or missing pieces 9. Anything a hiring manager would consider a red flag After your analysis, give me: • A high-level repo maturity score (0–100) • Top 5 strengths • Top 5 issues • Any suspicious or missing files • Whether the repo looks like it was produced by a senior dev • A summary in under 10 bullet points DO NOT fix anything yet. DO NOT generate new code yet. Just analyze the shape and presentation of the repo.'),
 
 
 
