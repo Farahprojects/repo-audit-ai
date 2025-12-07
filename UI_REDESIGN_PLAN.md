@@ -1,11 +1,50 @@
-# UI Redesign Plan: Audit Types & History Integration
+# UI Redesign Plan: ReportDashboard Audit Types & History Integration
 
 ## 🎯 **Problem Statement**
-- Current UI shows "Overview, Security, Performance, Architecture" which doesn't match our 4 audit types
-- No history functionality for multiple audits on same repo
-- Need clean UI that scales with multiple audit instances
+- **Current Issue**: `ReportDashboard` shows issue categories (Overview/Security/Performance/Architecture) within ONE audit
+- **New Requirement**: Show multiple audits of different types for the SAME repo with history
+- **Target Page**: The actual repo analysis results page (`components/ReportDashboard.tsx`)
 
-## 🔍 **Current Audit Types (Database)**
+## 🔍 **Current vs Proposed**
+
+### **Current State (ReportDashboard.tsx)**
+```
+┌─────────────────┬─────────────────────────────┐
+│ 🏷️ Categories   │ 📊 Single Audit Results     │
+│ • Overview      │ • Health Score: 85/100      │
+│ • Security      │ • Executive Summary         │
+│ • Performance   │ • Issue Categories          │
+│ • Architecture  │ • Findings List             │
+│                 │                             │
+│ 🛒 Available    │                             │
+│    Upgrades     │                             │
+│ • Shape (2)     │                             │
+│ • Conventions(4)│                             │
+│ • Performance(6)│                             │
+│ • Security(10)  │                             │
+└─────────────────┴─────────────────────────────┘
+```
+
+### **Proposed State**
+```
+┌─────────────────┬─────────────────────────────┐
+│ 🔍 Repo Audits  │ 📊 Selected Audit Results   │
+│ • 📈 Shape      │ • Health Score: 85/100      │
+│   (2h ago)      │ • Executive Summary         │
+│ • 🎯 Conventions│ • Issue Categories          │
+│   (1d ago)      │ • Findings List             │
+│ • ⚡ Performance│                             │
+│   (3d ago)      │                             │
+│ • 🔒 Security   │                             │
+│   (Never)       │                             │
+│                 │                             │
+│ 📚 History      │                             │
+│ • View all      │                             │
+│   past audits   │                             │
+└─────────────────┴─────────────────────────────┘
+```
+
+## 🔍 **Audit Types (Database)**
 - `shape` - Repo Shape Check (2 credits)
 - `conventions` - Senior Conventions Check (4 credits)
 - `performance` - Performance Deep Dive (6 credits)
@@ -55,28 +94,33 @@ Available Audits
 audit_id, repo_url, repo_name, tier, status, score, created_at, updated_at, total_tokens, credit_cost
 ```
 
-### **History Query Logic**
+### **Key Fields for Repo Audit History**
 ```sql
+-- Get all audits for a specific repo
 SELECT
-  audit_id,
-  repo_name,
-  tier,
-  status,
-  score,
-  created_at,
-  credit_cost
-FROM audits
-WHERE user_id = $current_user
-ORDER BY created_at DESC
-LIMIT 50
+  a.audit_id,
+  a.tier,
+  a.status,
+  a.score,
+  a.created_at,
+  a.credit_cost,
+  sp.name as audit_name,
+  sp.description
+FROM audits a
+JOIN system_prompts sp ON a.tier = sp.tier
+WHERE a.repo_url = $repo_url
+  AND a.user_id = $current_user
+ORDER BY a.created_at DESC
 ```
 
 ## 📁 **Files to Modify**
 
 ### **1. Components to Update**
-- `components/Dashboard.tsx` - Main dashboard layout
-- `components/ReportDashboard.tsx` - Current audit results display
-- `components/IssueCard.tsx` - Individual issue display
+- `components/ReportDashboard.tsx` - **MAIN COMPONENT** - Complete sidebar and navigation redesign
+  - Change left sidebar from issue categories to repo audit types
+  - Add audit history/timeline functionality
+  - Modify main navigation to switch between audit types instead of issue categories
+- `constants.ts` - Update CATEGORIES to align with audit types instead of issue categories
 
 ### **2. New Components Needed**
 - `components/AuditHistory.tsx` - History grid/list component
@@ -117,29 +161,29 @@ Audit Card:
 
 ## 🔄 **Implementation Phases**
 
-### **Phase 1: Sidebar Redesign**
-1. Update `Dashboard.tsx` left panel
-2. Replace static cards with dynamic audit type cards
-3. Add credit cost display
-4. Connect to `system_prompts` table for descriptions
+### **Phase 1: Sidebar Redesign (ReportDashboard.tsx)**
+1. **Update constants.ts** - Change CATEGORIES from issue types to audit types
+2. **Modify ReportDashboard sidebar** - Replace category navigation with audit type navigation
+3. **Add audit status indicators** - Show when each audit type was last run
+4. **Update TierUpsellPanel** - Change from "Available Upgrades" to "Run New Audit"
 
-### **Phase 2: History Component**
-1. Create `AuditHistory.tsx` component
-2. Add database query for user's audit history
-3. Implement card layout for each audit
-4. Add loading states and error handling
+### **Phase 2: Audit Navigation Logic**
+1. **Add audit selection state** - Track which audit is currently being viewed
+2. **Modify data fetching** - Load specific audit results instead of filtering issues
+3. **Update URL routing** - Support `/repo/:repo/audit/:auditId` style URLs
+4. **Add audit switching** - Allow users to switch between completed audits
 
-### **Phase 3: Integration**
-1. Update main dashboard layout
-2. Add routing for individual audit views
-3. Implement filtering/search functionality
-4. Add pagination for large histories
+### **Phase 3: History Integration**
+1. **Add history section to sidebar** - Show timeline of all audits for this repo
+2. **Create audit history API endpoint** - Fetch all audits for a specific repo
+3. **Implement history UI** - Compact timeline with status indicators
+4. **Add "View All History" link** - Expand to full history modal/page
 
-### **Phase 4: Polish**
-1. Add animations and transitions
-2. Implement responsive design
-3. Add empty states ("No audits yet")
-4. Performance optimization for large lists
+### **Phase 4: Polish & Edge Cases**
+1. **Handle missing audits** - Show "Not yet audited" state for un-run audit types
+2. **Loading states** - Show progress when switching between audits
+3. **Error handling** - Handle failed audits and missing data gracefully
+4. **Responsive design** - Ensure history works on mobile devices
 
 ## 📊 **Database Queries Needed**
 
@@ -170,26 +214,27 @@ LIMIT $limit OFFSET $offset
 ```
 
 ## 🎯 **Success Metrics**
-- Users can easily see all 4 audit types
-- History is scannable and organized
-- No UI clutter with multiple audits per repo
-- Clear credit costs and audit status
-- Fast loading of history (pagination ready)
+- Users can easily navigate between different audit types for the same repo
+- History sidebar shows clear timeline of when each audit was run
+- No confusion between issue categories and audit types
+- Clear distinction between "run new audit" vs "view existing audit"
+- Fast switching between audit results for the same repo
 
 ## 🚨 **Edge Cases to Handle**
-- User with no audit history
+- Repo with no audits yet (show all as "Not audited")
+- Repo with partial audits (some types completed, others not)
 - Failed audits with error messages
-- Audits still processing
-- Very long repo names
-- Multiple audits of same type on same repo
-- Different screen sizes
+- Audits still processing/queued
+- Multiple audits of same type (show most recent + history)
+- Very long repo names and audit names
+- Mobile responsive design
 
 ## 🔍 **Testing Checklist**
-- [ ] All 4 audit types display correctly
-- [ ] History loads and paginates
-- [ ] Status indicators work
-- [ ] Credit costs show accurately
-- [ ] Responsive design works
-- [ ] Error states handled
-- [ ] Empty states look good
-- [ ] Performance acceptable with 50+ audits
+- [ ] All 4 audit types show in sidebar with correct status
+- [ ] Clicking audit type switches to that audit's results
+- [ ] History timeline shows correct dates and status
+- [ ] "Run New Audit" works for un-run audit types
+- [ ] URL routing supports audit switching
+- [ ] Error states handled for failed audits
+- [ ] Loading states during audit switching
+- [ ] Mobile layout works properly
