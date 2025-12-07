@@ -95,7 +95,7 @@ const TierBadges: React.FC<TierBadgesProps> = ({
                             {isCompleted ? (
                                 <Check className="w-3 h-3" />
                             ) : (
-                                <Lock className="w-3 h-3" />
+                                <Play className="w-3 h-3" />
                             )}
                             {tier.shortName}
                         </div>
