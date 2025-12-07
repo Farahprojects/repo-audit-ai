@@ -164,6 +164,7 @@ serve(async (req) => {
     const { error: insertError } = await supabase.from('audits').insert({
       user_id: userId,
       repo_url: repoUrl,
+      tier: tier,
       health_score: finalReport?.healthScore || 0,
       summary: finalReport?.summary || "No summary generated.",
       issues: dbIssues,

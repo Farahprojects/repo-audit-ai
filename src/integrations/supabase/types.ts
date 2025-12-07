@@ -22,6 +22,7 @@ export type Database = {
           issues: Json | null
           repo_url: string
           summary: string | null
+          tier: string
           total_tokens: number | null
           user_id: string | null
         }
@@ -32,6 +33,7 @@ export type Database = {
           issues?: Json | null
           repo_url: string
           summary?: string | null
+          tier: string
           total_tokens?: number | null
           user_id?: string | null
         }
@@ -42,6 +44,7 @@ export type Database = {
           issues?: Json | null
           repo_url?: string
           summary?: string | null
+          tier?: string
           total_tokens?: number | null
           user_id?: string | null
         }
