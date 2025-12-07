@@ -6,20 +6,23 @@ verify_jwt = false
 [functions.audit-runner]
 verify_jwt = false
 
+[functions.audit-worker]
+verify_jwt = false
+
+[functions.audit-coordinator]
+verify_jwt = false
+
 [functions.github-oauth-start]
-enabled = true
 verify_jwt = true
-import_map = "./functions/github-oauth-start/deno.json"
-entrypoint = "./functions/github-oauth-start/index.ts"
 
 [functions.github-oauth-callback]
-enabled = true
 verify_jwt = false
-import_map = "./functions/github-oauth-callback/deno.json"
-entrypoint = "./functions/github-oauth-callback/index.ts"
 
 [functions.decrypt-github-token]
-enabled = true
 verify_jwt = true
-import_map = "./functions/decrypt-github-token/deno.json"
-entrypoint = "./functions/decrypt-github-token/index.ts"
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.verify-email]
+verify_jwt = false
