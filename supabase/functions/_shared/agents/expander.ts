@@ -1,6 +1,6 @@
 
 import { AuditContext, ScanResult, ArchitectureMap } from './types.ts';
-import { callGemini } from './utils.ts';
+import { callGemini, GeminiUsage } from './utils.ts';
 
 const SYSTEM_PROMPT = `You are the EXPANDER agent (Pass 2/5).
 Your job is to build an ARCHITECTURE MAP from the code.
@@ -18,7 +18,7 @@ Return JSON:
   ]
 }`;
 
-export async function runExpander(context: AuditContext, scanResult: ScanResult, apiKey: string, tierPrompt: string): Promise<ArchitectureMap> {
+export async function runExpander(context: AuditContext, scanResult: ScanResult, apiKey: string, tierPrompt: string): Promise<{ result: ArchitectureMap; usage: GeminiUsage }> {
   console.log('Running Pass 2: Expander...');
 
   // Strategy: We need to see code to find routes/schema.
@@ -42,5 +42,7 @@ ${tierPrompt}
 Analyze these Key Files for Architecture:
 ${fileContext}`;
 
-  return await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+  const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+  return { result: data, usage };
 }
+```

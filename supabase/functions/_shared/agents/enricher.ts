@@ -1,6 +1,6 @@
 
 import { AuditContext, CorrelationGraph, RiskAssessment } from './types.ts';
-import { callGemini } from './utils.ts';
+import { callGemini, GeminiUsage } from './utils.ts';
 
 const SYSTEM_PROMPT = `You are the ENRICHER agent (Pass 4/5).
 Your job is to take the potential issues found by the Correlator and Apply DEEP EXPERTISE.
@@ -31,7 +31,7 @@ Return JSON:
   ]
 }`;
 
-export async function runEnricher(context: AuditContext, correlation: CorrelationGraph, apiKey: string, tierPrompt: string): Promise<RiskAssessment> {
+export async function runEnricher(context: AuditContext, correlation: CorrelationGraph, apiKey: string, tierPrompt: string): Promise<{ result: RiskAssessment; usage: GeminiUsage }> {
   console.log('Running Pass 4: Enricher...');
 
   // We feed the correlator's suspicions to the expert.
@@ -48,5 +48,6 @@ ${tierPrompt}
 Verify these issues and perform a deep security/performance review.
 `;
 
-  return await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+  const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+  return { result: data, usage };
 }

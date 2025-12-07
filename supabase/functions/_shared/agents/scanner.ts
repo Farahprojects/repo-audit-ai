@@ -1,6 +1,6 @@
 
 import { AuditContext, ScanResult } from './types.ts';
-import { callGemini } from './utils.ts';
+import { callGemini, GeminiUsage } from './utils.ts';
 
 const SYSTEM_PROMPT = `You are the SCANNER agent (Pass 1/5) in a code audit pipeline.
 Your job is to read the raw file list and extract structural metadata.
@@ -23,7 +23,7 @@ Return JSON:
   }
 }`;
 
-export async function runScanner(context: AuditContext, apiKey: string, tierPrompt: string): Promise<ScanResult> {
+export async function runScanner(context: AuditContext, apiKey: string, tierPrompt: string): Promise<{ result: ScanResult; usage: GeminiUsage }> {
   console.log('Running Pass 1: Scanner...');
 
   // Prepare light context (filenames only + key configs)
@@ -35,5 +35,6 @@ export async function runScanner(context: AuditContext, apiKey: string, tierProm
 
   const userPrompt = `Files in Repo:\n${filePaths}\n\nKey Configs:\n${configContent}\n\nReview Focus:\n${tierPrompt}`;
 
-  return await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.1);
+  const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.1);
+  return { result: data, usage };
 }

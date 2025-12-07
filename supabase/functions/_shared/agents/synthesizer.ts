@@ -1,6 +1,6 @@
 
 import { AuditContext, RiskAssessment, FinalAuditReport } from './types.ts';
-import { callGemini } from './utils.ts';
+import { callGemini, GeminiUsage } from './utils.ts';
 
 const SYSTEM_PROMPT = `You are the SYNTHESIZER agent (Pass 5/5).
 Your job is to write the FINAL AUDIT REPORT.
@@ -20,7 +20,7 @@ Output Requirements:
 
 Return JSON.`;
 
-export async function runSynthesizer(context: AuditContext, risks: RiskAssessment, apiKey: string, tierPrompt: string): Promise<FinalAuditReport> {
+export async function runSynthesizer(context: AuditContext, risks: RiskAssessment, apiKey: string, tierPrompt: string): Promise<{ result: FinalAuditReport; usage: GeminiUsage }> {
     console.log('Running Pass 5: Synthesizer...');
 
     const userPrompt = `Risk Assessment (Pass 4):
@@ -35,5 +35,6 @@ Generate the final Senior Principal Engineer Report.
 Prioritize findings. Filter out noise.
 `;
 
-    return await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+    const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+    return { result: data, usage };
 }

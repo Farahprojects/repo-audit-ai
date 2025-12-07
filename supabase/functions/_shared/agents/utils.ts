@@ -1,12 +1,23 @@
 
 export const GEMINI_MODEL = 'gemini-2.0-flash-exp';
 
+export interface GeminiUsage {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+}
+
+export interface GeminiResponse<T = any> {
+    data: T;
+    usage: GeminiUsage;
+}
+
 export async function callGemini(
     apiKey: string,
     systemPrompt: string,
     userPrompt: string,
     temperature: number = 0.2
-): Promise<any> {
+): Promise<GeminiResponse> {
     const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
         {
@@ -34,9 +45,19 @@ export async function callGemini(
 
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const usageRaw = data.usageMetadata || {};
+
+    const usage: GeminiUsage = {
+        promptTokens: usageRaw.promptTokenCount || 0,
+        completionTokens: usageRaw.candidatesTokenCount || 0,
+        totalTokens: (usageRaw.promptTokenCount || 0) + (usageRaw.candidatesTokenCount || 0)
+    };
 
     try {
-        return JSON.parse(text);
+        return {
+            data: JSON.parse(text),
+            usage
+        };
     } catch (e) {
         console.error('Failed to parse Gemini JSON:', text);
         throw new Error('Invalid JSON response from Gemini');

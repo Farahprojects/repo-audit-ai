@@ -1,6 +1,6 @@
 
 import { AuditContext, ArchitectureMap, CorrelationGraph } from './types.ts';
-import { callGemini } from './utils.ts';
+import { callGemini, GeminiUsage } from './utils.ts';
 
 const SYSTEM_PROMPT = `You are the CORRELATOR agent (Pass 3/5).
 Your job is to find BROKEN LINKS, INCONSISTENCIES, and LOGIC GAPS.
@@ -26,7 +26,7 @@ Return JSON:
   ]
 }`;
 
-export async function runCorrelator(context: AuditContext, archMap: ArchitectureMap, apiKey: string, tierPrompt: string): Promise<CorrelationGraph> {
+export async function runCorrelator(context: AuditContext, archMap: ArchitectureMap, apiKey: string, tierPrompt: string): Promise<{ result: CorrelationGraph; usage: GeminiUsage }> {
   console.log('Running Pass 3: Correlator...');
 
   // This pass needs to look at the relationships.
@@ -43,5 +43,6 @@ Are there missing guards?
 Are there defined services that are never used?
 Are there API routes that don't map to known DB constraints?`;
 
-  return await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+  const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+  return { result: data, usage };
 }
