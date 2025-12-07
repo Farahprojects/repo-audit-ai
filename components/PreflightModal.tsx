@@ -173,8 +173,8 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
             <p className="text-3xl font-bold text-slate-900">{stats?.files}</p>
           </div>
           <div className="p-8 text-center">
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Complexity</p>
-            <p className="text-3xl font-bold text-slate-900">{stats?.tokens}</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Size</p>
+            <p className="text-3xl font-bold text-slate-900">{stats?.size}</p>
           </div>
           <div className="p-8 text-center">
             <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Language</p>

@@ -213,6 +213,12 @@ serve(async (req) => {
         ? `${(estTokens / 1000000).toFixed(1)}M`
         : `${(estTokens / 1000).toFixed(1)}k`;
 
+      // Calculate repository size in human-readable format
+      const sizeInBytes = repoData.size * 1024; // GitHub size is in KB
+      const sizeDisplay = sizeInBytes > (1024 * 1024 * 1024)
+        ? `${(sizeInBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+        : `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+
       const fileCount = Math.round(repoData.size / 5);
 
       console.log(`📊 [github-proxy] Calculated stats:`, {
@@ -228,6 +234,7 @@ serve(async (req) => {
         JSON.stringify({
           files: fileCount,
           tokens: tokenDisplay,
+          size: sizeDisplay,
           language: primaryLang,
           languagePercent,
           defaultBranch: repoData.default_branch

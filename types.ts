@@ -26,6 +26,7 @@ export interface Issue {
 export interface AuditStats {
   files: number;
   tokens: string;
+  size: string;
   language: string;
   languagePercent: number;
 }
