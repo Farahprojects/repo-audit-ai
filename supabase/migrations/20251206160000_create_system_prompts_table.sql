@@ -58,63 +58,69 @@ EXECUTE FUNCTION public.update_updated_at_column();
 
 INSERT INTO public.system_prompts (tier, name, description, credit_cost, prompt) VALUES
 
-('shape', 'Repo Shape Check', 'Structural analysis of folder organization, dependencies, and naming conventions', 2,
+('shape', 'Repo Shape Check', 'Shape-level structural analysis of project organization and basic conventions', 2,
 
-'You are a WORKER AGENT in a multi-agent code audit system.
+'I want you to perform a shape-level analysis of this repo.
 
-You are analyzing ONE CHUNK of a larger codebase.
+Don''t review individual code logic yet.
 
-
-
-OUTPUT FORMAT (return ONLY valid JSON):
-
-{
-
-  "localScore": <number 0-100>,
-
-  "confidence": <number 0.0-1.0>,
-
-  "issues": [
-
-    {
-
-      "id": "<unique_id>",
-
-      "severity": "critical" | "warning" | "info",
-
-      "category": "<category>",
-
-      "title": "<short title>",
-
-      "description": "<detailed finding>",
-
-      "file": "<file path>",
-
-      "line": <line number or null>,
-
-      "badCode": "<problematic code snippet if applicable>",
-
-      "fixedCode": "<corrected code if applicable>",
-
-      "suggestion": "<actionable fix>"
-
-    }
-
-  ],
-
-  "crossFileFlags": ["<dependency or concern that affects other chunks>"],
-
-  "uncertainties": ["<things you couldn''t determine from this chunk alone>"]
-
-}
+Just evaluate the structural health of the project.
 
 
 
-## FOCUS: STRUCTURAL SHAPE
+Specifically check:
 
-Check: folder organization, dependency hygiene, naming conventions, AI-generated indicators, red flags.
 
-Categories: maintainability | best-practices | security'),
+
+Folder structure clarity
+
+
+
+Dependency hygiene (package.json / imports)
+
+
+
+Config + environment file setup
+
+
+
+API + routing organization
+
+
+
+Authentication flow structure
+
+
+
+Error handling patterns
+
+
+
+How well the repo reflects senior-level conventions
+
+
+
+Any signs of AI-generated shortcuts or missing pieces
+
+
+
+Anything a hiring manager would consider a red flag
+
+
+
+After your analysis, give me:
+
+• A high-level repo maturity score (0–100)
+
+• Top 5 strengths
+
+• Top 5 issues
+
+• Any suspicious or missing files
+
+• Whether the repo looks like it was produced by a senior dev
+
+• A summary in under 10 bullet points'),
 
 
 
