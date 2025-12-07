@@ -7,17 +7,32 @@ interface FileContent {
 }
 
 export const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
+  console.log('🔗 [parseGitHubUrl] Parsing URL:', url);
+
   try {
     const urlObj = new URL(url);
+    console.log('🔗 [parseGitHubUrl] Full URL detected, hostname:', urlObj.hostname);
     const parts = urlObj.pathname.split('/').filter(Boolean);
+    console.log('🔗 [parseGitHubUrl] Path parts:', parts);
+
     if (parts.length >= 2) {
-      return { owner: parts[0], repo: parts[1] };
+      const result = { owner: parts[0], repo: parts[1] };
+      console.log('✅ [parseGitHubUrl] Successfully parsed:', result);
+      return result;
     }
   } catch (e) {
+    console.log('🔄 [parseGitHubUrl] URL parsing failed, trying simple format');
     // Try parsing as owner/repo format
     const parts = url.split('/');
-    if (parts.length === 2) return { owner: parts[0], repo: parts[1] };
+    console.log('🔗 [parseGitHubUrl] Simple format parts:', parts);
+    if (parts.length === 2) {
+      const result = { owner: parts[0], repo: parts[1] };
+      console.log('✅ [parseGitHubUrl] Successfully parsed simple format:', result);
+      return result;
+    }
   }
+
+  console.log('❌ [parseGitHubUrl] Failed to parse URL');
   return null;
 };
 
@@ -30,27 +45,50 @@ export const fetchRepoStats = async (
   repo: string,
   accessToken?: string
 ): Promise<AuditStats> => {
+  console.log('🔍 [fetchRepoStats] Starting repo analysis for:', `${owner}/${repo}`);
+  console.log('🔍 [fetchRepoStats] Access token provided:', !!accessToken);
+
   // Call github-proxy edge function
+  console.log('🔍 [fetchRepoStats] Calling github-proxy edge function...');
   const { data, error } = await supabase.functions.invoke('github-proxy', {
     body: { owner, repo, action: 'stats', userToken: accessToken }
   });
 
+  console.log('🔍 [fetchRepoStats] Edge function response:', { data, error });
+
   if (error) {
-    console.error('GitHub proxy error:', error);
+    console.error('❌ [fetchRepoStats] GitHub proxy error:', error);
     throw new Error(error.message || 'Failed to fetch repository');
   }
 
   if (data?.error) {
+    console.log('⚠️ [fetchRepoStats] Data contains error:', data.error);
+
     if (data.error.includes('rate limit')) {
+      console.log('⏱️ [fetchRepoStats] Rate limit detected');
       throw new Error('GitHub API rate limit exceeded. Please try again later.');
     }
+
     // Detect private repo specifically (404 = Not Found, 401 = Unauthorized/Private)
-    if (data.error.includes('404') || data.error.includes('401') || data.error.includes('Not Found')) {
+    const isPrivateError = data.error.includes('404') || data.error.includes('401') || data.error.includes('Not Found');
+    console.log('🔐 [fetchRepoStats] Private repo check:', {
+      error: data.error,
+      includes404: data.error.includes('404'),
+      includes401: data.error.includes('401'),
+      includesNotFound: data.error.includes('Not Found'),
+      isPrivateError
+    });
+
+    if (isPrivateError) {
+      console.log('🔐 [fetchRepoStats] Treating as private repo - throwing PRIVATE_REPO error');
       throw new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
     }
+
+    console.log('❌ [fetchRepoStats] Throwing generic error:', data.error);
     throw new Error(data.error);
   }
 
+  console.log('✅ [fetchRepoStats] Success! Returning stats:', data);
   return data as AuditStats;
 };
 

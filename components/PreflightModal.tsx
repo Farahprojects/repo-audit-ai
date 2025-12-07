@@ -25,35 +25,49 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   const { isGitHubConnected, getGitHubToken, signInWithGitHub, isConnecting } = useGitHubAuth();
 
   const loadStats = async (token?: string) => {
+    console.log('🚀 [PreflightModal] Starting loadStats for repo:', repoUrl);
+    console.log('🚀 [PreflightModal] GitHub token available:', !!token);
+
     setLoading(true);
     setError(null);
     setIsPrivateRepo(false);
 
+    console.log('🔍 [PreflightModal] Parsing GitHub URL...');
     const repoInfo = parseGitHubUrl(repoUrl);
+    console.log('🔍 [PreflightModal] Parsed repo info:', repoInfo);
 
     if (!repoInfo) {
+      console.log('❌ [PreflightModal] Invalid GitHub URL format');
       setError("Invalid GitHub URL format");
       setLoading(false);
       return;
     }
 
+    console.log('📡 [PreflightModal] Calling fetchRepoStats...');
     try {
       const data = await fetchRepoStats(repoInfo.owner, repoInfo.repo, token);
+      console.log('✅ [PreflightModal] fetchRepoStats success:', data);
       setStats(data);
       setStep('selection');
+      console.log('🎯 [PreflightModal] Moving to selection step');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
+      console.log('❌ [PreflightModal] fetchRepoStats failed:', message);
 
       // Check if this is a private repo error
       if (message.startsWith('PRIVATE_REPO:')) {
+        console.log('🔐 [PreflightModal] Detected private repo error');
         setIsPrivateRepo(true);
         setError(message.replace('PRIVATE_REPO:', ''));
         setStep('github-connect');
+        console.log('🎯 [PreflightModal] Moving to github-connect step');
       } else {
+        console.log('⚠️ [PreflightModal] Setting generic error:', message);
         setError(message);
       }
     } finally {
       setLoading(false);
+      console.log('🏁 [PreflightModal] loadStats completed');
     }
   };
 

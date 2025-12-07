@@ -135,21 +135,33 @@ serve(async (req) => {
     // ACTION: stats - Fetch repository metadata and stats
     // =========================================================================
     if (action === 'stats') {
-      console.log(`Fetching stats for: ${owner}/${repo}`);
+      console.log(`🔍 [github-proxy] Fetching stats for: ${owner}/${repo}`);
+      console.log(`🔍 [github-proxy] Using token:`, !!GITHUB_TOKEN);
 
       const repoRes = await fetch(
         `https://api.github.com/repos/${owner}/${repo}`,
         { headers }
       );
 
+      console.log(`🔍 [github-proxy] GitHub API response status:`, repoRes.status);
+      console.log(`🔍 [github-proxy] GitHub API response headers:`, Object.fromEntries(repoRes.headers.entries()));
+
       if (!repoRes.ok) {
         const remaining = repoRes.headers.get('X-RateLimit-Remaining');
+        console.log(`🔍 [github-proxy] Rate limit remaining:`, remaining);
+
         if (remaining === '0') {
+          console.log(`⏱️ [github-proxy] Rate limit exceeded`);
           return new Response(
             JSON.stringify({ error: 'GitHub API rate limit exceeded' }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+
+        console.log(`❌ [github-proxy] Repository not found or private - status:`, repoRes.status);
+        const errorText = await repoRes.text();
+        console.log(`❌ [github-proxy] GitHub API error response:`, errorText);
+
         return new Response(
           JSON.stringify({ error: `Repository not found: ${repoRes.status}` }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -157,13 +169,22 @@ serve(async (req) => {
       }
 
       const repoData = await repoRes.json();
+      console.log(`✅ [github-proxy] Successfully fetched repo data:`, {
+        name: repoData.name,
+        private: repoData.private,
+        size: repoData.size,
+        language: repoData.language,
+        default_branch: repoData.default_branch
+      });
 
       // Fetch languages
+      console.log(`🔍 [github-proxy] Fetching languages...`);
       const langRes = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/languages`,
         { headers }
       );
       const langData = await langRes.json();
+      console.log(`✅ [github-proxy] Languages data:`, langData);
 
       const languages = Object.keys(langData);
       const primaryLang = languages.length > 0 ? languages[0] : 'Unknown';
@@ -177,6 +198,15 @@ serve(async (req) => {
         : `${(estTokens / 1000).toFixed(1)}k`;
 
       const fileCount = Math.round(repoData.size / 5);
+
+      console.log(`📊 [github-proxy] Calculated stats:`, {
+        primaryLang,
+        languagePercent,
+        estTokens,
+        tokenDisplay,
+        fileCount,
+        totalBytes
+      });
 
       return new Response(
         JSON.stringify({
