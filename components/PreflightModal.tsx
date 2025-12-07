@@ -147,26 +147,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     );
   }
 
-  // Generic error (not private repo)
-  if (error && !isPrivateRepo) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
-        <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
-          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
-          </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Unable to Access Repository</h3>
-          <p className="text-slate-500 mb-8">{error}</p>
-          <button
-            onClick={onCancel}
-            className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-medium transition-colors shadow-lg"
-          >
-            Try Another Repo
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/10 backdrop-blur-lg p-4 animate-in fade-in zoom-in duration-300">
@@ -313,6 +293,25 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
         </div>
 
       </div>
+
+      {/* Error popup overlay */}
+      {error && !isPrivateRepo && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Unable to Access Repository</h3>
+            <p className="text-slate-500 mb-8">{error}</p>
+            <button
+              onClick={onCancel}
+              className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-medium transition-colors shadow-lg"
+            >
+              Try Another Repo
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

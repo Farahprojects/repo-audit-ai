@@ -1,7 +1,15 @@
 // @ts-nocheck
-// Audit Runner - Orchestration layer for multi-agent audit system
+// Audit Runner - Orchestration layer for 5-Pass "Magic Analysis" Pipeline
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Import Agents
+import { runScanner } from '../_shared/agents/scanner.ts';
+import { runExpander } from '../_shared/agents/expander.ts';
+import { runCorrelator } from '../_shared/agents/correlator.ts';
+import { runEnricher } from '../_shared/agents/enricher.ts';
+import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
+import { AuditContext } from '../_shared/agents/types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,296 +20,8 @@ const ENV = {
   SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
   GEMINI_API_KEY: Deno.env.get('GEMINI_API_KEY'),
-  GEMINI_MODEL: 'gemini-2.0-flash-exp',
 };
 
-// Valid tiers for validation
-const VALID_TIERS = ['shape', 'conventions', 'performance', 'security'];
-
-// Token estimation: ~4 chars per token
-function estimateTokens(content: string): number {
-  return Math.ceil(content.length / 4);
-}
-
-// ============================================================================
-// Chunking Logic
-// ============================================================================
-interface FileInfo {
-  path: string;
-  content: string;
-  tokens: number;
-}
-
-interface Chunk {
-  id: string;
-  name: string;
-  files: FileInfo[];
-  totalTokens: number;
-  priority: number;
-}
-
-function getFolderPriority(folderName: string): number {
-  const priorities: Record<string, number> = {
-    'src': 10, 'app': 10, 'lib': 9, 'api': 9, 'pages': 8,
-    'components': 8, 'services': 8, 'hooks': 7, 'utils': 7,
-    'supabase': 9, 'functions': 9, 'server': 9, 'auth': 10,
-    'middleware': 8, 'config': 6, 'types': 5, 'styles': 3,
-    '_root': 5,
-  };
-  return priorities[folderName.toLowerCase()] || 5;
-}
-
-function createChunks(
-  files: Array<{ path: string; content: string }>,
-  maxTokensPerChunk: number = 400000
-): Chunk[] {
-  const filesWithTokens: FileInfo[] = files.map(f => ({
-    ...f,
-    tokens: estimateTokens(f.content),
-  }));
-
-  const totalTokens = filesWithTokens.reduce((sum, f) => sum + f.tokens, 0);
-  console.log(`📊 Total tokens: ${totalTokens.toLocaleString()}`);
-
-  // Small repo: single chunk
-  if (totalTokens <= maxTokensPerChunk) {
-    return [{
-      id: 'all',
-      name: 'Full Repository',
-      files: filesWithTokens,
-      totalTokens,
-      priority: 10,
-    }];
-  }
-
-  // Group by folder
-  const folders = new Map<string, FileInfo[]>();
-  for (const file of filesWithTokens) {
-    const parts = file.path.split('/');
-    const folder = parts.length > 1 ? parts[0] : '_root';
-    if (!folders.has(folder)) folders.set(folder, []);
-    folders.get(folder)!.push(file);
-  }
-
-  const chunks: Chunk[] = [];
-  const smallFolders: FileInfo[] = [];
-
-  for (const [folderName, folderFiles] of folders) {
-    const folderTokens = folderFiles.reduce((sum, f) => sum + f.tokens, 0);
-
-    if (folderTokens > maxTokensPerChunk) {
-      // Split large folder
-      let currentChunk: FileInfo[] = [];
-      let currentTokens = 0;
-      let chunkIndex = 0;
-
-      for (const file of folderFiles) {
-        if (currentTokens + file.tokens > maxTokensPerChunk && currentChunk.length > 0) {
-          chunks.push({
-            id: `${folderName}-${chunkIndex}`,
-            name: `${folderName} (part ${chunkIndex + 1})`,
-            files: currentChunk,
-            totalTokens: currentTokens,
-            priority: getFolderPriority(folderName),
-          });
-          currentChunk = [];
-          currentTokens = 0;
-          chunkIndex++;
-        }
-        currentChunk.push(file);
-        currentTokens += file.tokens;
-      }
-      if (currentChunk.length > 0) {
-        chunks.push({
-          id: `${folderName}-${chunkIndex}`,
-          name: chunkIndex > 0 ? `${folderName} (part ${chunkIndex + 1})` : folderName,
-          files: currentChunk,
-          totalTokens: currentTokens,
-          priority: getFolderPriority(folderName),
-        });
-      }
-    } else if (folderTokens < 30000) {
-      // Small folder: queue for merging
-      smallFolders.push(...folderFiles);
-    } else {
-      // Medium folder: single chunk
-      chunks.push({
-        id: folderName,
-        name: folderName,
-        files: folderFiles,
-        totalTokens: folderTokens,
-        priority: getFolderPriority(folderName),
-      });
-    }
-  }
-
-  // Merge small folders
-  if (smallFolders.length > 0) {
-    const smallTotal = smallFolders.reduce((sum, f) => sum + f.tokens, 0);
-    chunks.push({
-      id: 'misc',
-      name: 'Other Files',
-      files: smallFolders,
-      totalTokens: smallTotal,
-      priority: 4,
-    });
-  }
-
-  chunks.sort((a, b) => b.priority - a.priority);
-  console.log(`📦 Created ${chunks.length} chunks for parallel processing`);
-  return chunks;
-}
-
-// ============================================================================
-// Fetch System Prompt from Database
-// ============================================================================
-interface SystemPrompt {
-  tier: string;
-  name: string;
-  prompt: string;
-  credit_cost: number;
-}
-
-async function fetchSystemPrompt(supabase: any, tier: string): Promise<SystemPrompt> {
-  const { data, error } = await supabase
-    .from('system_prompts')
-    .select('tier, name, prompt, credit_cost')
-    .eq('tier', tier)
-    .eq('is_active', true)
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to fetch system prompt for tier "${tier}": ${error.message}`);
-  }
-
-  if (!data) {
-    throw new Error(`No active system prompt found for tier "${tier}"`);
-  }
-
-  console.log(`✅ [DB] Loaded prompt for tier "${tier}" (${data.name})`);
-  return data;
-}
-
-// ============================================================================
-// Coordinator Synthesis (for multi-chunk repos)
-// ============================================================================
-async function callCoordinator(workerFindings: any[], tier: string, repoUrl: string): Promise<any> {
-  console.log(`🎯 Calling Coordinator to synthesize ${workerFindings.length} worker findings...`);
-
-  const SYNTHESIS_PROMPT = `You are the COORDINATOR AGENT synthesizing a multi-agent code audit.
-
-Worker agents have analyzed different chunks of this codebase. Your job is to generate a COMPREHENSIVE, SENIOR-LEVEL audit report.
-
-Return ONLY valid JSON with this EXACT structure:
-{
-  "healthScore": <number 0-100>,
-  "summary": "<2-3 sentence executive summary that sounds like a senior developer wrote it>",
-  
-  "topStrengths": [
-    {"title": "<strength name>", "detail": "<1-2 sentence explanation>"}
-  ],
-  
-  "topIssues": [
-    {"title": "<issue name>", "detail": "<1-2 sentence explanation>"}
-  ],
-  
-  "suspiciousFiles": {
-    "present": ["<files that exist but are concerning - with brief reason>"],
-    "missing": ["<expected files that are missing - like .env.example, README, etc>"]
-  },
-  
-  "categoryAssessments": {
-    "architecture": "<1-2 sentence assessment of folder structure and organization>",
-    "codeQuality": "<1-2 sentence assessment of TypeScript usage, patterns, readability>",
-    "security": "<1-2 sentence assessment of auth, RLS, secrets, vulnerabilities>",
-    "dependencies": "<1-2 sentence assessment of package.json, outdated/vulnerable deps>",
-    "database": "<1-2 sentence assessment of schema, migrations, data modeling>",
-    "documentation": "<1-2 sentence assessment of README, comments, docs>",
-    "deployment": "<1-2 sentence assessment of build setup, CI/CD, hosting config>",
-    "maintenance": "<1-2 sentence assessment of code debt, TODOs, test coverage>"
-  },
-  
-  "seniorDeveloperAssessment": {
-    "isSeniorLevel": <boolean - does this look like senior-level work?>,
-    "justification": "<2-3 sentences explaining why this is/isn't senior-level code>"
-  },
-  
-  "overallVerdict": "<3-4 sentence closing statement summarizing the repo's production-readiness and key recommendations>",
-  "productionReady": <boolean>,
-  "riskLevel": "critical" | "high" | "medium" | "low"
-}
-
-GUIDELINES:
-- Be specific and actionable, not generic
-- Reference actual patterns/files from the worker findings
-- topStrengths should have 3-5 items highlighting genuinely good practices
-- topIssues should have 3-5 items focusing on the most impactful problems
-- For small/simple repos, it's OK to have fewer items
-- The seniorDeveloperAssessment should be honest - junior code is OK, just explain why
-- Health score: 90+ exceptional, 80+ professional, 70+ acceptable, 60+ needs work, <60 concerning`;
-
-  // Build findings summary for coordinator
-  const findingsSummary = workerFindings.map((f: any) => `
-## Chunk: ${f.chunkName} (${f.tokensAnalyzed.toLocaleString()} tokens)
-- Local Score: ${f.localScore}/100 (confidence: ${f.confidence})
-- Issues Found: ${f.issues?.length || 0}
-${f.issues?.slice(0, 8).map((i: any) => `  - [${i.severity}] ${i.title}: ${i.description?.slice(0, 100) || ''}`).join('\n') || '  None'}
-- Cross-File Flags: ${f.crossFileFlags?.join(', ') || 'None'}
-- Uncertainties: ${f.uncertainties?.join(', ') || 'None'}
-`).join('\n');
-
-  const userPrompt = `Repository: ${repoUrl}
-Audit Tier: ${tier}
-Total Chunks Analyzed: ${workerFindings.length}
-Total Issues Across Workers: ${workerFindings.reduce((sum: number, f: any) => sum + (f.issues?.length || 0), 0)}
-
-WORKER FINDINGS:
-${findingsSummary}
-
-Generate the comprehensive audit report.`;
-
-  try {
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${ENV.GEMINI_MODEL}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': ENV.GEMINI_API_KEY!
-        },
-        body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: SYNTHESIS_PROMPT + '\n\n' + userPrompt }] }
-          ],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 8192,
-          }
-        })
-      }
-    );
-
-    if (!geminiResponse.ok) {
-      console.error('[Coordinator] Gemini error:', geminiResponse.status);
-      return null;
-    }
-
-    const geminiData = await geminiResponse.json();
-    let responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-    const result = JSON.parse(responseText);
-    console.log(`✅ Coordinator synthesis complete: healthScore=${result.healthScore}, riskLevel=${result.riskLevel}, seniorLevel=${result.seniorDeveloperAssessment?.isSeniorLevel}`);
-    return result;
-  } catch (e) {
-    console.error('[Coordinator] Error:', e);
-    return null;
-  }
-}
-
-// ============================================================================
-// Main Handler
-// ============================================================================
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -312,10 +32,9 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    // Create supabase client for DB operations (used throughout)
     const supabase = createClient(ENV.SUPABASE_URL!, ENV.SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Auth
+    // Auth Check
     const authHeader = req.headers.get('Authorization');
     let userId: string | null = null;
     if (authHeader) {
@@ -324,7 +43,7 @@ serve(async (req) => {
       userId = user?.id || null;
     }
 
-    const { repoUrl, files, tier = 'shape' } = await req.json();
+    const { repoUrl, files, tier = 'security' } = await req.json();
 
     if (!repoUrl || !files || !Array.isArray(files)) {
       return new Response(
@@ -333,283 +52,100 @@ serve(async (req) => {
       );
     }
 
-    const selectedTier = tier.toLowerCase();
-
-    // Validate tier
-    if (!VALID_TIERS.includes(selectedTier)) {
-      return new Response(
-        JSON.stringify({ error: `Invalid tier "${selectedTier}". Valid tiers: ${VALID_TIERS.join(', ')}` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Fetch prompt from database (fail fast if not found)
-    const systemPromptData = await fetchSystemPrompt(supabase, selectedTier);
-
-    const workerPrompt = systemPromptData.prompt;
-    const creditCost = systemPromptData.credit_cost;
-    const tierName = systemPromptData.name;
-
-    console.log(`📝 Using prompt from DB: ${tierName}`);
-    console.log(`💳 Credit cost: ${creditCost}`);
-
     console.log(`\n${'='.repeat(60)}`);
-    console.log(`🚀 MULTI-AGENT ${selectedTier.toUpperCase()} AUDIT`);
-    console.log(`📁 Repository: ${repoUrl}`);
+    console.log(`🚀 STARTING 5-PASS MAGIC ANALYSIS`);
+    console.log(`📁 Repo: ${repoUrl}`);
     console.log(`📄 Files: ${files.length}`);
     console.log(`${'='.repeat(60)}\n`);
 
-    // Step 1: Create chunks for parallel processing
-    const chunks = createChunks(files);
-    const isMultiChunk = chunks.length > 1;
+    // Initialize Context
+    const context: AuditContext = {
+      repoUrl,
+      files: files.map(f => ({ path: f.path, type: 'file', content: f.content, size: f.content.length })),
+      tier
+    };
 
-    console.log(`\n🤖 AGENT DISPATCH:`);
-    chunks.forEach((chunk, i) => {
-      console.log(`   Worker ${i + 1}: ${chunk.name} (${chunk.files.length} files, ${chunk.totalTokens.toLocaleString()} tokens)`);
-    });
-    console.log('');
+    // --- PIPELINE EXECUTION ---
 
-    // Step 2: Dispatch workers in parallel
-    const workerPromises = chunks.map(async (chunk, index) => {
-      const startTime = Date.now();
-      console.log(`⚡ [Worker ${index + 1}/${chunks.length}] Starting analysis of "${chunk.name}"...`);
+    // 1. Pass One: Scanner
+    const timeStart = Date.now();
+    const scanResult = await runScanner(context, ENV.GEMINI_API_KEY);
+    console.log('✅ Pass 1 (Scanner) Complete');
 
-      const fileContext = chunk.files
-        .map(f => `--- ${f.path} ---\n${f.content}`)
-        .join('\n\n');
+    // 2. Pass Two: Expander
+    const archMap = await runExpander(context, scanResult, ENV.GEMINI_API_KEY);
+    console.log('✅ Pass 2 (Expander) Complete');
 
-      const userPrompt = `Analyze this code chunk from ${repoUrl}:
-Chunk: ${chunk.name}
-Files: ${chunk.files.length}
+    // 3. Pass Three: Correlator
+    const correlation = await runCorrelator(context, archMap, ENV.GEMINI_API_KEY);
+    console.log('✅ Pass 3 (Correlator) Complete');
 
-${fileContext}`;
+    // 4. Pass Four: Enricher
+    const risks = await runEnricher(context, correlation, ENV.GEMINI_API_KEY);
+    console.log('✅ Pass 4 (Enricher) Complete');
 
-      // Direct Gemini call (inline worker)
-      const geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${ENV.GEMINI_MODEL}:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': ENV.GEMINI_API_KEY!
-          },
-          body: JSON.stringify({
-            contents: [
-              { role: 'user', parts: [{ text: workerPrompt + '\n\n' + userPrompt }] }
-            ],
-            generationConfig: {
-              temperature: 0.2,
-              maxOutputTokens: 8192,
-            }
-          })
-        }
-      );
+    // 5. Pass Five: Synthesis
+    const finalReport = await runSynthesizer(context, risks, ENV.GEMINI_API_KEY);
+    console.log('✅ Pass 5 (Synthesizer) Complete');
 
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const totalTime = ((Date.now() - timeStart) / 1000).toFixed(1);
+    console.log(`🏁 Pipeline finished in ${totalTime}s`);
 
-      if (!geminiResponse.ok) {
-        console.error(`❌ [Worker ${index + 1}] Failed after ${elapsed}s:`, geminiResponse.status);
-        return {
-          chunkId: chunk.id,
-          chunkName: chunk.name,
-          tokensAnalyzed: chunk.totalTokens,
-          filesAnalyzed: chunk.files.length,
-          localScore: 50,
-          confidence: 0.3,
-          issues: [],
-          crossFileFlags: [`Worker ${chunk.id} failed`],
-          uncertainties: [],
-          duration: elapsed,
-        };
-      }
+    // --- SAVE TO DB ---
 
-      const geminiData = await geminiResponse.json();
-      let responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    // Map internal "issues" specific format to general DB format
+    // The Enricher/Synthesizer should return compatible issues, but let's standardise
+    // We use the "issues" from finalReport which are filtered/prioritised
 
-      try {
-        const result = JSON.parse(responseText);
-        console.log(`✅ [Worker ${index + 1}] Completed in ${elapsed}s → Score: ${result.localScore}, Issues: ${result.issues?.length || 0}`);
-        return {
-          chunkId: chunk.id,
-          chunkName: chunk.name,
-          tokensAnalyzed: chunk.totalTokens,
-          filesAnalyzed: chunk.files.length,
-          duration: elapsed,
-          ...result,
-        };
-      } catch {
-        console.error(`⚠️ [Worker ${index + 1}] Parse error after ${elapsed}s`);
-        return {
-          chunkId: chunk.id,
-          chunkName: chunk.name,
-          tokensAnalyzed: chunk.totalTokens,
-          filesAnalyzed: chunk.files.length,
-          localScore: 50,
-          confidence: 0.3,
-          issues: [],
-          crossFileFlags: [`Worker ${chunk.id} parse error`],
-          uncertainties: [],
-          duration: elapsed,
-        };
-      }
-    });
-
-    const workerFindings = await Promise.all(workerPromises);
-    console.log(`\n📊 All ${workerFindings.length} workers complete`);
-
-    // Step 3: Synthesize findings
-    let healthScore: number;
-    let summary: string;
-    let coordinatorInsights: any = null;
-
-    // Collect all issues from workers
-    const allIssues = workerFindings.flatMap(f => f.issues || []);
-    const totalTokens = workerFindings.reduce((sum, f) => sum + f.tokensAnalyzed, 0);
-    const crossFileFlags = [...new Set(workerFindings.flatMap(f => f.crossFileFlags || []))];
-
-    // If multi-chunk, use Coordinator for AI-powered synthesis
-    if (isMultiChunk) {
-      console.log(`\n🎯 COORDINATOR SYNTHESIS (multi-chunk repo)`);
-      coordinatorInsights = await callCoordinator(workerFindings, selectedTier, repoUrl);
-    }
-
-    if (coordinatorInsights) {
-      // Use coordinator's synthesized score and summary
-      healthScore = coordinatorInsights.healthScore;
-      summary = coordinatorInsights.summary;
-      console.log(`✅ Coordinator score: ${healthScore}/100`);
-    } else {
-      // Fallback: simple weighted average
-      const avgScore = workerFindings.reduce((sum, f) => sum + (f.localScore || 50), 0) / workerFindings.length;
-      healthScore = Math.round(avgScore);
-      healthScore -= Math.min(crossFileFlags.length * 2, 10); // Cross-file penalty
-      healthScore = Math.max(0, Math.min(100, healthScore));
-
-      summary = `Multi-agent analysis across ${chunks.length} code regions found ${allIssues.length} issues. ` +
-        `Health score: ${healthScore}/100. ` +
-        (allIssues.filter(i => i.severity === 'critical').length > 0
-          ? `${allIssues.filter(i => i.severity === 'critical').length} critical issues require immediate attention.`
-          : 'No critical issues found.');
-    }
-
-    // Deduplicate issues
-    const issueMap = new Map();
-    for (const issue of allIssues) {
-      const key = `${issue.category}-${issue.title}-${issue.file}`.toLowerCase();
-      if (!issueMap.has(key) || issue.description.length > issueMap.get(key).description.length) {
-        issueMap.set(key, issue);
-      }
-    }
-    const uniqueIssues = Array.from(issueMap.values());
-
-    // Sort by severity
-    const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
-    uniqueIssues.sort((a, b) => (severityOrder[a.severity] || 2) - (severityOrder[b.severity] || 2));
-
-    // Transform issues for frontend
-    const issues = uniqueIssues.map((issue, index) => ({
-      id: issue.id || `issue-${index + 1}`,
+    const dbIssues = (finalReport.issues || risks.findings || []).map((issue: any, index: number) => ({
+      id: issue.id || `issue-${index}`,
       title: issue.title,
       description: issue.description,
-      category: issue.category === 'security' ? 'Security' :
-        issue.category === 'performance' ? 'Performance' : 'Architecture',
-      severity: issue.severity === 'critical' ? 'Critical' :
-        issue.severity === 'warning' ? 'Warning' : 'Info',
-      filePath: issue.file || 'Repository-wide',
+      category: issue.category || 'Security',
+      severity: issue.severity || 'warning',
+      filePath: issue.filePath || 'Repository-wide',
       lineNumber: issue.line || 0,
-      badCode: issue.badCode || '',
-      fixedCode: issue.fixedCode || '',
-      sections: issue.sections || [],
+      badCode: issue.badCode || issue.snippet || '',
+      fixedCode: issue.remediation || '',
+      cwe: issue.cwe
     }));
 
-    // Save to DB - ALWAYS save audits (even without credits)
-    {
+    const { error: insertError } = await supabase.from('audits').insert({
+      user_id: userId,
+      repo_url: repoUrl,
+      health_score: finalReport.healthScore || risks.securityScore || 0,
+      summary: finalReport.summary,
+      issues: dbIssues,
+      total_tokens: scanResult.metadata?.totalTokens || 0, // Approx
+      architecture_map: archMap, // Save the rich data too!
+    });
 
-      // Always save the audit with token count
-      const { error: insertError } = await supabase.from('audits').insert({
-        user_id: userId, // can be null for anonymous users
-        repo_url: repoUrl,
-        health_score: healthScore,
-        summary: summary,
-        issues: issues,
-        total_tokens: totalTokens,
-      });
-
-      if (insertError) {
-        console.error(`❌ Failed to save audit:`, insertError);
-      } else {
-        console.log(`💾 Audit saved (${totalTokens.toLocaleString()} tokens)`);
-      }
-
-      // Deduct credits separately (only if user is authenticated and has credits)
-      if (userId) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('credits')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (profile && profile.credits >= creditCost) {
-          await supabase
-            .from('profiles')
-            .update({ credits: profile.credits - creditCost })
-            .eq('id', userId);
-          console.log(`💳 Credits deducted: ${profile.credits} → ${profile.credits - creditCost}`);
-        } else {
-          console.log(`⚠️ Insufficient credits (has: ${profile?.credits || 0}, needs: ${creditCost})`);
-        }
-      }
+    if (insertError) {
+      console.error('Failed to save audit:', insertError);
+    } else {
+      console.log('💾 Audit saved to DB');
     }
 
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`✅ AUDIT COMPLETE`);
-    console.log(`   Score: ${healthScore}/100`);
-    console.log(`   Issues: ${issues.length}`);
-    console.log(`   Mode: ${isMultiChunk ? 'Multi-Agent' : 'Single-Agent'}`);
-    console.log(`${'='.repeat(60)}\n`);
-
+    // Return Result
     return new Response(
       JSON.stringify({
-        healthScore,
-        summary,
-        issues,
-        totalTokens, // Top-level token count for easy access
-        filesAnalyzed: files.length,
-        tier: selectedTier,
-        // Multi-agent metadata
-        multiAgent: {
-          enabled: true,
-          chunksAnalyzed: chunks.length,
-          totalTokensAnalyzed: totalTokens,
-          crossFileFlags,
-          workerDetails: workerFindings.map(w => ({
-            chunk: w.chunkName,
-            files: w.filesAnalyzed,
-            tokens: w.tokensAnalyzed,
-            score: w.localScore,
-            issues: w.issues?.length || 0,
-            duration: w.duration,
-          })),
-          coordinatorUsed: !!coordinatorInsights,
-        },
-        // Coordinator insights if available
-        ...(coordinatorInsights ? {
-          topStrengths: coordinatorInsights.topStrengths,
-          topIssues: coordinatorInsights.topIssues,
-          suspiciousFiles: coordinatorInsights.suspiciousFiles,
-          categoryAssessments: coordinatorInsights.categoryAssessments,
-          seniorDeveloperAssessment: coordinatorInsights.seniorDeveloperAssessment,
-          overallVerdict: coordinatorInsights.overallVerdict,
-          productionReady: coordinatorInsights.productionReady,
-          riskLevel: coordinatorInsights.riskLevel,
-        } : {}),
+        healthScore: finalReport.healthScore,
+        summary: finalReport.summary,
+        issues: dbIssues,
+        riskLevel: finalReport.riskLevel,
+        productionReady: finalReport.productionReady,
+        meta: {
+          scan: scanResult,
+          architecture: archMap,
+          correlation: correlation,
+          duration: totalTime
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Audit runner error:', error);
+    console.error('Pipeline Error:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
