@@ -1,5 +1,5 @@
 
-export const GEMINI_MODEL = 'gemini-1.5-pro';
+export const GEMINI_MODEL = 'gemini-2.5-pro';
 
 export interface GeminiUsage {
     promptTokens: number;
@@ -33,7 +33,12 @@ export async function callGemini(
                 generationConfig: {
                     temperature: temperature,
                     maxOutputTokens: 8192,
-                    responseMimeType: "application/json"
+                    responseMimeType: "application/json",
+                    // Enable dynamic reasoning
+                    thinkingConfig: {
+                        includeThoughts: false, // We only want the final JSON, not the thought trace
+                        thinkingBudget: 1024 // Moderate budget for "Thinking"
+                    }
                 }
             })
         }
