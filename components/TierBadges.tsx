@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Play, Zap, Shield, ChevronRight, Layers } from 'lucide-react';
+import { Check, Play, Zap, Shield, ChevronRight, Layers, TrendingUp } from 'lucide-react';
 
 export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security';
 
