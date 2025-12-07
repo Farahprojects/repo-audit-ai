@@ -45,4 +45,3 @@ ${fileContext}`;
   const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
   return { result: data, usage };
 }
-```
