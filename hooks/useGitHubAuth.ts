@@ -37,14 +37,17 @@ export function useGitHubAuth() {
         if (!session?.user?.id) return;
 
         try {
-            const { data, error } = await (supabase
-                .from('github_accounts' as any)
+            const { data, error } = await supabase
+                .from('github_accounts')
                 .select('*')
                 .eq('user_id', session.user.id)
-                .single() as unknown as Promise<{ data: GitHubAccount | null; error: any }>);
+                .maybeSingle();
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-                console.error('Error fetching GitHub account:', error);
+            if (error) {
+                // Only log non-"not found" errors
+                if (error.code !== 'PGRST116') {
+                    console.error('Error fetching GitHub account:', error);
+                }
                 return;
             }
 
