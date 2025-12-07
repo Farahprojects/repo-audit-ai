@@ -152,9 +152,8 @@ serve(async (req) => {
     }));
 
 
-    console.log(`💾 Saving ${dbIssues.length} issues to DB...`);
 
-    const totalTokens = (plannerUsage?.totalTokens || 0) + swarmTokenUsage + (synthesizerUsage?.totalTokens || 0);
+    console.log(`💾 Saving ${dbIssues.length} issues to DB...`);
 
     console.log(`💰 Total Tokens Used: ${totalTokens}`);
 
@@ -184,7 +183,7 @@ serve(async (req) => {
         meta: {
           planValues: plan,
           swarmCount: swarmResults.length,
-          duration: totalTime
+          duration: durationMs
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
