@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Play, Zap, Shield, ChevronRight, Layers, TrendingUp } from 'lucide-react';
+import { Check, Lock, Zap, Shield, TrendingUp, Layers } from 'lucide-react';
 
 export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security';
 
@@ -95,7 +95,7 @@ const TierBadges: React.FC<TierBadgesProps> = ({
                             {isCompleted ? (
                                 <Check className="w-3 h-3" />
                             ) : (
-                                <Play className="w-3 h-3" />
+                                <Lock className="w-3 h-3" />
                             )}
                             {tier.shortName}
                         </div>
@@ -146,60 +146,33 @@ export const TierUpsellPanel: React.FC<TierUpsellPanelProps> = ({
 }) => {
     const unlockedTiers = TIERS.filter(t => !completedTiers.includes(t.id));
 
-    if (unlockedTiers.length === 0) {
-        return (
-            <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-100/50 flex flex-col items-center text-center">
-                <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center mb-2">
-                    <Check className="w-4 h-4 text-emerald-600" />
-                </div>
-                <p className="text-xs font-medium text-emerald-900">All Audits Complete</p>
-            </div>
-        );
-    }
-
     return (
-        <div className="bg-gradient-to-b from-slate-50 to-white rounded-xl p-4 border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-                <div className="w-6 h-6 bg-slate-900 rounded-md flex items-center justify-center">
-                    <Play className="w-3 h-3 text-white" />
-                </div>
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    Run New Audit
-                </h4>
-            </div>
+        <div className="space-y-1">
+            {TIERS.map((tier) => {
+                const isCompleted = completedTiers.includes(tier.id);
+                const Icon = tier.icon;
 
-            <div className="space-y-2">
-                {TIERS.map((tier) => {
-                    const isCompleted = completedTiers.includes(tier.id);
-                    // Don't show completed tiers in the upsell list to reduce noise, 
-                    // or show them very subtly. Let's hide them to be "intuitive" and focus on what's next.
-                    if (isCompleted) return null;
-
-                    const Icon = tier.icon;
-                    return (
-                        <button
-                            key={tier.id}
-                            onClick={() => onRunTier(tier.id)}
-                            className="w-full group flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs transition-all text-left"
-                        >
-                            <div className="flex items-center gap-2.5">
-                                <Icon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
-                                <div>
-                                    <div className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">
-                                        {tier.shortName}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 font-medium">
-                                        {tier.price === 'Free' ? 'Free Audit' : `${tier.price} • Run Now`}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white transition-colors">
-                                <ChevronRight className="w-3 h-3" />
-                            </div>
-                        </button>
-                    );
-                })}
-            </div>
+                return (
+                    <button
+                        key={tier.id}
+                        onClick={() => !isCompleted && onRunTier(tier.id)}
+                        disabled={isCompleted}
+                        className={`w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors text-left ${
+                            isCompleted ? 'opacity-50 cursor-default' : ''
+                        }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <Icon className={`w-4 h-4 ${isCompleted ? 'text-slate-400' : 'text-slate-600'}`} />
+                            <span className={`text-sm font-medium ${isCompleted ? 'text-slate-400' : 'text-slate-700'}`}>
+                                {tier.shortName}
+                            </span>
+                        </div>
+                        <span className={`text-sm font-medium ${isCompleted ? 'text-slate-400' : 'text-slate-600'}`}>
+                            {tier.price}
+                        </span>
+                    </button>
+                );
+            })}
         </div>
     );
 };

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { RepoReport } from '../types';
-import { AUDIT_TYPES, CATEGORIES } from '../constants';
+import { CATEGORIES } from '../constants';
 import IssueCard from './IssueCard';
-import { Download, Share2, GitBranch, Check, FileText, Star, AlertTriangle, User, FileQuestion, Shield, Zap, Database, FileCode, Rocket, Wrench, FolderTree, ChevronRight } from 'lucide-react';
+import { Download, Share2, GitBranch, Check, FileText, Star, AlertTriangle, User, FileQuestion, Shield, Zap, Database, FileCode, Rocket, Wrench, FolderTree, ChevronRight, ChevronDown } from 'lucide-react';
 import { TierUpsellPanel, AuditTier } from './TierBadges';
 
 interface ReportDashboardProps {
@@ -14,8 +15,24 @@ interface ReportDashboardProps {
 
 const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRunTier, completedTiers = [] }) => {
   const [activeCategory, setActiveCategory] = useState<string>('Overview');
-  const currentAuditType = data.tier || 'shape';
   const [copied, setCopied] = useState(false);
+  const [upgradesDropdownOpen, setUpgradesDropdownOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
+        setUpgradesDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const filteredIssues = activeCategory === 'Overview'
     ? data.issues
@@ -62,6 +79,17 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
     document.body.removeChild(link);
   };
 
+  const handleUpgradesClick = () => {
+    if (!upgradesDropdownOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX
+      });
+    }
+    setUpgradesDropdownOpen(!upgradesDropdownOpen);
+  };
+
   const riskBadgeColor = {
     critical: 'bg-red-100 text-red-700 border-red-200',
     high: 'bg-orange-100 text-orange-700 border-orange-200',
@@ -81,127 +109,103 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
   };
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col md:flex-row print:bg-white text-foreground font-sans pt-32">
+    <div className="min-h-screen bg-surface flex flex-col print:bg-white text-foreground font-sans pt-32">
 
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-background border-r border-border p-5 flex flex-col sticky top-16 h-[calc(100vh-4rem)] print:hidden z-20">
-        <nav className="space-y-1 flex-1 mt-2">
-          <div className="text-xs font-semibold text-slate-500 mb-3 px-3">Audit Types</div>
-          {AUDIT_TYPES.map((auditType) => {
-            const isCompleted = completedTiers?.includes(auditType.id);
-            const isCurrent = data.tier === auditType.id;
-
-            return (
-              <button
-                key={auditType.id}
-                onClick={() => setActiveCategory(auditType.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
-                  auditType.id === currentAuditType
-                    ? 'bg-slate-100 text-foreground font-medium ring-1 ring-slate-200'
-                    : 'text-slate-500 hover:text-foreground hover:bg-slate-50/80 font-normal'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <auditType.icon className={`w-4 h-4 ${auditType.id === currentAuditType ? 'text-foreground' : 'text-slate-400'}`} />
-                  <div className="flex flex-col items-start">
-                    <span>{auditType.label}</span>
-                    <span className="text-[10px] text-slate-400">{auditType.credits} credits</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {completedTiers?.includes(auditType.id) && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                      ✓
-                    </span>
-                  )}
-                  {!completedTiers?.includes(auditType.id) && auditType.id !== currentAuditType && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
-                      Not run
-                    </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto pt-6 border-t border-border space-y-6">
-          {/* Upsell Panel */}
-          {onRunTier && (
-            <TierUpsellPanel
-              completedTiers={completedTiers.length > 0 ? completedTiers : [data.tier || 'shape']}
-              repoUrl={`https://github.com/${data.repoName}`}
-              onRunTier={(tier) => onRunTier(tier, `https://github.com/${data.repoName}`)}
-            />
-          )}
-
-          {/* Health Score - Minimal */}
-          <div className="px-1">
-            <div className="flex items-baseline justify-between mb-1">
-              <span className="text-xs font-semibold text-slate-500">Health Score</span>
-              <span className={`text-2xl font-bold tracking-tight ${healthColor}`}>{data.healthScore}</span>
-            </div>
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full ${data.healthScore > 80 ? 'bg-emerald-500' : data.healthScore > 60 ? 'bg-amber-500' : 'bg-red-500'}`}
-                style={{ width: `${data.healthScore}%` }}
-              ></div>
-            </div>
-          </div>
-        </div>
-      </aside>
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto print:overflow-visible bg-white">
         {/* Header */}
-        <header className="bg-white/80 backdrop-blur-sm border-b border-border sticky top-0 z-10 px-8 py-4 flex justify-between items-center print:static print:border-none">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold text-foreground">
-                {data.repoName}
-              </h1>
-              {data.riskLevel && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${riskBadgeColor[data.riskLevel]}`}>
-                  {data.riskLevel.toUpperCase()} RISK
-                </span>
-              )}
-              {data.productionReady !== undefined && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${data.productionReady ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-                  {data.productionReady ? '✓ PRODUCTION READY' : '⚠ NOT PRODUCTION READY'}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-              <GitBranch className="w-3 h-3" />
-              <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">main</span>
-              <span>•</span>
-              <span>Last scanned just now</span>
-            </div>
+        <header className="bg-white/80 backdrop-blur-sm border-b border-border sticky top-0 z-10 px-8 py-4 print:static print:border-none">
+          {/* Top Row: Repo Info */}
+          <div className="flex items-center gap-3 mb-4">
+            <h1 className="text-xl font-semibold text-foreground">
+              {data.repoName}
+            </h1>
+            {data.riskLevel && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${riskBadgeColor[data.riskLevel]}`}>
+                {data.riskLevel.toUpperCase()} RISK
+              </span>
+            )}
+            {data.productionReady !== undefined && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${data.productionReady ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                {data.productionReady ? '✓ PRODUCTION READY' : '⚠ NOT PRODUCTION READY'}
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center gap-1 print:hidden">
-            <button
-              onClick={handleShare}
-              className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
-              title="Share Report"
-            >
-              {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Share2 className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={handleExportCSV}
-              className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
-              title="Export CSV"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
-            <div className="h-4 w-px bg-slate-200 mx-1"></div>
-            <button
-              onClick={handleExportPDF}
-              className="px-4 py-1.5 text-xs font-medium bg-foreground text-background hover:bg-slate-800 rounded-lg transition-all shadow-sm flex items-center gap-2"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Download PDF
-            </button>
+          {/* Second Row: Branch Info */}
+          <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
+            <GitBranch className="w-3 h-3" />
+            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">main</span>
+            <span>•</span>
+            <span>Last scanned just now</span>
+          </div>
+
+          {/* Third Row: Navigation + Actions */}
+          <div className="flex items-center justify-between relative">
+            {/* Category Navigation - Left */}
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${
+                    activeCategory === cat.id
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                  }`}
+                >
+                  <cat.icon className="w-4 h-4" />
+                  {cat.label}
+                  {cat.id !== 'Overview' && getCount(cat.id) > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                      activeCategory === cat.id
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {getCount(cat.id)}
+                    </span>
+                  )}
+                </button>
+              ))}
+
+              {/* Upgrades Dropdown Button */}
+              {onRunTier && (
+                <div className="relative inline-block ml-1">
+                  <button
+                    ref={buttonRef}
+                    onClick={handleUpgradesClick}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${
+                      upgradesDropdownOpen
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <Zap className="w-4 h-4" />
+                    Upgrades
+                    <ChevronDown className={`w-3 h-3 transition-transform ${upgradesDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons - Far Right */}
+            <div className="flex items-center gap-1 print:hidden">
+              <button
+                onClick={handleShare}
+                className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
+                title="Share Report"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Share2 className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={handleExportCSV}
+                className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
+                title="Export CSV"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -353,6 +357,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
                   <p className="text-slate-600 text-[15px] leading-7">{data.overallVerdict}</p>
                 </div>
               )}
+
             </>
           )}
 
@@ -389,6 +394,28 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
           </div>
         </div>
       </main>
+
+      {/* Upgrades Dropdown Portal */}
+      {upgradesDropdownOpen && dropdownPosition && ReactDOM.createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-[9999] p-4 max-h-96 overflow-y-auto"
+          style={{
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+          }}
+        >
+          <TierUpsellPanel
+            completedTiers={completedTiers}
+            repoUrl={`https://github.com/${data.repoName}`}
+            onRunTier={(tier) => {
+              onRunTier(tier, `https://github.com/${data.repoName}`);
+              setUpgradesDropdownOpen(false);
+            }}
+          />
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

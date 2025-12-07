@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Issue } from '../types';
-import { AlertTriangle, AlertOctagon, Info, ChevronDown, ChevronUp, Wand2, Copy, Check } from 'lucide-react';
-
-declare const Prism: any;
+import { AlertTriangle, AlertOctagon, Info, ChevronDown, Wand2, Check } from 'lucide-react';
 
 interface IssueCardProps {
   issue: Issue;
@@ -10,24 +8,7 @@ interface IssueCardProps {
 
 const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
   const [expanded, setExpanded] = useState(false);
-  const [showFix, setShowFix] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
-  const codeRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (expanded && codeRef.current && typeof Prism !== 'undefined') {
-      Prism.highlightElement(codeRef.current);
-    }
-  }, [expanded, showFix]);
-
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const text = showFix ? issue.fixedCode : issue.badCode;
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const handleCopyPrompt = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -116,8 +97,8 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
               <button
                 onClick={handleCopyPrompt}
                 className={`group flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all border ${promptCopied
-                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-500/30 hover:bg-emerald-50/30 hover:text-emerald-700 hover:shadow-sm'
+                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-500/30 hover:bg-emerald-50/30 hover:text-emerald-700 hover:shadow-sm'
                   }`}
                 title="Copy Prompt for Cursor/Windsurf"
               >

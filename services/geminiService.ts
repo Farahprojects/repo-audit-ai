@@ -16,7 +16,8 @@ export const generateAuditReport = async (
   repoName: string,
   stats: any,
   fileMap: any[], // Was fileContents
-  tier: string = 'shape'
+  tier: string = 'shape',
+  fullRepoUrl?: string // Add optional full URL parameter
 ): Promise<RepoReport & { tierData?: any }> => {
 
   // Map frontend tier to backend tier
@@ -25,7 +26,7 @@ export const generateAuditReport = async (
   // Call Supabase edge function instead of direct API
   const { data, error } = await supabase.functions.invoke('audit-runner', {
     body: {
-      repoUrl: `https://github.com/${repoName}`,
+      repoUrl: fullRepoUrl || `https://github.com/${repoName}`,
       files: fileMap, // Send the MAP, not the content
       tier: backendTier
     }

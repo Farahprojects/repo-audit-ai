@@ -130,7 +130,7 @@ const App: React.FC = () => {
       // Step 4: AI Audit (Real API)
       addLog(`[Agent: Security] Sending metadata to Brain...`);
       addLog(`[System] Running ${tier.toUpperCase()} audit tier...`);
-      const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier);
+      const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier, repoUrl);
 
       addLog(`[Success] Report generated successfully.`);
       addLog(`[System] Finalizing health score: ${report.healthScore}/100`);
@@ -267,10 +267,8 @@ const App: React.FC = () => {
             data={displayData}
             onRestart={handleRestart}
             onRunTier={(tier, url) => {
-              // For upsells, go through preflight to reload stats
-              setRepoUrl(url);
-              setPreviousView('report');
-              setView('preflight');
+              // Temporarily disabled - clean slate for upgrade flow
+              console.log('Upgrade clicked:', tier, url);
             }}
           />
         ) : null;
