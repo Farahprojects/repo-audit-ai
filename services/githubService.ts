@@ -149,7 +149,17 @@ export const fetchRepoFingerprint = async (
   }
 
   if (data?.error) {
-    console.log('⚠️ [fetchRepoFingerprint] Data contains error:', data.error);
+    console.log('⚠️ [fetchRepoFingerprint] Structured error response:', data);
+
+    // Handle specific error codes - same as fetchRepoStats
+    if (data.errorCode === 'OWNER_NOT_FOUND') {
+      throw new Error('Repository owner does not exist. Please check the URL spelling.');
+    }
+
+    if (data.errorCode === 'PRIVATE_REPO') {
+      throw new Error('PRIVATE_REPO:Repository exists but is private. Connect your GitHub account to access private repositories.');
+    }
+
     throw new Error(data.error);
   }
 
