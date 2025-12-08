@@ -1,0 +1,82 @@
+import { useState } from 'react';
+import { ViewState, RepoReport } from '../types';
+
+export interface SEOData {
+  title: string;
+  description: string;
+  keywords: string;
+}
+
+export const useAppRouter = () => {
+  const [view, setView] = useState<ViewState>('landing');
+  const [previousView, setPreviousView] = useState<ViewState>('landing');
+
+  const navigate = (newView: ViewState) => {
+    setPreviousView(view);
+    setView(newView);
+  };
+
+  const goBack = () => {
+    setView(previousView);
+  };
+
+  const resetToLanding = () => {
+    setView('landing');
+    setPreviousView('landing');
+  };
+
+  const isPublicPage = ['landing', 'pricing', 'about', 'contact', 'preflight', 'dashboard', 'report'].includes(view);
+
+  const getSEO = (reportData?: RepoReport | null): SEOData => {
+    switch (view) {
+      case 'landing':
+        return {
+          title: "SCAI - AI Code Auditor & Security Scanner",
+          description: "The AI Senior Engineer that never sleeps. Instant automated code review, security scanning, and technical debt audit for your GitHub repositories.",
+          keywords: "AI code review, static analysis, github security scanner, technical debt audit"
+        };
+      case 'pricing':
+        return {
+          title: "Pricing - SCAI",
+          description: "Simple, transparent pricing for automated code reviews. Start auditing your technical debt for free.",
+          keywords: "code review pricing, static analysis cost, saas pricing"
+        };
+      case 'about':
+        return {
+          title: "About Us - The AI Senior Engineer",
+          description: "SCAI is built by ex-FAANG engineers to democratize world-class software architecture and security audits.",
+          keywords: "automated software engineering, ai developer tools, code quality mission"
+        };
+      case 'contact':
+        return {
+          title: "Contact Sales - SCAI",
+          description: "Get in touch with our team for enterprise security audits, on-premise deployments, and partnership inquiries.",
+          keywords: "enterprise code security, contact support"
+        };
+      case 'report':
+        return {
+          title: reportData ? `Audit Result: ${reportData.repoName} (${reportData.healthScore}/100)` : "Audit Report - SCAI",
+          description: reportData ? `AI Code Audit for ${reportData.repoName}. Found ${reportData.issues.length} issues impacting security and performance.` : "View your code audit report.",
+          keywords: "code audit report, security vulnerabilities found, performance bottlenecks"
+        };
+      default:
+        return {
+          title: "SCAI - Code. Perfected.",
+          description: "Instant security, performance, and architecture audits for any codebase.",
+          keywords: "ai code tools"
+        };
+    }
+  };
+
+  return {
+    view,
+    setView,
+    previousView,
+    setPreviousView,
+    navigate,
+    goBack,
+    resetToLanding,
+    isPublicPage,
+    getSEO,
+  };
+};

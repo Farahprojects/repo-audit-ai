@@ -1,9 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import Hero from './components/Hero';
-import PreflightModal from './components/PreflightModal';
-import Scanner from './components/Scanner';
-import ReportDashboard from './components/ReportDashboard';
-import Dashboard from './components/Dashboard';
+import React from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Pricing from './components/Pricing';
@@ -11,349 +6,87 @@ import About from './components/About';
 import Contact from './components/Contact';
 import AuthModal from './components/AuthModal';
 import SEO from './components/SEO';
-import { ViewState, AuditStats, RepoReport, Issue, AuditRecord } from './types';
-import { Tables } from './src/integrations/supabase/types';
-import { generateAuditReport } from './services/geminiService';
-import { fetchRepoMap, parseGitHubUrl } from './services/githubService';
+import { ViewState } from './types';
 import { useAuth } from './hooks/useAuth';
 import { useGitHubAuth } from './hooks/useGitHubAuth';
-import { supabase } from './src/integrations/supabase/client';
+import { useAppRouter } from './hooks/useAppRouter';
+import { useAuditOrchestrator } from './hooks/useAuditOrchestrator';
+import { useAuthFlow } from './hooks/useAuthFlow';
+import { AppProviders } from './components/AppProviders';
+import { LandingPage } from './components/LandingPage';
+import { AuditFlow } from './components/AuditFlow';
+import { DashboardPage } from './components/DashboardPage';
 
 const App: React.FC = () => {
   const { user, signOut } = useAuth();
   const { getGitHubToken } = useGitHubAuth();
-  const [view, setView] = useState<ViewState>('landing');
-  const [previousView, setPreviousView] = useState<ViewState>('landing'); // Track where user came from
 
-  const [repoUrl, setRepoUrl] = useState('');
-  const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
-  const [reportData, setReportData] = useState<RepoReport | null>(null);
-  const [historicalReportData, setHistoricalReportData] = useState<RepoReport | null>(null);
-  const [relatedAudits, setRelatedAudits] = useState<AuditRecord[]>([]);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [pendingRepoUrl, setPendingRepoUrl] = useState<string | null>(null);
-  const [auditConfig, setAuditConfig] = useState<any>(null);
+  // Navigation logic
+  const router = useAppRouter();
 
-  // Real-time Scanner State
-  const [scannerLogs, setScannerLogs] = useState<string[]>([]);
-  const [scannerProgress, setScannerProgress] = useState(0);
+  // Audit orchestration
+  const auditOrchestrator = useAuditOrchestrator({
+    user,
+    getGitHubToken,
+    navigate: router.navigate,
+    setPreviousView: router.setPreviousView,
+  });
 
-  const addLog = (msg: string) => setScannerLogs(prev => [...prev, msg]);
+  // Authentication flow
+  const authFlow = useAuthFlow({
+    user,
+    view: router.view,
+    pendingRepoUrl: auditOrchestrator.pendingRepoUrl,
+    setPendingRepoUrl: auditOrchestrator.setPendingRepoUrl,
+    navigate: router.navigate,
+    setPreviousView: router.setPreviousView,
+  });
 
-  // Supabase SDK handles OAuth callback automatically via onAuthStateChange in useAuth hook
-
-  // Restore pending repo URL from localStorage on app load
-  useEffect(() => {
-    const stored = localStorage.getItem('pendingRepoUrl');
-    if (stored) {
-      setPendingRepoUrl(stored);
-      localStorage.removeItem('pendingRepoUrl');
-    }
-  }, []);
-
-  // Close auth modal and navigate to dashboard when user logs in
-  // Also auto-start audit if there's a pending repo URL
-  useEffect(() => {
-    if (user) {
-      setIsAuthOpen(false);
-
-      // If there's a pending repo URL, start the audit automatically
-      if (pendingRepoUrl) {
-        setRepoUrl(pendingRepoUrl);
-        setPendingRepoUrl(null);
-        setPreviousView('landing');
-        setView('preflight');
-        return;
-      }
-
-      // Navigate to dashboard if on landing page
-      if (view === 'landing') {
-        setView('dashboard');
-      }
-    }
-  }, [user, pendingRepoUrl]);
-
-  const handleAnalyze = (url: string) => {
-    setRepoUrl(url);
-    setPreviousView('landing');
-    setView('preflight');
-  };
-
+  // Handle soft start (auth flow version)
   const handleSoftStart = (url: string) => {
-    // Check if user is authenticated
     if (user) {
       // If authenticated, start audit immediately
-      handleAnalyze(url);
+      auditOrchestrator.handleAnalyze(url);
     } else {
-      // If not authenticated, store URL and show sign-in
-      localStorage.setItem('pendingRepoUrl', url);
-      setPendingRepoUrl(url);
-      setIsAuthOpen(true);
+      // If not authenticated, use auth flow
+      authFlow.handleSoftStart(url);
     }
   };
 
-  const handleConfirmAudit = async (tier: string, stats: AuditStats) => {
-    setAuditStats(stats);
-    setView('scanning');
-    setScannerLogs([]);
-    setScannerProgress(0);
-
-    // EXECUTION ENGINE
-    try {
-      const repoInfo = parseGitHubUrl(repoUrl);
-      if (!repoInfo) throw new Error("Invalid URL");
-
-      // Step 1: Initialize
-      addLog(`[System] Initializing audit for ${repoInfo.owner}/${repoInfo.repo}...`);
-      setScannerProgress(10);
-
-      // Step 2: Fetch Files (Real API)
-      addLog(`[Network] Connecting to GitHub API...`);
-      await new Promise(r => setTimeout(r, 500));
-
-      addLog(`[Network] Downloading source tree (Map Only)...`);
-      // Pass GitHub token for private repo access
-      const githubToken = await getGitHubToken();
-      // NEW: Fetch Map, NOT Content
-      const fileMap = await fetchRepoMap(repoInfo.owner, repoInfo.repo, githubToken || undefined);
-
-      addLog(`[Success] Mapped ${fileMap.length} files.`);
-      setScannerProgress(40);
-
-      // Step 3: Parse
-      addLog(`[Agent: Parser] Analyzing structure...`);
-      await new Promise(r => setTimeout(r, 800)); // Simulate AST parsing time
-      setScannerProgress(60);
-
-      // Step 4: AI Audit (Real API)
-      addLog(`[Agent: Security] Sending metadata to Brain...`);
-      addLog(`[System] Running ${tier.toUpperCase()} audit tier...`);
-
-      // Get estimated tokens from server-side cost estimator
-      let estimatedTokens: number | undefined;
-      if (stats.fingerprint) {
-        try {
-          const { CostEstimator } = await import('./services/costEstimator');
-          const estimate = await CostEstimator.estimateTokensAsync(tier, stats.fingerprint);
-          estimatedTokens = estimate.estimatedTokens;
-        } catch (err) {
-          console.warn('Failed to get token estimate:', err);
-          // Continue without estimate - server will calculate anyway
-        }
-      }
-
-      const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier, repoUrl, estimatedTokens, auditConfig);
-
-      // Clear config
-      setAuditConfig(null);
-
-      addLog(`[Success] Report generated successfully.`);
-      addLog(`[System] Finalizing health score: ${report.healthScore}/100`);
-      setScannerProgress(100);
-
-      // Attach tier info to the report
-      const enrichedReport: RepoReport = {
-        ...report,
-        tier: tier,
-      };
-
-      setReportData(enrichedReport);
-
-      // Fetch all audits for this repo to populate tier navigation
-      const { data: allAudits } = await supabase
-        .from('audits')
-        .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
-        .eq('repo_url', repoUrl)
-        .order('created_at', { ascending: false });
-
-      setRelatedAudits(allAudits || []);
-
-      // Short delay to let user see 100%
-      setTimeout(() => setView('report'), 1000);
-
-    } catch (e: any) {
-      addLog(`[Error] Audit Failed: ${e.message}`);
-      addLog(`[System] Terminating process.`);
-      console.error("Failed to generate report", e);
-    }
-  };
-
-  const handleRestart = () => {
-    setView('landing');
-    setRepoUrl('');
-    setReportData(null);
-    setHistoricalReportData(null);
-    setAuditStats(null);
-    setScannerLogs([]);
-    setScannerProgress(0);
-  };
-
-  // Data is now normalized server-side, these helpers are only needed for historical DB data
-  // that was saved before normalization was added
-  const ensureNormalized = (items: any[]): { title: string; detail: string }[] => {
-    if (!items || !Array.isArray(items)) return [];
-    // If already normalized (has title property), return as-is
-    if (items.length > 0 && items[0]?.title !== undefined) {
-      return items;
-    }
-    // Fallback for legacy data
-    return items.map(item => {
-      if (typeof item === 'string') {
-        const colonIndex = item.indexOf(':');
-        if (colonIndex > 0) {
-          return { title: item.substring(0, colonIndex).trim(), detail: item.substring(colonIndex + 1).trim() };
-        }
-        return { title: item, detail: '' };
-      }
-      if (item?.area) return { title: item.area, detail: item.description || '' };
-      return { title: String(item), detail: '' };
-    });
-  };
-
-  const ensureRiskLevel = (level: any): 'critical' | 'high' | 'medium' | 'low' | undefined => {
-    if (!level) return undefined;
-    const normalized = String(level).toLowerCase();
-    return ['critical', 'high', 'medium', 'low'].includes(normalized) 
-      ? normalized as 'critical' | 'high' | 'medium' | 'low' 
-      : undefined;
-  };
-
-  const handleViewHistoricalReport = async (audit: Tables<'audits'> & { extra_data?: any }) => {
-    const issues = (audit.issues as unknown as Issue[]) || [];
-    const repoName = audit.repo_url.split('/').slice(-2).join('/');
-    const extraData = audit.extra_data || {};
-
-    // Fetch all audits for this repo to enable tier navigation
-    const { data: allAudits } = await supabase
-      .from('audits')
-      .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
-      .eq('repo_url', audit.repo_url)
-      .order('created_at', { ascending: false });
-
-    setRelatedAudits(allAudits || []);
-
-    const stats: AuditStats = {
-      files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
-      tokens: 'N/A',
-      size: 'N/A',
-      language: 'Mixed',
-      languagePercent: 100
-    };
-
-    const report: RepoReport = {
-      repoName,
-      healthScore: audit.health_score || 0,
-      issues,
-      summary: audit.summary || 'No summary available',
-      stats,
-      // Use normalized data from server, with fallback for legacy data
-      topStrengths: ensureNormalized(extraData.topStrengths),
-      topIssues: ensureNormalized(extraData.topWeaknesses),
-      riskLevel: ensureRiskLevel(extraData.riskLevel),
-      productionReady: extraData.productionReady,
-      categoryAssessments: extraData.categoryAssessments,
-      seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,
-      suspiciousFiles: extraData.suspiciousFiles,
-      overallVerdict: extraData.overallVerdict,
-      tier: audit.tier,
-      auditId: audit.id,
-    };
-
-    setHistoricalReportData(report);
-    setView('report');
-  };
-
-  // Handle switching to a different audit from history dropdown
-  const handleSelectAudit = (audit: AuditRecord) => {
-    const issues = (audit.issues as Issue[]) || [];
-    const repoName = audit.repo_url.split('/').slice(-2).join('/');
-    const extraData = audit.extra_data || {};
-
-    const stats: AuditStats = {
-      files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
-      tokens: 'N/A',
-      size: 'N/A',
-      language: 'Mixed',
-      languagePercent: 100
-    };
-
-    const report: RepoReport = {
-      repoName,
-      healthScore: audit.health_score || 0,
-      issues,
-      summary: audit.summary || 'No summary available',
-      stats,
-      topStrengths: ensureNormalized(extraData.topStrengths),
-      topIssues: ensureNormalized(extraData.topWeaknesses),
-      riskLevel: ensureRiskLevel(extraData.riskLevel),
-      productionReady: extraData.productionReady,
-      categoryAssessments: extraData.categoryAssessments,
-      seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,
-      suspiciousFiles: extraData.suspiciousFiles,
-      overallVerdict: extraData.overallVerdict,
-      tier: audit.tier,
-      auditId: audit.id,
-    };
-
-    setHistoricalReportData(report);
-  };
-
-  const isPublicPage = ['landing', 'pricing', 'about', 'contact', 'preflight', 'dashboard', 'report'].includes(view);
-
-  // SEO Strategy Configuration
-  const getSEO = () => {
-    switch (view) {
-      case 'landing':
-        return {
-          title: "SCAI - AI Code Auditor & Security Scanner",
-          description: "The AI Senior Engineer that never sleeps. Instant automated code review, security scanning, and technical debt audit for your GitHub repositories.",
-          keywords: "AI code review, static analysis, github security scanner, technical debt audit"
-        };
-      case 'pricing':
-        return {
-          title: "Pricing - SCAI",
-          description: "Simple, transparent pricing for automated code reviews. Start auditing your technical debt for free.",
-          keywords: "code review pricing, static analysis cost, saas pricing"
-        };
-      case 'about':
-        return {
-          title: "About Us - The AI Senior Engineer",
-          description: "SCAI is built by ex-FAANG engineers to democratize world-class software architecture and security audits.",
-          keywords: "automated software engineering, ai developer tools, code quality mission"
-        };
-      case 'contact':
-        return {
-          title: "Contact Sales - SCAI",
-          description: "Get in touch with our team for enterprise security audits, on-premise deployments, and partnership inquiries.",
-          keywords: "enterprise code security, contact support"
-        };
-      case 'report':
-        return {
-          title: reportData ? `Audit Result: ${reportData.repoName} (${reportData.healthScore}/100)` : "Audit Report - SCAI",
-          description: reportData ? `AI Code Audit for ${reportData.repoName}. Found ${reportData.issues.length} issues impacting security and performance.` : "View your code audit report.",
-          keywords: "code audit report, security vulnerabilities found, performance bottlenecks"
-        };
-      default:
-        return {
-          title: "SCAI - Code. Perfected.",
-          description: "Instant security, performance, and architecture audits for any codebase.",
-          keywords: "ai code tools"
-        };
-    }
-  };
-
-  const seoData = getSEO();
+  const seoData = router.getSEO(auditOrchestrator.reportData);
 
   const renderContent = () => {
-    switch (view) {
+    switch (router.view) {
       case 'landing':
-        return <Hero onAnalyze={handleAnalyze} onSoftStart={handleSoftStart} />;
-      case 'preflight':
         return (
-          <PreflightModal
-            repoUrl={repoUrl}
-            onConfirm={handleConfirmAudit}
-            onCancel={() => setView(previousView)}
+          <LandingPage
+            onAnalyze={auditOrchestrator.handleAnalyze}
+            onSoftStart={handleSoftStart}
+          />
+        );
+      case 'preflight':
+      case 'scanning':
+      case 'report':
+        return (
+          <AuditFlow
+            view={router.view}
+            previousView={router.previousView}
+            repoUrl={auditOrchestrator.repoUrl}
+            scannerLogs={auditOrchestrator.scannerLogs}
+            scannerProgress={auditOrchestrator.scannerProgress}
+            reportData={auditOrchestrator.reportData}
+            historicalReportData={auditOrchestrator.historicalReportData}
+            relatedAudits={auditOrchestrator.relatedAudits}
+            onConfirmAudit={auditOrchestrator.handleConfirmAudit}
+            onCancelPreflight={() => router.navigate(router.previousView)}
+            onRestart={auditOrchestrator.handleRestart}
+            onSelectAudit={auditOrchestrator.handleSelectAudit}
+            onRunTier={(tier, url, config) => {
+              auditOrchestrator.setRepoUrl(url);
+              if (config) auditOrchestrator.setAuditConfig(config);
+              router.setPreviousView('report');
+              router.navigate('preflight');
+            }}
           />
         );
       case 'pricing':
@@ -364,63 +97,55 @@ const App: React.FC = () => {
         return <Contact />;
       case 'dashboard':
         return (
-          <Dashboard
-            onNavigate={setView}
-            onViewReport={handleViewHistoricalReport}
+          <DashboardPage
+            onNavigate={router.navigate}
+            onViewReport={auditOrchestrator.handleViewHistoricalReport}
             onStartAudit={(url, tier) => {
-              setRepoUrl(url);
-              setPreviousView('dashboard');
-              setView('preflight');
+              auditOrchestrator.setRepoUrl(url);
+              router.setPreviousView('dashboard');
+              router.navigate('preflight');
             }}
           />
         );
-      case 'scanning':
-        return <Scanner logs={scannerLogs} progress={scannerProgress} />;
-      case 'report':
-        const displayData = reportData || historicalReportData;
-        return displayData ? (
-          <ReportDashboard
-            data={displayData}
-            relatedAudits={relatedAudits}
-            onRestart={handleRestart}
-            onSelectAudit={handleSelectAudit}
-            onRunTier={(tier, url, config) => {
-              setRepoUrl(url);
-              if (config) setAuditConfig(config);
-              setPreviousView('report');
-              setView('preflight');
-            }}
-          />
-        ) : null;
       default:
-        return <Hero onAnalyze={handleAnalyze} />;
+        return (
+          <LandingPage
+            onAnalyze={auditOrchestrator.handleAnalyze}
+            onSoftStart={handleSoftStart}
+          />
+        );
     }
   };
 
   return (
-    <div className="bg-background min-h-screen text-foreground font-sans antialiased tracking-tight">
-      <SEO
-        title={seoData.title}
-        description={seoData.description}
-        keywords={seoData.keywords}
-      />
-
-      {isPublicPage && (
-        <Navbar
-          currentView={view}
-          onNavigate={setView}
-          onSignInClick={() => setIsAuthOpen(true)}
-          user={user}
-          onSignOut={signOut}
+    <AppProviders>
+      <div className="bg-background min-h-screen text-foreground font-sans antialiased tracking-tight">
+        <SEO
+          title={seoData.title}
+          description={seoData.description}
+          keywords={seoData.keywords}
         />
-      )}
 
-      {renderContent()}
+        {router.isPublicPage && (
+          <Navbar
+            currentView={router.view}
+            onNavigate={router.navigate}
+            onSignInClick={authFlow.openAuthModal}
+            user={user}
+            onSignOut={signOut}
+          />
+        )}
 
-      {isPublicPage && <Footer onNavigate={setView} />}
+        {renderContent()}
 
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
-    </div>
+        {router.isPublicPage && <Footer onNavigate={router.navigate} />}
+
+        <AuthModal
+          isOpen={authFlow.isAuthOpen}
+          onClose={authFlow.closeAuthModal}
+        />
+      </div>
+    </AppProviders>
   );
 };
 
