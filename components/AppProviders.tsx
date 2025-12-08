@@ -13,6 +13,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  clearGitHubState: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -105,7 +106,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   const router = useAppRouter();
 
   // GitHub auth hook
-  const { getGitHubToken } = useGitHubAuth();
+  const { getGitHubToken, clearGitHubState } = useGitHubAuth();
 
   // Audit orchestrator hook
   const auditOrchestrator = useAuditOrchestrator({
@@ -131,7 +132,8 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     session: auth.session,
     loading: auth.loading,
     signOut: auth.signOut,
-  }), [auth.user, auth.session, auth.loading, auth.signOut]);
+    clearGitHubState,
+  }), [auth.user, auth.session, auth.loading, auth.signOut, clearGitHubState]);
 
   const routerValue = useMemo(() => ({
     view: router.view,

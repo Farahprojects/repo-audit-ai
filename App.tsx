@@ -12,7 +12,7 @@ import { AuditFlow } from './components/AuditFlow';
 import { DashboardPage } from './components/DashboardPage';
 
 const AppContent: React.FC = () => {
-  const { user, signOut } = useAuthContext();
+  const { user, signOut, clearGitHubState } = useAuthContext();
   const { view, previousView, navigate, resetToLanding, isPublicPage, getSEO } = useRouterContext();
   const {
     repoUrl,
@@ -49,6 +49,9 @@ const AppContent: React.FC = () => {
       // Sign out (this also clears localStorage/sessionStorage)
       await signOut();
 
+      // Clear GitHub auth state (tokens, account info)
+      clearGitHubState();
+
       // Clear all audit state
       clearAuditState();
 
@@ -57,6 +60,7 @@ const AppContent: React.FC = () => {
     } catch (error) {
       console.error('Error during logout:', error);
       // Still attempt cleanup even if sign out fails
+      clearGitHubState();
       clearAuditState();
       resetToLanding();
     }
