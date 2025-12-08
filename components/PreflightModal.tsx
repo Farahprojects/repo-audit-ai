@@ -77,7 +77,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
+      console.log('🔍 [PreflightModal] Error caught:', message);
       if (message.includes('PRIVATE_REPO:')) {
+        console.log('🔐 [PreflightModal] Detected PRIVATE_REPO, showing modal');
         setIsPrivateRepo(true);
         setError(message.replace('PRIVATE_REPO:', '').replace('Unable to Access Repository ', ''));
         setStep('github-connect');
@@ -145,7 +147,10 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     );
   }
 
+  console.log('🔍 [PreflightModal] Render state:', { step, isPrivateRepo, error });
+
   if (step === 'github-connect' && isPrivateRepo) {
+    console.log('🎯 [PreflightModal] Showing GitHubConnectModal');
     return (
       <GitHubConnectModal
         repoUrl={repoUrl}
