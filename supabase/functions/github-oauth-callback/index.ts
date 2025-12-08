@@ -169,15 +169,21 @@ Deno.serve(async (req: Request) => {
 </head>
 <body>
   <script>
-    if (window.opener) {
-      // Popup window - send message to parent
-      window.opener.postMessage({
-        type: '${action}',
-        ${success ? '' : `message: ${JSON.stringify(message)},`}
-      }, '*');
-      window.close();
-    } else {
-      // Regular window - redirect
+    // Always treat as popup since this is OAuth callback
+    try {
+      if (window.opener && !window.opener.closed) {
+        // Popup window - send message to parent
+        window.opener.postMessage({
+          type: '${action}',
+          ${success ? '' : `message: ${JSON.stringify(message)},`}
+        }, '*');
+        window.close();
+      } else {
+        // Fallback: redirect to frontend (popup might have lost opener reference)
+        window.location.href = ${JSON.stringify(redirectUrl)};
+      }
+    } catch (e) {
+      // If postMessage fails, redirect as fallback
       window.location.href = ${JSON.stringify(redirectUrl)};
     }
   </script>
