@@ -30,6 +30,7 @@ interface RouterContextType {
   view: ViewState;
   previousView: ViewState;
   navigate: (view: ViewState) => void;
+  resetToLanding: () => void;
   isPublicPage: boolean;
   getSEO: (reportData?: RepoReport | null) => { title: string; description: string; keywords: string };
 }
@@ -136,9 +137,10 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     view: router.view,
     previousView: router.previousView,
     navigate: router.navigate,
+    resetToLanding: router.resetToLanding,
     isPublicPage: router.isPublicPage,
     getSEO: router.getSEO,
-  }), [router.view, router.previousView, router.navigate, router.isPublicPage, router.getSEO]);
+  }), [router.view, router.previousView, router.navigate, router.resetToLanding, router.isPublicPage, router.getSEO]);
 
   const auditValue = useMemo(() => ({
     repoUrl: auditOrchestrator.repoUrl,
