@@ -1,5 +1,6 @@
-import React from 'react';
-import { Github, Shield, Eye, Trash2, Lock } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { Github, Eye, Trash2, Lock } from 'lucide-react';
+import { supabase } from '../src/integrations/supabase/client';
 
 interface GitHubConnectModalProps {
     repoUrl: string;
@@ -14,6 +15,64 @@ const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
     onCancel,
     isConnecting = false,
 }) => {
+    const pollIntervalRef = useRef<number | null>(null);
+    const hasConnectedRef = useRef(false);
+
+    // Poll github_accounts table to detect when OAuth flow completes
+    useEffect(() => {
+        if (!isConnecting) {
+            // Clear any existing poll when not connecting
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+            return;
+        }
+
+        // Start polling when connecting
+        const pollForAccount = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user?.id) return;
+
+                const { data, error } = await supabase
+                    .from('github_accounts')
+                    .select('id')
+                    .eq('user_id', session.user.id)
+                    .maybeSingle();
+
+                if (data && !error && !hasConnectedRef.current) {
+                    console.log('✅ [GitHubConnectModal] GitHub account detected, closing modal');
+                    hasConnectedRef.current = true;
+                    
+                    // Clear the interval
+                    if (pollIntervalRef.current) {
+                        clearInterval(pollIntervalRef.current);
+                        pollIntervalRef.current = null;
+                    }
+                    
+                    // Trigger the onConnect callback to continue the flow
+                    onConnect();
+                }
+            } catch (err) {
+                console.error('[GitHubConnectModal] Polling error:', err);
+            }
+        };
+
+        // Poll every 500ms
+        pollIntervalRef.current = window.setInterval(pollForAccount, 500);
+
+        // Also check immediately
+        pollForAccount();
+
+        return () => {
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+        };
+    }, [isConnecting, onConnect]);
+
     // Extract repo name for display
     const repoName = repoUrl.split('/').slice(-2).join('/');
 
@@ -65,7 +124,7 @@ const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
                             {isConnecting ? (
                                 <>
                                     <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    Connecting...
+                                    Waiting for GitHub...
                                 </>
                             ) : (
                                 'Authorize Access'
