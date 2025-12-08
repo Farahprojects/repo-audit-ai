@@ -284,7 +284,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Perf Audit</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">N+1, leaks, re-renders, AI sins.</p>
                   <button
-                    onClick={() => onConfirm('performance' as any, stats!, fileMap)}
+                    onClick={() => handleTierSelect('performance' as any)}
                     className="w-full py-3 border border-slate-200 text-slate-600 rounded-full hover:bg-slate-50 font-medium transition-colors"
                   >
                     Run Perf
