@@ -219,14 +219,18 @@ serve(async (req) => {
         ? `${(sizeInBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
         : `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
 
+      console.log(`📏 [github-proxy] Size calculation: ${repoData.size}KB → ${sizeInBytes} bytes → ${sizeDisplay}`);
+
       const fileCount = Math.round(repoData.size / 5);
 
       console.log(`📊 [github-proxy] Calculated stats:`, {
+        repoSizeKB: repoData.size,
+        sizeDisplay,
+        fileCount,
         primaryLang,
         languagePercent,
         estTokens,
         tokenDisplay,
-        fileCount,
         totalBytes
       });
 
