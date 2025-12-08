@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { ViewState } from '../types';
 import { supabase } from '../src/integrations/supabase/client';
 import { Tables } from '../src/integrations/supabase/types';
-import { Calendar, ExternalLink, TrendingUp, FileText, RefreshCw, AlertCircle, Eye, Search, Zap } from 'lucide-react';
+import { Calendar, ExternalLink, TrendingUp, FileText, RefreshCw, AlertCircle, Eye, Search, Zap, AlertTriangle } from 'lucide-react';
 import TierBadges, { TIERS, AuditTier } from './TierBadges';
+import { parseGitHubUrl, fetchRepoStats } from '../services/githubService';
+import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
 type Audit = Tables<'audits'> & { tier?: string };
 
@@ -28,6 +30,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newRepoUrl, setNewRepoUrl] = useState('');
+  const [repoError, setRepoError] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
+  const { getGitHubToken } = useGitHubAuth();
 
   useEffect(() => {
     fetchUserAudits();
@@ -56,9 +61,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
     }
   };
 
-  const handleStartNewAudit = () => {
-    if (newRepoUrl.trim() && onStartAudit) {
-      onStartAudit(newRepoUrl.trim(), 'shape');
+  const handleStartNewAudit = async () => {
+    if (!newRepoUrl.trim()) return;
+
+    setValidating(true);
+    setRepoError(null);
+
+    try {
+      const trimmedUrl = newRepoUrl.trim();
+
+      // Parse the URL
+      const repoInfo = parseGitHubUrl(trimmedUrl);
+      if (!repoInfo) {
+        throw new Error("Please enter a complete GitHub repository URL (e.g., https://github.com/owner/repository-name)");
+      }
+
+      // Try to fetch repository stats to validate it exists
+      const githubToken = await getGitHubToken();
+      await fetchRepoStats(repoInfo.owner, repoInfo.repo, githubToken || undefined);
+
+      // If validation succeeds, proceed with audit
+      if (onStartAudit) {
+        onStartAudit(trimmedUrl, 'shape');
+      }
+    } catch (error: any) {
+      setRepoError(error.message || "Repository not found. Please check the URL and try again.");
+      setValidating(false); // Don't navigate if there's an error
     }
   };
 
@@ -178,7 +206,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
               <input
                 type="text"
                 value={newRepoUrl}
-                onChange={(e) => setNewRepoUrl(e.target.value)}
+                onChange={(e) => {
+                  setNewRepoUrl(e.target.value);
+                  if (repoError) setRepoError(null); // Clear error when user types
+                }}
                 placeholder="https://github.com/owner/repo-name"
                 className="w-full bg-slate-50 border border-slate-200 rounded-full py-3 pl-12 pr-6 text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 onKeyDown={(e) => e.key === 'Enter' && handleStartNewAudit()}
@@ -186,12 +217,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
             </div>
             <button
               onClick={handleStartNewAudit}
-              disabled={!newRepoUrl.trim()}
+              disabled={!newRepoUrl.trim() || validating}
               className="px-6 py-3 bg-slate-900 text-white font-semibold rounded-full hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-slate-900/10"
             >
-              Analyze
+              {validating ? 'Validating...' : 'Analyze'}
             </button>
           </div>
+
+          {/* Repository Error Display */}
+          {repoError && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-semibold text-red-800 mb-1">Unable to Access Repository</h4>
+                  <p className="text-sm text-red-700">{repoError}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Stats Overview */}
