@@ -32,40 +32,6 @@ export function useGitHubAuth() {
         account: null,
     });
 
-    // Handle OAuth completion from URL parameters (fallback for popup redirects)
-    useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const githubStatus = urlParams.get('github');
-        const errorMessage = urlParams.get('message');
-
-        if (githubStatus === 'connected') {
-            console.log('🎉 OAuth success detected from URL parameters - updating GitHub connection state');
-            // Clear URL parameters
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.delete('github');
-            window.history.replaceState({}, '', newUrl.toString());
-
-            // Refetch GitHub account to update state
-            fetchGitHubAccount().then(() => {
-                console.log('🔄 [useGitHubAuth] GitHub account refetched after OAuth success');
-                setState(prev => ({ ...prev, isConnecting: false, error: null }));
-            });
-        } else if (githubStatus === 'error') {
-            console.log('❌ OAuth error detected from URL parameters:', errorMessage);
-            // Clear URL parameters
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.delete('github');
-            newUrl.searchParams.delete('message');
-            window.history.replaceState({}, '', newUrl.toString());
-
-            setState(prev => ({
-                ...prev,
-                isConnecting: false,
-                error: errorMessage || 'GitHub connection failed'
-            }));
-        }
-    }, []);
-
     // Fetch GitHub account data
     const fetchGitHubAccount = useCallback(async () => {
         if (!session?.user?.id) return;
@@ -86,14 +52,12 @@ export function useGitHubAuth() {
             }
 
             if (data) {
-                console.log('✅ [useGitHubAuth] GitHub account found, setting isConnected=true');
                 setState(prev => ({
                     ...prev,
                     isConnected: true,
                     account: data as GitHubAccount,
                 }));
             } else {
-                console.log('❌ [useGitHubAuth] No GitHub account found, setting isConnected=false');
                 setState(prev => ({
                     ...prev,
                     isConnected: false,
@@ -178,7 +142,7 @@ export function useGitHubAuth() {
                 return { success: false, error: errorMsg };
             }
 
-            // Listen for popup to close or navigate to our domain
+            // Listen for popup to close or receive message
             const checkClosed = setInterval(() => {
                 if (popup.closed) {
                     clearInterval(checkClosed);
@@ -186,24 +150,6 @@ export function useGitHubAuth() {
                     fetchGitHubAccount().then(() => {
                         setState(prev => ({ ...prev, isConnecting: false }));
                     });
-                } else {
-                    // Check if popup has navigated to our domain (OAuth redirect fallback)
-                    try {
-                        const popupUrl = popup.location.href;
-                        if (popupUrl && popupUrl.includes(window.location.origin)) {
-                            console.log('🔄 Popup redirected to our domain, closing...');
-                            clearInterval(checkClosed);
-                            popup.close();
-                            // The useEffect above will handle the URL parameters
-                            setTimeout(() => {
-                                fetchGitHubAccount().then(() => {
-                                    setState(prev => ({ ...prev, isConnecting: false }));
-                                });
-                            }, 1000); // Give time for the redirect to complete
-                        }
-                    } catch (e) {
-                        // Cross-origin access will throw, ignore
-                    }
                 }
             }, 500);
 
