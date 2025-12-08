@@ -17,6 +17,7 @@ export type Database = {
       audits: {
         Row: {
           created_at: string
+          estimated_tokens: number | null
           extra_data: Json | null
           health_score: number | null
           id: string
@@ -29,6 +30,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          estimated_tokens?: number | null
           extra_data?: Json | null
           health_score?: number | null
           id?: string
@@ -41,6 +43,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          estimated_tokens?: number | null
           extra_data?: Json | null
           health_score?: number | null
           id?: string
