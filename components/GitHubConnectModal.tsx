@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Github, Shield, Eye, Trash2, Lock } from 'lucide-react';
+import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
 interface GitHubConnectModalProps {
     repoUrl: string;
     onConnect: () => void;
     onCancel: () => void;
     isConnecting?: boolean;
+    onOAuthSuccess?: () => void;
 }
 
 const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
@@ -13,9 +15,20 @@ const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
     onConnect,
     onCancel,
     isConnecting = false,
+    onOAuthSuccess,
 }) => {
+    const { isGitHubConnected } = useGitHubAuth();
+
     // Extract repo name for display
     const repoName = repoUrl.split('/').slice(-2).join('/');
+
+    // Detect OAuth completion and call success callback
+    useEffect(() => {
+        if (isGitHubConnected && onOAuthSuccess) {
+            console.log('🎉 [GitHubConnectModal] OAuth completed successfully, calling success callback');
+            onOAuthSuccess();
+        }
+    }, [isGitHubConnected, onOAuthSuccess]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">

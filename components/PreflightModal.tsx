@@ -113,7 +113,12 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
   useEffect(() => {
     const retryWithToken = async () => {
-      console.log('🔄 [PreflightModal] Checking for auth retry:', { isGitHubConnected, step, loading });
+      console.log('🔄 [PreflightModal] Checking for auth retry:', {
+        isGitHubConnected,
+        step,
+        loading,
+        hasToken: !!(await getGitHubToken())
+      });
       if (isGitHubConnected && step === 'github-connect' && !loading) {
         console.log('🎯 [PreflightModal] GitHub connected, retrying with token...');
         const token = await getGitHubToken();
@@ -123,13 +128,30 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
         } else {
           console.log('❌ [PreflightModal] No token available despite being connected');
         }
+      } else if (isGitHubConnected && step === 'github-connect' && loading) {
+        console.log('⏳ [PreflightModal] GitHub connected but still loading, will retry when loading completes');
+      } else if (!isGitHubConnected && step === 'github-connect') {
+        console.log('⏸️ [PreflightModal] Still waiting for GitHub connection...');
       }
     };
     retryWithToken();
-  }, [isGitHubConnected, step, loading]);
+  }, [isGitHubConnected, step, loading, getGitHubToken]);
 
   const handleGitHubConnect = async () => {
     await signInWithGitHub(window.location.href);
+  };
+
+  const handleOAuthSuccess = () => {
+    console.log('🎯 [PreflightModal] OAuth success callback triggered, retrying with token...');
+    // Directly retry with token instead of relying on useEffect
+    getGitHubToken().then(token => {
+      if (token) {
+        console.log('🔑 [PreflightModal] Got token after OAuth success, calling loadStats...');
+        loadStats(token);
+      } else {
+        console.log('❌ [PreflightModal] No token available after OAuth success');
+      }
+    });
   };
 
   const handleTierSelect = (tier: 'lite' | 'deep' | 'ultra') => {
@@ -159,6 +181,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
         onConnect={handleGitHubConnect}
         onCancel={onCancel}
         isConnecting={isConnecting}
+        onOAuthSuccess={handleOAuthSuccess}
       />
     );
   }
