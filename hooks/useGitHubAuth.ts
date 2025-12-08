@@ -98,105 +98,133 @@ export function useGitHubAuth() {
     }, [state.account]);
 
     // Sign in with GitHub OAuth using popup flow
-    const signInWithGitHub = useCallback(async (redirectTo?: string) => {
+    // Returns a Promise that resolves when OAuth completes (success or error)
+    const signInWithGitHub = useCallback((): Promise<{ success: boolean; error?: string }> => {
         setState(prev => ({ ...prev, isConnecting: true, error: null }));
 
-        try {
-            // Call edge function to get OAuth URL
-            const { data, error: invokeError } = await supabase.functions.invoke('github-oauth-start');
+        return new Promise(async (resolve) => {
+            try {
+                // Call edge function to get OAuth URL
+                const { data, error: invokeError } = await supabase.functions.invoke('github-oauth-start');
 
-            if (invokeError) {
-                console.error('Error starting GitHub OAuth:', invokeError);
-                const errorMsg = 'Failed to initiate GitHub connection';
-                setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
-                return { success: false, error: errorMsg };
-            }
-
-            if (!data?.url || !data?.state) {
-                const errorMsg = 'Invalid response from OAuth service';
-                setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
-                return { success: false, error: errorMsg };
-            }
-
-            const authUrl = data.url;
-            const stateToken = data.state;
-
-            // Store state in sessionStorage for verification
-            sessionStorage.setItem('github_oauth_state', stateToken);
-
-            // Open in popup window
-            const width = 600;
-            const height = 700;
-            const left = window.screen.width / 2 - width / 2;
-            const top = window.screen.height / 2 - height / 2;
-
-            const popup = window.open(
-                authUrl,
-                'github-oauth',
-                `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes,location=no,directories=no,status=no`
-            );
-
-            if (!popup) {
-                const errorMsg = 'Popup blocked. Please allow popups for this site.';
-                setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
-                return { success: false, error: errorMsg };
-            }
-
-            // Listen for popup to close or receive message
-            const checkClosed = setInterval(() => {
-                if (popup.closed) {
-                    clearInterval(checkClosed);
-                    // Check if connection was successful by refetching GitHub account
-                    fetchGitHubAccount().then(() => {
-                        setState(prev => ({ ...prev, isConnecting: false }));
-                    });
+                if (invokeError) {
+                    console.error('Error starting GitHub OAuth:', invokeError);
+                    const errorMsg = 'Failed to initiate GitHub connection';
+                    setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                    resolve({ success: false, error: errorMsg });
+                    return;
                 }
-            }, 500);
 
-            // Also listen for postMessage from popup
-            const messageHandler = (event: MessageEvent) => {
-                if (
-                    event.data?.type === 'github-oauth-success' ||
-                    event.data?.type === 'github-oauth-error'
-                ) {
+                if (!data?.url || !data?.state) {
+                    const errorMsg = 'Invalid response from OAuth service';
+                    setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                    resolve({ success: false, error: errorMsg });
+                    return;
+                }
+
+                const authUrl = data.url;
+                const stateToken = data.state;
+
+                // Store state in sessionStorage for verification
+                sessionStorage.setItem('github_oauth_state', stateToken);
+
+                // Open in popup window
+                const width = 600;
+                const height = 700;
+                const left = window.screen.width / 2 - width / 2;
+                const top = window.screen.height / 2 - height / 2;
+
+                const popup = window.open(
+                    authUrl,
+                    'github-oauth',
+                    `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes,location=no,directories=no,status=no`
+                );
+
+                if (!popup) {
+                    const errorMsg = 'Popup blocked. Please allow popups for this site.';
+                    setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                    resolve({ success: false, error: errorMsg });
+                    return;
+                }
+
+                let resolved = false;
+
+                const cleanup = () => {
                     clearInterval(checkClosed);
-                    popup.close();
+                    clearTimeout(timeout);
                     window.removeEventListener('message', messageHandler);
+                };
 
-                    if (event.data.type === 'github-oauth-success') {
-                        // Refetch GitHub account
+                // Listen for postMessage from popup (primary mechanism)
+                const messageHandler = (event: MessageEvent) => {
+                    if (resolved) return;
+                    
+                    if (event.data?.type === 'github-oauth-success') {
+                        resolved = true;
+                        cleanup();
+                        popup.close();
+                        console.log('✅ [useGitHubAuth] OAuth success via postMessage');
+                        
+                        // Refetch GitHub account then resolve
                         fetchGitHubAccount().then(() => {
                             setState(prev => ({ ...prev, isConnecting: false, error: null }));
+                            resolve({ success: true });
                         });
-                    } else {
-                        const errorMsg = event.data.message || 'Failed to connect GitHub account';
-                        setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
-                    }
-                }
-            };
-
-            window.addEventListener('message', messageHandler);
-
-            // Cleanup after 5 minutes if still open
-            setTimeout(
-                () => {
-                    if (!popup.closed) {
+                    } else if (event.data?.type === 'github-oauth-error') {
+                        resolved = true;
+                        cleanup();
                         popup.close();
-                        clearInterval(checkClosed);
-                        window.removeEventListener('message', messageHandler);
-                        setState(prev => ({ ...prev, isConnecting: false }));
+                        const errorMsg = event.data.message || 'Failed to connect GitHub account';
+                        console.error('❌ [useGitHubAuth] OAuth error via postMessage:', errorMsg);
+                        setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                        resolve({ success: false, error: errorMsg });
                     }
-                },
-                5 * 60 * 1000
-            );
+                };
 
-            return { success: true };
-        } catch (err) {
-            console.error('Error in GitHub OAuth:', err);
-            const errorMsg = 'Failed to connect to GitHub';
-            setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
-            return { success: false, error: errorMsg };
-        }
+                window.addEventListener('message', messageHandler);
+
+                // Fallback: check if popup closed manually (user cancelled)
+                const checkClosed = setInterval(() => {
+                    if (resolved) return;
+                    
+                    if (popup.closed) {
+                        resolved = true;
+                        cleanup();
+                        console.log('⚠️ [useGitHubAuth] Popup closed without postMessage, checking account...');
+                        
+                        // Check if connection was successful by refetching GitHub account
+                        fetchGitHubAccount().then(() => {
+                            setState(prev => {
+                                const wasSuccessful = prev.isConnected;
+                                if (wasSuccessful) {
+                                    resolve({ success: true });
+                                } else {
+                                    resolve({ success: false, error: 'Authorization cancelled or failed' });
+                                }
+                                return { ...prev, isConnecting: false };
+                            });
+                        });
+                    }
+                }, 500);
+
+                // Timeout after 5 minutes
+                const timeout = setTimeout(() => {
+                    if (resolved) return;
+                    resolved = true;
+                    cleanup();
+                    if (!popup.closed) popup.close();
+                    console.error('⏱️ [useGitHubAuth] OAuth timeout');
+                    setState(prev => ({ ...prev, isConnecting: false }));
+                    resolve({ success: false, error: 'Authorization timed out' });
+                }, 5 * 60 * 1000);
+
+            } catch (err) {
+                console.error('Error in GitHub OAuth:', err);
+                const errorMsg = 'Failed to connect to GitHub';
+                setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                resolve({ success: false, error: errorMsg });
+            }
+        });
     }, [fetchGitHubAccount]);
 
     // Disconnect GitHub
