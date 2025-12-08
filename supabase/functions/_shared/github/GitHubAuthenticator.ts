@@ -13,25 +13,22 @@ export class GitHubAuthenticator {
         return GitHubAuthenticator.instance;
     }
 
-    async getAuthenticatedToken(req: Request, owner?: string): Promise<string | null> {
-        const { userToken } = await req.clone().json().catch(() => ({}));
-
+    async getAuthenticatedToken(userToken: string | undefined, authHeader: string | null, owner?: string): Promise<string | null> {
         // 1. Check direct user token first
         if (userToken) {
             return userToken;
         }
 
         // 2. If no direct token, try to get it from the user's GitHub account via Supabase
-        if (owner) {
-            return this.retrieveStoredToken(req);
+        if (owner && authHeader) {
+            return this.retrieveStoredToken(authHeader);
         }
 
         return null;
     }
 
-    private async retrieveStoredToken(req: Request): Promise<string | null> {
+    private async retrieveStoredToken(authHeader: string): Promise<string | null> {
         try {
-            const authHeader = req.headers.get('authorization');
             if (!authHeader) return null;
 
             const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;

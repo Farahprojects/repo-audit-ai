@@ -21,7 +21,8 @@ serve(async (req) => {
   }
 
   try {
-    const { owner, repo, branch, filePath, action } = await req.json();
+    const requestData = await req.json();
+    const { owner, repo, branch, filePath, action, userToken } = requestData;
 
     if (!owner || !repo) {
       return new Response(
@@ -32,7 +33,7 @@ serve(async (req) => {
 
     // 1. Authenticate
     const authenticator = GitHubAuthenticator.getInstance();
-    const token = await authenticator.getAuthenticatedToken(req, owner);
+    const token = await authenticator.getAuthenticatedToken(userToken, req.headers.get('authorization'), owner);
 
     // Log authentication status
     if (token) {
