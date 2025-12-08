@@ -285,7 +285,7 @@ serve(async (req) => {
     // --- SWARM PIPELINE EXECUTION ---
 
     // 1. MAP PHASE: The Planner (CEO)
-    const { result: plan, usage: plannerUsage } = await runPlanner(context, ENV.GEMINI_API_KEY, tierPrompt);
+    const { result: plan, usage: plannerUsage } = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
     console.log(`🧠 CEO BRAIN PLAN: Focus on ${plan.focusArea}`);
     console.log(`📋 Generated ${plan.tasks.length} Worker Assignments:`);
     plan.tasks.forEach((t, i) => {
@@ -297,7 +297,7 @@ serve(async (req) => {
     console.log(`\n🚀 releasing the swarm...`);
 
     const workerPromises = plan.tasks.map(async (task) => {
-      return runWorker(context, task, ENV.GEMINI_API_KEY);
+      return runWorker(context, task, GEMINI_API_KEY);
     });
 
     const workerOutputs = await Promise.all(workerPromises);
@@ -314,7 +314,7 @@ serve(async (req) => {
     console.log(`✅ Swarm Complete. Collected ${swarmResults.length} findings.`);
 
     // 3. REDUCE PHASE: The Synthesizer (Editor)
-    const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, swarmResults, ENV.GEMINI_API_KEY, tierPrompt);
+    const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, swarmResults, GEMINI_API_KEY, tierPrompt);
     console.log(`📝 Final Report Generated. Health Score: ${finalReport.healthScore}`);
 
     const timeEnd = Date.now();
