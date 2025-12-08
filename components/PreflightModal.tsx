@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, Zap, AlertTriangle, Lock, ArrowRight, Mail } from 'lucide-react';
+import { CheckCircle, Zap, AlertTriangle } from 'lucide-react';
 import { AuditStats } from '../types';
 import { parseGitHubUrl, fetchRepoStats } from '../services/githubService';
 import GitHubConnectModal from './GitHubConnectModal';
@@ -11,7 +11,7 @@ interface PreflightModalProps {
   onCancel: () => void;
 }
 
-type ModalStep = 'analysis' | 'selection' | 'auth' | 'github-connect';
+type ModalStep = 'analysis' | 'selection' | 'github-connect';
 
 const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onCancel }) => {
   const [step, setStep] = useState<ModalStep>('analysis');
@@ -19,8 +19,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   const [error, setError] = useState<string | null>(null);
   const [isPrivateRepo, setIsPrivateRepo] = useState(false);
   const [stats, setStats] = useState<AuditStats | null>(null);
-  const [selectedTier, setSelectedTier] = useState<'lite' | 'deep' | 'ultra'>('lite');
-  const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const { isGitHubConnected, getGitHubToken, signInWithGitHub, isConnecting } = useGitHubAuth();
@@ -108,19 +106,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   };
 
   const handleTierSelect = (tier: 'lite' | 'deep' | 'ultra') => {
-    if (tier === 'lite') {
-      onConfirm(tier, stats!);
-    } else {
-      setSelectedTier(tier);
-      setStep('auth');
-    }
-  };
-
-  const handleAuthSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (email) {
-      onConfirm(selectedTier, stats!);
-    }
+    onConfirm(tier, stats!);
   };
 
   if (loading) {
@@ -249,46 +235,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
             </div>
           )}
 
-          {step === 'auth' && (
-            <div className="max-w-md mx-auto animate-in fade-in slide-in-from-right-4 duration-300 text-center">
-              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Lock className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-3">Unlock Report</h3>
-              <p className="text-slate-500 mb-8">
-                We need your email to securely deliver the
-                <span className="text-slate-900 font-bold"> {selectedTier === 'deep' ? 'Senior' : 'CTO'} Audit</span> results.
-              </p>
-
-              <form onSubmit={handleAuthSubmit} className="space-y-4">
-                <div className="relative">
-                  <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="work@company.com"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-full py-3 pl-12 pr-6 text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-                >
-                  Start Agents <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
-
-              <button
-                onClick={() => setStep('selection')}
-                className="mt-6 text-slate-400 hover:text-slate-600 text-sm font-medium transition-colors"
-              >
-                Back to plans
-              </button>
-            </div>
-          )}
 
         </div>
 
