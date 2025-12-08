@@ -129,23 +129,17 @@ const App: React.FC = () => {
       addLog(`[Agent: Security] Sending metadata to Brain...`);
       addLog(`[System] Running ${tier.toUpperCase()} audit tier...`);
 
-      // Get estimated tokens for the selected tier
+      // Get estimated tokens from server-side cost estimator
       let estimatedTokens: number | undefined;
       if (stats.fingerprint) {
-        const { CostEstimator } = await import('./services/costEstimator');
-        // Map frontend tier names to backend audit types
-        const tierMapping: Record<string, string> = {
-          'lite': 'shape',
-          'deep': 'conventions',
-          'ultra': 'security',
-          'performance': 'performance',
-          'security': 'security',
-          'shape': 'shape',
-          'conventions': 'conventions',
-          'supabase_deep_dive': 'supabase_deep_dive',
-        };
-        const backendTier = tierMapping[tier] || 'shape';
-        estimatedTokens = CostEstimator.estimateTokens(backendTier as any, stats.fingerprint);
+        try {
+          const { CostEstimator } = await import('./services/costEstimator');
+          const estimate = await CostEstimator.estimateTokensAsync(tier, stats.fingerprint);
+          estimatedTokens = estimate.estimatedTokens;
+        } catch (err) {
+          console.warn('Failed to get token estimate:', err);
+          // Continue without estimate - server will calculate anyway
+        }
       }
 
       const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier, repoUrl, estimatedTokens, auditConfig);

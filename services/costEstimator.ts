@@ -1,74 +1,72 @@
+// Cost Estimator Client - Thin wrapper that calls the edge function
+// All pricing logic is now server-side for security
+import { supabase } from '../src/integrations/supabase/client';
 import { ComplexityFingerprint } from '../types';
-import { AuditTier } from '../components/TierBadges';
 
-export interface TierCostFormula {
-  tier: AuditTier;
-  estimateTokens: (fingerprint: ComplexityFingerprint) => number;
-  baseTokens: number;
-  maxOverrun: number; // e.g., 1.15 = 15% max overrun guarantee
+export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security' | 'supabase_deep_dive';
+
+interface TierEstimate {
+  estimatedTokens: number;
+  maxTokens: number;
+  formatted: string;
 }
 
-// Cost estimation formulas for each audit tier
-// These formulas are tuned based on real usage data and can be adjusted
-const COST_FORMULAS: TierCostFormula[] = [
-  {
-    tier: 'shape',
-    baseTokens: 5000,
-    maxOverrun: 1.1,
-    estimateTokens: (fp) => 5000 + fp.file_count * 50 + fp.config_files * 200
-  },
-  {
-    tier: 'conventions',
-    baseTokens: 20000,
-    maxOverrun: 1.15,
-    estimateTokens: (fp) => 20000 + fp.token_estimate * 0.05 + fp.test_files * 500
-  },
-  {
-    tier: 'performance',
-    baseTokens: 30000,
-    maxOverrun: 1.15,
-    estimateTokens: (fp) => 30000 + fp.frontend_files * 800 + fp.backend_files * 600
-  },
-  {
-    tier: 'security',
-    baseTokens: 50000,
-    maxOverrun: 1.2,
-    estimateTokens: (fp) => 50000 + fp.sql_files * 3000 + (fp.has_supabase ? 10000 : 0) + fp.api_endpoints_estimated * 1000
-  },
-  {
-    tier: 'supabase_deep_dive',
-    baseTokens: 60000,
-    maxOverrun: 1.2,
-    estimateTokens: (fp) => 60000 + fp.sql_files * 4000 + fp.backend_files * 1000 + fp.api_endpoints_estimated * 1500
-  }
-];
+interface AllTierEstimates {
+  estimates: Record<AuditTier, TierEstimate>;
+}
 
 export class CostEstimator {
   /**
-   * Estimate the token cost for a specific audit tier based on repository complexity
+   * Get estimated tokens for a specific tier (calls edge function)
    */
-  static estimateTokens(tier: AuditTier, fingerprint: ComplexityFingerprint): number {
-    const formula = COST_FORMULAS.find(f => f.tier === tier);
-    if (!formula) {
-      throw new Error(`No cost formula found for tier: ${tier}`);
+  static async estimateTokensAsync(tier: string, fingerprint: ComplexityFingerprint): Promise<TierEstimate> {
+    const { data, error } = await supabase.functions.invoke('cost-estimator', {
+      body: { action: 'estimate', tier, fingerprint }
+    });
+
+    if (error) {
+      throw new Error(`Cost estimation failed: ${error.message}`);
     }
 
-    const estimated = formula.estimateTokens(fingerprint);
-    // Ensure minimum cost
-    return Math.max(formula.baseTokens, Math.round(estimated));
+    return {
+      estimatedTokens: data.estimatedTokens,
+      maxTokens: data.maxTokens,
+      formatted: data.formatted,
+    };
   }
 
   /**
-   * Get the maximum possible tokens for a tier (including overrun guarantee)
+   * Get estimates for all tiers at once (calls edge function)
    */
-  static getMaxTokens(tier: AuditTier, fingerprint: ComplexityFingerprint): number {
-    const estimated = this.estimateTokens(tier, fingerprint);
-    const formula = COST_FORMULAS.find(f => f.tier === tier)!;
-    return Math.round(estimated * formula.maxOverrun);
+  static async getAllTierEstimatesAsync(fingerprint: ComplexityFingerprint): Promise<Record<AuditTier, TierEstimate>> {
+    const { data, error } = await supabase.functions.invoke('cost-estimator', {
+      body: { action: 'estimateAll', fingerprint }
+    });
+
+    if (error) {
+      throw new Error(`Cost estimation failed: ${error.message}`);
+    }
+
+    return data.estimates;
   }
 
   /**
-   * Format tokens for display (e.g., "15.2k" or "1.2M")
+   * Map frontend tier to backend tier (calls edge function)
+   */
+  static async mapTierAsync(frontendTier: string): Promise<string> {
+    const { data, error } = await supabase.functions.invoke('cost-estimator', {
+      body: { action: 'mapTier', tier: frontendTier }
+    });
+
+    if (error) {
+      throw new Error(`Tier mapping failed: ${error.message}`);
+    }
+
+    return data.backendTier;
+  }
+
+  /**
+   * Format tokens for display (local helper - no security risk)
    */
   static formatTokens(tokens: number): string {
     if (tokens >= 1000000) {
@@ -77,32 +75,5 @@ export class CostEstimator {
       return `${(tokens / 1000).toFixed(1)}k`;
     }
     return tokens.toString();
-  }
-
-  /**
-   * Calculate cost in dollars based on estimated tokens
-   * Note: This assumes a token-to-dollar conversion rate
-   */
-  static tokensToDollars(tokens: number, dollarsPerThousandTokens: number = 0.01): number {
-    return Math.round((tokens / 1000) * dollarsPerThousandTokens * 100) / 100;
-  }
-
-  /**
-   * Get all tier estimates for a given fingerprint
-   */
-  static getAllTierEstimates(fingerprint: ComplexityFingerprint): Record<AuditTier, number> {
-    const estimates: Partial<Record<AuditTier, number>> = {};
-    COST_FORMULAS.forEach(formula => {
-      estimates[formula.tier] = this.estimateTokens(formula.tier, fingerprint);
-    });
-    return estimates as Record<AuditTier, number>;
-  }
-
-  /**
-   * Validate that actual tokens don't exceed the guaranteed maximum
-   */
-  static validateActualCost(tier: AuditTier, fingerprint: ComplexityFingerprint, actualTokens: number): boolean {
-    const maxAllowed = this.getMaxTokens(tier, fingerprint);
-    return actualTokens <= maxAllowed;
   }
 }
