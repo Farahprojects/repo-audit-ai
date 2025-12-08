@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Decrypt the token
-    const decryptedToken = await decryptToken(encryptedToken, ENV.TOKEN_ENCRYPTION_KEY);
+    const decryptedToken = await decryptToken(encryptedToken, TOKEN_ENCRYPTION_KEY);
 
     return createSuccessResponse({
       token: decryptedToken,
