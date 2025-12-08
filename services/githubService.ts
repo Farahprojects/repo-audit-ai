@@ -106,14 +106,14 @@ export const fetchRepoStats = async (
       if (data.errorCode === 'PRIVATE_REPO') {
         // Repo exists but is private - we already checked owner exists
         const error = new Error('PRIVATE_REPO:Repository exists but is private. Connect your GitHub account to access private repositories.');
-        ErrorLogger.info('Repository is private', error, context);
+        ErrorLogger.warn('Repository is private', error, context);
         throw error;
       }
 
       // Handle legacy requiresAuth flag (fallback for any edge cases)
       if (data.requiresAuth && !accessToken) {
         const error = new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
-        ErrorLogger.info('Repository requires authentication', error, context);
+        ErrorLogger.warn('Repository requires authentication', error, context);
         throw error;
       }
 

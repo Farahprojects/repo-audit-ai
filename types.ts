@@ -1,13 +1,6 @@
-export interface ViewState {
-  landing: 'landing';
-  preflight: 'preflight';
-  scanning: 'scanning';
-  report: 'report';
-  pricing: 'pricing';
-  about: 'about';
-  contact: 'contact';
-  dashboard: 'dashboard';
-}
+export type ViewState = 'landing' | 'preflight' | 'scanning' | 'report' | 'pricing' | 'about' | 'contact' | 'dashboard';
+
+export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security' | 'supabase_deep_dive';
 
 export interface AuditStats {
   files: number;
