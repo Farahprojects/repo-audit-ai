@@ -80,10 +80,10 @@ export async function callGemini(
                             temperature: temperature,
                             maxOutputTokens: 8192,
                             responseMimeType: "application/json",
-                            // Enable dynamic reasoning
+                            // Thinking mode disabled for agents - only main LLM brain uses thinking
                             thinkingConfig: {
-                                includeThoughts: false, // We only want the final JSON, not the thought trace
-                                thinkingBudget: 1024 // Moderate budget for "Thinking"
+                                includeThoughts: false,
+                                thinkingBudget: 0 // Disabled: agents use fast mode, only LLM brain has thinking
                             }
                         }
                     })
