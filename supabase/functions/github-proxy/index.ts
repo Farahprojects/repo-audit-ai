@@ -254,9 +254,7 @@ serve(async (req) => {
           disabled: repoData.disabled || false,
           createdAt: repoData.created_at,
           updatedAt: repoData.updated_at,
-          pushedAt: repoData.pushed_at,
-          // Technology stack detection
-          techStack
+          pushedAt: repoData.pushed_at
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -393,7 +391,8 @@ serve(async (req) => {
         totalFiles: treeData.tree.length,
         codeFiles: filteredTree.length,
         truncated: treeData.truncated,
-        defaultBranch
+        defaultBranch,
+        techStack
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
