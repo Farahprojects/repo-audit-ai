@@ -45,12 +45,21 @@ const AppContent: React.FC = () => {
 
   // Comprehensive logout handler
   const handleSignOut = async () => {
-    await signOut(() => {
+    try {
+      // Sign out (this also clears localStorage/sessionStorage)
+      await signOut();
+
       // Clear all audit state
       clearAuditState();
+
       // Reset router to landing page
       resetToLanding();
-    });
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Still attempt cleanup even if sign out fails
+      clearAuditState();
+      resetToLanding();
+    }
   };
 
   const seoData = getSEO(reportData);

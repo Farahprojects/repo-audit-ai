@@ -27,7 +27,7 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signOut = async (onCleanup?: () => void) => {
+  const signOut = async () => {
     try {
       // Clear all localStorage and sessionStorage
       localStorage.clear();
@@ -35,19 +35,11 @@ export function useAuth() {
 
       // Sign out from Supabase
       await supabase.auth.signOut();
-
-      // Call cleanup callback if provided (navigation, state reset, etc.)
-      if (onCleanup) {
-        onCleanup();
-      }
     } catch (error) {
       console.error('Error during sign out:', error);
       // Still attempt to clear storage even if Supabase sign out fails
       localStorage.clear();
       sessionStorage.clear();
-      if (onCleanup) {
-        onCleanup();
-      }
     }
   };
 
