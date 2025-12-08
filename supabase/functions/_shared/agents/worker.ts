@@ -42,7 +42,7 @@ ${task.instruction}
 CODE CONTEXT:
 ${fileContext}`;
 
-    const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2);
+    const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, { role: 'WORKER' });
 
     // Note: 'data' here is likely JSON if callGemini parses it, or text if it failed.
     // Ideally callGemini should support returning raw text if we want markdown.
@@ -59,7 +59,7 @@ ${fileContext}`;
     return {
         result: {
             taskId: task.id,
-            findings: JSON.stringify(data), // Store the object as string for the Synthesizer
+            findings: data, // Return raw object - no double serialization
             tokenUsage: usage.totalTokens
         },
         usage

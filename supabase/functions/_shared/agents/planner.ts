@@ -27,10 +27,10 @@ Return JSON:
 }`;
 
 export async function runPlanner(context: AuditContext, apiKey: string, tierPrompt: string): Promise<{ result: SwarmPlan; usage: GeminiUsage }> {
-    console.log('Running Pass 0: Planner (Swarm CEO)...');
+  console.log('Running Pass 0: Planner (Swarm CEO)...');
 
-    const fileList = context.files.map(f => f.path).join('\n');
-    const userPrompt = `Project File Map:
+  const fileList = context.files.map(f => f.path).join('\n');
+  const userPrompt = `Project File Map:
 ${fileList}
 
 Client Audit Goal:
@@ -38,13 +38,13 @@ ${tierPrompt}
 
 Create a distinct task list to execute this audit.`;
 
-    const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.1);
+  const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.1, { role: 'CEO' });
 
-    // Fallback
-    if (!data.tasks || !Array.isArray(data.tasks)) {
-        data.tasks = [];
-        console.warn("Planner returned no tasks!");
-    }
+  // Fallback
+  if (!data.tasks || !Array.isArray(data.tasks)) {
+    data.tasks = [];
+    console.warn("Planner returned no tasks!");
+  }
 
-    return { result: data, usage };
+  return { result: data, usage };
 }

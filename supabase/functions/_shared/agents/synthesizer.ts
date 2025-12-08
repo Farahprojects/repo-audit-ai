@@ -35,7 +35,7 @@ ${tierPrompt}
 Generate the final Senior Principal Engineer Report.
 Prioritize findings. Filter out noise. Deduplicate similar issues found by different workers.`;
 
-    const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2);
+    const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.2, { role: 'SYNTHESIZER' });
 
     // Fallback for issues if missing (Brain might return empty sometimes)
     if (!data.issues) data.issues = [];

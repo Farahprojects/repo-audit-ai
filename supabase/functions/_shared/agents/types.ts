@@ -95,7 +95,7 @@ export interface WorkerTask {
 
 export interface WorkerResult {
     taskId: string;
-    findings: string; // Raw text/JSON analysis from the worker
+    findings: any; // Raw finding object - no serialization for efficiency
     tokenUsage: number;
 }
 

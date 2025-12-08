@@ -1,5 +1,16 @@
 
+// Gemini 2.5 Pro for all agents - reasoning model for quality audits
 export const GEMINI_MODEL = 'gemini-2.5-pro';
+
+// Thinking Budget Configuration
+// -1 = Dynamic (model decides), 128-32768 = Fixed budget for Gemini 2.5 Pro
+export const THINKING_BUDGET = {
+    CEO: -1,          // Dynamic - uncapped for strategic planning
+    SYNTHESIZER: -1,  // Dynamic - uncapped for consolidation & deduplication
+    WORKER: 10000,    // 10k tokens - high budget for thorough scanning (8k-12k range)
+} as const;
+
+export type AgentRole = 'CEO' | 'SYNTHESIZER' | 'WORKER';
 
 export interface GeminiUsage {
     promptTokens: number;
@@ -10,6 +21,11 @@ export interface GeminiUsage {
 export interface GeminiResponse<T = any> {
     data: T;
     usage: GeminiUsage;
+}
+
+export interface GeminiCallOptions {
+    role?: AgentRole;           // Determines thinking budget
+    thinkingBudget?: number;    // Override: -1 = dynamic, 128+ = fixed
 }
 
 const MAX_RETRIES = 3;
@@ -58,8 +74,16 @@ export async function callGemini(
     apiKey: string,
     systemPrompt: string,
     userPrompt: string,
-    temperature: number = 0.2
+    temperature: number = 0.2,
+    options: GeminiCallOptions = {}
 ): Promise<GeminiResponse> {
+    // Determine thinking budget: explicit override > role-based > default to dynamic
+    const thinkingBudget = options.thinkingBudget ??
+        (options.role ? THINKING_BUDGET[options.role] : THINKING_BUDGET.WORKER);
+
+    const roleLabel = options.role || 'UNKNOWN';
+    console.log(`🧠 [${roleLabel}] Calling Gemini with thinkingBudget: ${thinkingBudget === -1 ? 'DYNAMIC' : thinkingBudget}`);
+
     let lastError: any;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -80,10 +104,10 @@ export async function callGemini(
                             temperature: temperature,
                             maxOutputTokens: 8192,
                             responseMimeType: "application/json",
-                            // Thinking mode disabled for agents - only main LLM brain uses thinking
+                            // Role-based thinking budget configuration
                             thinkingConfig: {
                                 includeThoughts: false,
-                                thinkingBudget: 0 // Disabled: agents use fast mode, only LLM brain has thinking
+                                thinkingBudget: thinkingBudget
                             }
                         }
                     })

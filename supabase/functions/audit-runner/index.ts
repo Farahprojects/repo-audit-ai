@@ -10,17 +10,17 @@ import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
 import { detectCapabilities } from './capabilities.ts';
 import {
-    validateRequestBody,
-    validateGitHubUrl,
-    validateAuditTier,
-    validateFilePath,
-    ValidationError,
-    validateSupabaseEnv,
-    createSupabaseClient,
-    getOptionalUserId,
-    handleCorsPreflight,
-    createErrorResponse,
-    createSuccessResponse
+  validateRequestBody,
+  validateGitHubUrl,
+  validateAuditTier,
+  validateFilePath,
+  ValidationError,
+  validateSupabaseEnv,
+  createSupabaseClient,
+  getOptionalUserId,
+  handleCorsPreflight,
+  createErrorResponse,
+  createSuccessResponse
 } from '../_shared/utils.ts';
 
 // Canonical tier mapping - validates and maps frontend tiers
@@ -92,7 +92,7 @@ function calculateServerEstimate(tier: string, files: any[]): number {
 
   const formula = COST_FORMULAS[tier];
   if (!formula) return 50000; // Default fallback
-  
+
   const estimated = formula.estimate(fingerprint);
   return Math.max(formula.baseTokens, Math.round(estimated));
 }
@@ -300,16 +300,27 @@ serve(async (req) => {
       return runWorker(context, task, GEMINI_API_KEY);
     });
 
-    const workerOutputs = await Promise.all(workerPromises);
+    // Use Promise.allSettled for robust error handling - one worker failure won't lose all results
+    const workerOutputs = await Promise.allSettled(workerPromises);
 
-    // Aggregate Results & Token Usage
+    // Aggregate Results & Token Usage (handle both fulfilled and rejected)
     const swarmResults: WorkerResult[] = [];
     let swarmTokenUsage = 0;
+    let failedWorkers = 0;
 
-    workerOutputs.forEach(out => {
-      swarmResults.push(out.result);
-      swarmTokenUsage += out.usage.totalTokens;
+    workerOutputs.forEach((out, i) => {
+      if (out.status === 'fulfilled') {
+        swarmResults.push(out.value.result);
+        swarmTokenUsage += out.value.usage.totalTokens;
+      } else {
+        failedWorkers++;
+        console.warn(`⚠️ Worker ${i} failed:`, out.reason);
+      }
     });
+
+    if (failedWorkers > 0) {
+      console.warn(`⚠️ ${failedWorkers}/${workerOutputs.length} workers failed. Continuing with ${swarmResults.length} results.`);
+    }
 
     console.log(`✅ Swarm Complete. Collected ${swarmResults.length} findings.`);
 
