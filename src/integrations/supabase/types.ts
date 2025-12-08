@@ -283,6 +283,74 @@ export type Database = {
         }
         Relationships: []
       }
+      preflights: {
+        Row: {
+          created_at: string | null
+          default_branch: string | null
+          expires_at: string | null
+          fetch_strategy: string
+          file_count: number | null
+          fingerprint: Json | null
+          github_account_id: string | null
+          id: string
+          is_private: boolean
+          owner: string
+          repo: string
+          repo_map: Json
+          repo_url: string
+          stats: Json | null
+          token_valid: boolean | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_branch?: string | null
+          expires_at?: string | null
+          fetch_strategy?: string
+          file_count?: number | null
+          fingerprint?: Json | null
+          github_account_id?: string | null
+          id?: string
+          is_private?: boolean
+          owner: string
+          repo: string
+          repo_map?: Json
+          repo_url: string
+          stats?: Json | null
+          token_valid?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_branch?: string | null
+          expires_at?: string | null
+          fetch_strategy?: string
+          file_count?: number | null
+          fingerprint?: Json | null
+          github_account_id?: string | null
+          id?: string
+          is_private?: boolean
+          owner?: string
+          repo?: string
+          repo_map?: Json
+          repo_url?: string
+          stats?: Json | null
+          token_valid?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preflights_github_account_id_fkey"
+            columns: ["github_account_id"]
+            isOneToOne: false
+            referencedRelation: "github_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -355,6 +423,7 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_oauth_csrf_states: { Args: never; Returns: number }
+      cleanup_expired_preflights: { Args: never; Returns: number }
     }
     Enums: {
       [_ in never]: never
