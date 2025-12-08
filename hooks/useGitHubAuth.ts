@@ -422,6 +422,21 @@ export function useGitHubAuth() {
         }
     }, [state.account]);
 
+    // Clear all GitHub auth state (used on logout)
+    const clearGitHubState = useCallback(() => {
+        ErrorLogger.debug('Clearing GitHub auth state');
+        setState({
+            isConnected: false,
+            isConnecting: false,
+            token: null,
+            error: null,
+            account: null,
+        });
+        // Clear any OAuth-related storage
+        sessionStorage.removeItem('github_oauth_state');
+        localStorage.removeItem('github_oauth_result');
+    }, []);
+
     // Return individual values to prevent unnecessary re-renders
     // Components can now selectively subscribe to only the values they need
     return {
@@ -432,5 +447,6 @@ export function useGitHubAuth() {
         getGitHubToken,
         signInWithGitHub,
         disconnectGitHub,
+        clearGitHubState,
     };
 }
