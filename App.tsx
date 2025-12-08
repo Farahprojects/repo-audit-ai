@@ -127,7 +127,26 @@ const App: React.FC = () => {
       // Step 4: AI Audit (Real API)
       addLog(`[Agent: Security] Sending metadata to Brain...`);
       addLog(`[System] Running ${tier.toUpperCase()} audit tier...`);
-      const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier, repoUrl);
+
+      // Get estimated tokens for the selected tier
+      let estimatedTokens: number | undefined;
+      if (stats.fingerprint) {
+        const { CostEstimator } = await import('./services/costEstimator');
+        // Map frontend tier names to backend audit types
+        const tierMapping: Record<string, string> = {
+          'lite': 'shape',
+          'deep': 'conventions',
+          'ultra': 'security',
+          'performance': 'performance',
+          'security': 'security',
+          'shape': 'shape',
+          'conventions': 'conventions',
+        };
+        const backendTier = tierMapping[tier] || 'shape';
+        estimatedTokens = CostEstimator.estimateTokens(backendTier as any, stats.fingerprint);
+      }
+
+      const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier, repoUrl, estimatedTokens);
 
       addLog(`[Success] Report generated successfully.`);
       addLog(`[System] Finalizing health score: ${report.healthScore}/100`);

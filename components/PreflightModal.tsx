@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, Zap, AlertTriangle } from 'lucide-react';
-import { AuditStats } from '../types';
-import { parseGitHubUrl, fetchRepoStats } from '../services/githubService';
+import { AuditStats, ComplexityFingerprint } from '../types';
+import { parseGitHubUrl, fetchRepoStats, fetchRepoFingerprint } from '../services/githubService';
+import { CostEstimator } from '../services/costEstimator';
 import GitHubConnectModal from './GitHubConnectModal';
 import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
@@ -19,6 +20,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   const [error, setError] = useState<string | null>(null);
   const [isPrivateRepo, setIsPrivateRepo] = useState(false);
   const [stats, setStats] = useState<AuditStats | null>(null);
+  const [fingerprint, setFingerprint] = useState<ComplexityFingerprint | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const { isGitHubConnected, getGitHubToken, signInWithGitHub, isConnecting } = useGitHubAuth();
@@ -49,11 +51,19 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       return;
     }
 
-    console.log('📡 [PreflightModal] Calling fetchRepoStats...');
+    console.log('📡 [PreflightModal] Calling fetchRepoStats and fetchRepoFingerprint...');
     try {
-      const data = await fetchRepoStats(repoInfo.owner, repoInfo.repo, token);
-      console.log('✅ [PreflightModal] fetchRepoStats success:', data);
-      setStats(data);
+      // Fetch both stats and fingerprint in parallel
+      const [statsData, fingerprintData] = await Promise.all([
+        fetchRepoStats(repoInfo.owner, repoInfo.repo, token),
+        fetchRepoFingerprint(repoInfo.owner, repoInfo.repo, token)
+      ]);
+
+      console.log('✅ [PreflightModal] fetchRepoStats success:', statsData);
+      console.log('✅ [PreflightModal] fetchRepoFingerprint success:', fingerprintData);
+
+      setStats({ ...statsData, fingerprint: fingerprintData });
+      setFingerprint(fingerprintData);
       setStep('selection');
       console.log('🎯 [PreflightModal] Moving to selection step');
     } catch (err: unknown) {
@@ -108,6 +118,20 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   const handleTierSelect = (tier: 'lite' | 'deep' | 'ultra') => {
     onConfirm(tier, stats!);
   };
+
+  // Calculate estimated costs for all tiers
+  const getTierEstimates = () => {
+    if (!fingerprint) return null;
+
+    return {
+      shape: CostEstimator.estimateTokens('shape', fingerprint),
+      conventions: CostEstimator.estimateTokens('conventions', fingerprint),
+      performance: CostEstimator.estimateTokens('performance', fingerprint),
+      security: CostEstimator.estimateTokens('security', fingerprint),
+    };
+  };
+
+  const tierEstimates = getTierEstimates();
 
   if (loading) {
     return (
@@ -179,7 +203,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
                 {/* Tier 1: Shape Check (Free) */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-slate-300 transition-all flex flex-col items-center text-center">
-                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mb-4">FREE</span>
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mb-4">
+                    {tierEstimates ? `~${CostEstimator.formatTokens(tierEstimates.shape)} tokens` : 'FREE'}
+                  </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Shape Check</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">Repo structure, folder hygiene, missing files.</p>
                   <button
@@ -195,6 +221,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                   <div className="absolute -top-3 bg-primary text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
                     POPULAR
                   </div>
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full mb-4">
+                    {tierEstimates ? `~${CostEstimator.formatTokens(tierEstimates.conventions)} tokens` : 'POPULAR'}
+                  </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2 mt-2">Senior Check</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">Craftsmanship, types, tests, docs.</p>
                   <button
@@ -207,7 +236,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
                 {/* Tier 3: Performance Check */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-orange-200 transition-all flex flex-col items-center text-center group">
-                  <span className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full mb-4 group-hover:bg-orange-100 transition-colors">PRO</span>
+                  <span className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full mb-4 group-hover:bg-orange-100 transition-colors">
+                    {tierEstimates ? `~${CostEstimator.formatTokens(tierEstimates.performance)} tokens` : 'PRO'}
+                  </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Perf Audit</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">N+1, leaks, re-renders, AI sins.</p>
                   <button
@@ -220,7 +251,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
                 {/* Tier 4: Security Audit */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-red-200 transition-all flex flex-col items-center text-center group">
-                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full mb-4 group-hover:bg-red-100 transition-colors">PREMIUM</span>
+                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full mb-4 group-hover:bg-red-100 transition-colors">
+                    {tierEstimates ? `~${CostEstimator.formatTokens(tierEstimates.security)} tokens` : 'PREMIUM'}
+                  </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Security</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">RLS, secrets, auth, vulnerabilities.</p>
                   <button

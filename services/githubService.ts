@@ -1,4 +1,4 @@
-import { AuditStats } from '../types';
+import { AuditStats, ComplexityFingerprint } from '../types';
 import { supabase } from '../src/integrations/supabase/client';
 
 interface FileMapItem {
@@ -148,6 +148,38 @@ export const fetchRepoStats = async (
 
   console.log('✅ [fetchRepoStats] Success! Returning stats:', data);
   return data as AuditStats;
+};
+
+/**
+ * Fetch repository complexity fingerprint for cost estimation
+ * @param accessToken - Optional GitHub OAuth token for private repos
+ */
+export const fetchRepoFingerprint = async (
+  owner: string,
+  repo: string,
+  accessToken?: string
+): Promise<ComplexityFingerprint> => {
+  console.log('🔍 [fetchRepoFingerprint] Starting fingerprint generation for:', `${owner}/${repo}`);
+
+  // Call github-proxy edge function with fingerprint action
+  const { data, error } = await supabase.functions.invoke('github-proxy', {
+    body: { owner, repo, action: 'fingerprint', userToken: accessToken }
+  });
+
+  console.log('🔍 [fetchRepoFingerprint] Edge function response:', { data, error });
+
+  if (error) {
+    console.error('❌ [fetchRepoFingerprint] GitHub proxy error:', error);
+    throw new Error(error.message || 'Failed to generate fingerprint');
+  }
+
+  if (data?.error) {
+    console.log('⚠️ [fetchRepoFingerprint] Data contains error:', data.error);
+    throw new Error(data.error);
+  }
+
+  console.log('✅ [fetchRepoFingerprint] Success! Returning fingerprint:', data);
+  return data as ComplexityFingerprint;
 };
 
 

@@ -17,7 +17,8 @@ export const generateAuditReport = async (
   stats: any,
   fileMap: any[], // Was fileContents
   tier: string = 'shape',
-  fullRepoUrl?: string // Add optional full URL parameter
+  fullRepoUrl?: string, // Add optional full URL parameter
+  estimatedTokens?: number // Add estimated tokens parameter
 ): Promise<RepoReport & { tierData?: any }> => {
 
   // Map frontend tier to backend tier
@@ -28,7 +29,8 @@ export const generateAuditReport = async (
     body: {
       repoUrl: fullRepoUrl || `https://github.com/${repoName}`,
       files: fileMap, // Send the MAP, not the content
-      tier: backendTier
+      tier: backendTier,
+      estimatedTokens
     }
   });
 

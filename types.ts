@@ -42,6 +42,7 @@ export interface AuditStats {
   createdAt?: string;
   updatedAt?: string;
   pushedAt?: string;
+  fingerprint?: ComplexityFingerprint;
 }
 
 export interface StrengthOrIssue {
@@ -89,6 +90,37 @@ export interface RepoReport {
   auditId?: string;
 }
 
+export interface ComplexityFingerprint {
+  // Basic metrics (already available)
+  file_count: number;
+  total_size_kb: number;
+  token_estimate: number;
+
+  // Language breakdown
+  language_mix: Record<string, number>; // { ts: 65, python: 30, sql: 5 }
+  primary_language: string;
+
+  // File type counts (NEW - computed from tree)
+  sql_files: number;
+  config_files: number;  // yaml, json, toml, env
+  frontend_files: number; // tsx, jsx, vue, svelte
+  backend_files: number;  // ts, py, go, rs (in src/server/api folders)
+  test_files: number;
+
+  // Detection flags (already have some via techStack)
+  has_supabase: boolean;
+  has_docker: boolean;
+  has_env_files: boolean;
+  has_tests: boolean;
+  is_monorepo: boolean;
+
+  // Dependency info (if package.json accessible)
+  dependency_count: number;
+
+  // API surface hints
+  api_endpoints_estimated: number; // Based on route file patterns
+}
+
 // Audit record from database (for history)
 export interface AuditRecord {
   id: string;
@@ -99,4 +131,6 @@ export interface AuditRecord {
   created_at: string;
   issues: any;
   extra_data: any;
+  estimated_tokens?: number;
+  total_tokens?: number;
 }

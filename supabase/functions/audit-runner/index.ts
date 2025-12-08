@@ -42,7 +42,7 @@ serve(async (req) => {
       userId = user?.id || null;
     }
 
-    const { repoUrl, files, tier = 'security' } = await req.json();
+    const { repoUrl, files, tier = 'security', estimatedTokens } = await req.json();
 
     if (!repoUrl || !files || !Array.isArray(files)) {
       return new Response(
@@ -193,6 +193,7 @@ serve(async (req) => {
       user_id: userId,
       repo_url: repoUrl,
       tier: tier,
+      estimated_tokens: estimatedTokens,
       health_score: finalReport?.healthScore || 0,
       summary: finalReport?.summary || "No summary generated.",
       issues: dbIssues,
