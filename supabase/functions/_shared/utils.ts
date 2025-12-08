@@ -1,4 +1,6 @@
 // Shared utilities for Supabase Edge Functions
+// @ts-ignore - Deno import
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -163,8 +165,6 @@ export async function validateRequestBody(req: Request, maxSizeBytes: number = 1
 // ============================================================================
 // SHARED AUTHENTICATION UTILITIES
 // ============================================================================
-
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Environment configuration
 export interface SupabaseEnv {

@@ -16,8 +16,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -60,7 +58,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   }, [mode, email, password, onClose]);
 
-  const signInWithProvider = async (provider: 'google' | 'github' | 'apple') => {
+  const signInWithProvider = useCallback(async (provider: 'google' | 'github' | 'apple') => {
     setLoading(true);
     setError(null);
     try {
@@ -75,7 +73,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       setError(err.message || 'Authentication failed');
       setLoading(false);
     }
-  };
+  }, []);
+
+  if (!isOpen) return null;
 
   const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 24 24">

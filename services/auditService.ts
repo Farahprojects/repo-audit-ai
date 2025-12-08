@@ -103,7 +103,7 @@ export class AuditService {
         if (tokenResult.success) {
           estimatedTokens = tokenResult.data.estimatedTokens;
           ErrorLogger.debug('Token estimation successful', { estimatedTokens });
-        } else {
+        } else if (tokenResult.success === false) {
           ErrorLogger.warn('Token estimation failed, continuing without estimate', tokenResult.error);
           // Continue without estimate - server will calculate anyway
         }
@@ -150,7 +150,7 @@ export class AuditService {
         relatedAuditsCount: relatedAudits.length
       });
 
-      return { report: enrichedReport, relatedAudits };
+      return { report: enrichedReport, relatedAudits: relatedAudits as unknown as AuditRecord[] };
 
     } catch (error) {
       // Re-throw with proper context if it's already an AppError
@@ -206,7 +206,7 @@ export class AuditService {
         auditId: audit.id,
       };
 
-    return { report, relatedAudits: allAudits || [] };
+    return { report, relatedAudits: (allAudits || []) as unknown as AuditRecord[] };
   }
 
   // Process selected audit from history

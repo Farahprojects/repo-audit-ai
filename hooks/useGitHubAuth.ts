@@ -83,7 +83,7 @@ export function useGitHubAuth() {
                         error: null,
                     }));
                 }
-            } else {
+            } else if (result.success === false) {
                 ErrorLogger.warn('Failed to fetch GitHub account', result.error, { userId: session.user.id });
                 setState(prev => ({
                     ...prev,
@@ -146,7 +146,7 @@ export function useGitHubAuth() {
             if (result.success) {
                 ErrorLogger.debug('GitHub token decrypted successfully');
                 return result.data;
-            } else {
+            } else if (result.success === false) {
                 ErrorLogger.error('Failed to decrypt GitHub token', result.error);
                 // Update state to reflect the error
                 setState(prev => ({
@@ -156,6 +156,7 @@ export function useGitHubAuth() {
                 }));
                 return null;
             }
+            return null;
         } catch (err) {
             const error = err instanceof Error ? err : new Error('Unknown error getting GitHub token');
             ErrorLogger.error('Unexpected error in getGitHubToken', error, { accountId: state.account?.id });
@@ -407,11 +408,12 @@ export function useGitHubAuth() {
                     error: null,
                 }));
                 return true;
-            } else {
+            } else if (result.success === false) {
                 ErrorLogger.error('Failed to disconnect GitHub account', result.error);
                 setState(prev => ({ ...prev, error: result.error.message }));
                 return false;
             }
+            return false;
         } catch (err) {
             const error = err instanceof Error ? err : new Error('Unknown error during GitHub disconnection');
             ErrorLogger.error('Unexpected error disconnecting GitHub account', error, { accountId: state.account.id });
