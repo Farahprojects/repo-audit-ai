@@ -188,43 +188,34 @@ const App: React.FC = () => {
     setScannerProgress(0);
   };
 
-  // Helper to parse "Title: Detail" strings into structured objects
-  const parseStrengthsOrIssues = (items: any[]): { title: string; detail: string }[] => {
+  // Data is now normalized server-side, these helpers are only needed for historical DB data
+  // that was saved before normalization was added
+  const ensureNormalized = (items: any[]): { title: string; detail: string }[] => {
     if (!items || !Array.isArray(items)) return [];
+    // If already normalized (has title property), return as-is
+    if (items.length > 0 && items[0]?.title !== undefined) {
+      return items;
+    }
+    // Fallback for legacy data
     return items.map(item => {
       if (typeof item === 'string') {
         const colonIndex = item.indexOf(':');
         if (colonIndex > 0) {
-          return {
-            title: item.substring(0, colonIndex).trim(),
-            detail: item.substring(colonIndex + 1).trim()
-          };
+          return { title: item.substring(0, colonIndex).trim(), detail: item.substring(colonIndex + 1).trim() };
         }
         return { title: item, detail: '' };
       }
-      // Handle object with title/detail OR area/description
-      if (item && typeof item === 'object') {
-        // Check for title/detail structure first
-        if (item.title) {
-          return { title: item.title, detail: item.detail || '' };
-        }
-        // Check for area/description structure (from LLM output)
-        if (item.area) {
-          return { title: item.area, detail: item.description || '' };
-        }
-      }
+      if (item?.area) return { title: item.area, detail: item.description || '' };
       return { title: String(item), detail: '' };
     });
   };
 
-  // Normalize riskLevel to lowercase
-  const normalizeRiskLevel = (level: any): 'critical' | 'high' | 'medium' | 'low' | undefined => {
+  const ensureRiskLevel = (level: any): 'critical' | 'high' | 'medium' | 'low' | undefined => {
     if (!level) return undefined;
     const normalized = String(level).toLowerCase();
-    if (['critical', 'high', 'medium', 'low'].includes(normalized)) {
-      return normalized as 'critical' | 'high' | 'medium' | 'low';
-    }
-    return undefined;
+    return ['critical', 'high', 'medium', 'low'].includes(normalized) 
+      ? normalized as 'critical' | 'high' | 'medium' | 'low' 
+      : undefined;
   };
 
   const handleViewHistoricalReport = async (audit: Tables<'audits'> & { extra_data?: any }) => {
@@ -255,10 +246,10 @@ const App: React.FC = () => {
       issues,
       summary: audit.summary || 'No summary available',
       stats,
-      // Transform extra_data fields with proper parsing
-      topStrengths: parseStrengthsOrIssues(extraData.topStrengths),
-      topIssues: parseStrengthsOrIssues(extraData.topWeaknesses),
-      riskLevel: normalizeRiskLevel(extraData.riskLevel),
+      // Use normalized data from server, with fallback for legacy data
+      topStrengths: ensureNormalized(extraData.topStrengths),
+      topIssues: ensureNormalized(extraData.topWeaknesses),
+      riskLevel: ensureRiskLevel(extraData.riskLevel),
       productionReady: extraData.productionReady,
       categoryAssessments: extraData.categoryAssessments,
       seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,
@@ -292,9 +283,9 @@ const App: React.FC = () => {
       issues,
       summary: audit.summary || 'No summary available',
       stats,
-      topStrengths: parseStrengthsOrIssues(extraData.topStrengths),
-      topIssues: parseStrengthsOrIssues(extraData.topWeaknesses),
-      riskLevel: normalizeRiskLevel(extraData.riskLevel),
+      topStrengths: ensureNormalized(extraData.topStrengths),
+      topIssues: ensureNormalized(extraData.topWeaknesses),
+      riskLevel: ensureRiskLevel(extraData.riskLevel),
       productionReady: extraData.productionReady,
       categoryAssessments: extraData.categoryAssessments,
       seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,

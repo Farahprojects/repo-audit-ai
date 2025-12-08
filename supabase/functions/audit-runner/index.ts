@@ -30,6 +30,103 @@ const TIER_MAPPING: Record<string, string> = {
 
 const VALID_TIERS = ['shape', 'conventions', 'performance', 'security', 'supabase_deep_dive'];
 
+// Cost estimation formulas - server-side only (mirrors cost-estimator edge function)
+interface ComplexityFingerprint {
+  file_count: number;
+  total_bytes: number;
+  token_estimate: number;
+  frontend_files: number;
+  backend_files: number;
+  test_files: number;
+  config_files: number;
+  sql_files: number;
+  has_supabase: boolean;
+  api_endpoints_estimated: number;
+}
+
+const COST_FORMULAS: Record<string, { baseTokens: number; estimate: (fp: ComplexityFingerprint) => number }> = {
+  'shape': {
+    baseTokens: 5000,
+    estimate: (fp) => 5000 + fp.file_count * 50 + fp.config_files * 200
+  },
+  'conventions': {
+    baseTokens: 20000,
+    estimate: (fp) => 20000 + fp.token_estimate * 0.05 + fp.test_files * 500
+  },
+  'performance': {
+    baseTokens: 30000,
+    estimate: (fp) => 30000 + fp.frontend_files * 800 + fp.backend_files * 600
+  },
+  'security': {
+    baseTokens: 50000,
+    estimate: (fp) => 50000 + fp.sql_files * 3000 + (fp.has_supabase ? 10000 : 0) + fp.api_endpoints_estimated * 1000
+  },
+  'supabase_deep_dive': {
+    baseTokens: 60000,
+    estimate: (fp) => 60000 + fp.sql_files * 4000 + fp.backend_files * 1000 + fp.api_endpoints_estimated * 1500
+  }
+};
+
+// Server-side token estimation function
+function calculateServerEstimate(tier: string, files: any[]): number {
+  // Build a fingerprint from the file list
+  const fingerprint: ComplexityFingerprint = {
+    file_count: files.length,
+    total_bytes: files.reduce((sum, f) => sum + (f.size || 0), 0),
+    token_estimate: Math.round(files.reduce((sum, f) => sum + (f.size || 0), 0) / 4),
+    frontend_files: files.filter(f => /\.(tsx?|jsx?|vue|svelte)$/.test(f.path)).length,
+    backend_files: files.filter(f => /\.(ts|js)$/.test(f.path) && /(server|api|function|handler)/.test(f.path)).length,
+    test_files: files.filter(f => /\.(test|spec)\.(ts|js|tsx|jsx)$/.test(f.path)).length,
+    config_files: files.filter(f => /\.(json|ya?ml|toml|env)$/.test(f.path) || /config/.test(f.path)).length,
+    sql_files: files.filter(f => /\.sql$/.test(f.path)).length,
+    has_supabase: files.some(f => /supabase/.test(f.path)),
+    api_endpoints_estimated: files.filter(f => /(api|route|endpoint|handler)/.test(f.path)).length
+  };
+
+  const formula = COST_FORMULAS[tier];
+  if (!formula) return 50000; // Default fallback
+  
+  const estimated = formula.estimate(fingerprint);
+  return Math.max(formula.baseTokens, Math.round(estimated));
+}
+
+// Normalize LLM output for consistent frontend consumption
+function normalizeStrengthsOrIssues(items: any[]): { title: string; detail: string }[] {
+  if (!items || !Array.isArray(items)) return [];
+  return items.map(item => {
+    if (typeof item === 'string') {
+      const colonIndex = item.indexOf(':');
+      if (colonIndex > 0) {
+        return {
+          title: item.substring(0, colonIndex).trim(),
+          detail: item.substring(colonIndex + 1).trim()
+        };
+      }
+      return { title: item, detail: '' };
+    }
+    if (item && typeof item === 'object') {
+      // Handle title/detail structure
+      if (item.title) {
+        return { title: item.title, detail: item.detail || item.description || '' };
+      }
+      // Handle area/description structure (from LLM output)
+      if (item.area) {
+        return { title: item.area, detail: item.description || '' };
+      }
+    }
+    return { title: String(item), detail: '' };
+  });
+}
+
+function normalizeRiskLevel(level: any): 'critical' | 'high' | 'medium' | 'low' | null {
+  if (!level) return null;
+  const normalized = String(level).toLowerCase();
+  if (['critical', 'high', 'medium', 'low'].includes(normalized)) {
+    return normalized as 'critical' | 'high' | 'medium' | 'low';
+  }
+  return null;
+}
+
 const ENV = {
   SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
@@ -195,13 +292,19 @@ serve(async (req) => {
     // Total Tokens
     const totalTokens = (plannerUsage?.totalTokens || 0) + swarmTokenUsage + (synthesizerUsage?.totalTokens || 0);
 
+    // SERVER-SIDE TOKEN VALIDATION (Phase 4)
+    // Calculate estimate server-side, don't trust client-provided value
+    const serverEstimatedTokens = calculateServerEstimate(tier, files);
+    console.log(`📊 Token Estimates - Client: ${estimatedTokens || 'N/A'}, Server: ${serverEstimatedTokens}`);
+    if (estimatedTokens && Math.abs(estimatedTokens - serverEstimatedTokens) > serverEstimatedTokens * 0.5) {
+      console.warn(`⚠️ Large discrepancy between client (${estimatedTokens}) and server (${serverEstimatedTokens}) estimates`);
+    }
+    // Use server-calculated estimate for credit deduction
+    const finalEstimatedTokens = serverEstimatedTokens;
+
     // --- SAVE TO DB ---
 
     // Map internal "issues" specific format to general DB format
-    // The Enricher/Synthesizer should return compatible issues, but let's standardise
-    // We use the "issues" from finalReport which are filtered/prioritised
-
-    // Fallback: If Synthesizer dropped everything, maybe rely on Enricher?
     const rawIssues = (finalReport?.issues && finalReport.issues.length > 0) ? finalReport.issues : (swarmResults || []);
 
     const dbIssues = rawIssues.map((issue: any, index: number) => ({
@@ -217,25 +320,28 @@ serve(async (req) => {
       cwe: issue.cwe
     }));
 
-
+    // NORMALIZE LLM OUTPUT (Phase 3)
+    // Normalize data before saving to DB and returning to frontend
+    const normalizedTopStrengths = normalizeStrengthsOrIssues(finalReport?.topStrengths || []);
+    const normalizedTopWeaknesses = normalizeStrengthsOrIssues(finalReport?.topWeaknesses || []);
+    const normalizedRiskLevel = normalizeRiskLevel(finalReport?.riskLevel);
 
     console.log(`💾 Saving ${dbIssues.length} issues to DB...`);
-
     console.log(`💰 Total Tokens Used: ${totalTokens}`);
 
     const { error: insertError } = await supabase.from('audits').insert({
       user_id: userId,
       repo_url: repoUrl,
       tier: tier,
-      estimated_tokens: estimatedTokens,
+      estimated_tokens: finalEstimatedTokens, // Use server-calculated estimate
       health_score: finalReport?.healthScore || 0,
       summary: finalReport?.summary || "No summary generated.",
       issues: dbIssues,
       total_tokens: totalTokens,
       extra_data: {
-        topStrengths: finalReport?.topStrengths || [],
-        topWeaknesses: finalReport?.topWeaknesses || [],
-        riskLevel: finalReport?.riskLevel || null,
+        topStrengths: normalizedTopStrengths,
+        topWeaknesses: normalizedTopWeaknesses,
+        riskLevel: normalizedRiskLevel,
         productionReady: finalReport?.productionReady ?? null,
         categoryAssessments: finalReport?.categoryAssessments || null,
         seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
@@ -250,16 +356,16 @@ serve(async (req) => {
       console.log('💾 Audit saved to DB');
     }
 
-    // Return Result
+    // Return Result with NORMALIZED data - frontend doesn't need to transform
     return new Response(
       JSON.stringify({
         healthScore: finalReport.healthScore,
         summary: finalReport.summary,
         issues: dbIssues,
-        riskLevel: finalReport.riskLevel,
+        riskLevel: normalizedRiskLevel,
         productionReady: finalReport.productionReady,
-        topStrengths: finalReport?.topStrengths || [],
-        topIssues: finalReport?.topWeaknesses || [], // Map topWeaknesses to topIssues for frontend
+        topStrengths: normalizedTopStrengths,
+        topIssues: normalizedTopWeaknesses, // Already normalized
         suspiciousFiles: finalReport?.suspiciousFiles || null,
         categoryAssessments: finalReport?.categoryAssessments || null,
         seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
@@ -268,7 +374,12 @@ serve(async (req) => {
           planValues: plan,
           swarmCount: swarmResults.length,
           duration: durationMs,
-          detectedStack // Return to frontend
+          detectedStack,
+          tokenEstimates: {
+            client: estimatedTokens || null,
+            server: serverEstimatedTokens,
+            actual: totalTokens
+          }
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
