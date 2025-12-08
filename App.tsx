@@ -208,9 +208,16 @@ const App: React.FC = () => {
         }
         return { title: item, detail: '' };
       }
-      // Already an object with title/detail
-      if (item && typeof item === 'object' && item.title) {
-        return { title: item.title, detail: item.detail || '' };
+      // Handle object with title/detail OR area/description
+      if (item && typeof item === 'object') {
+        // Check for title/detail structure first
+        if (item.title) {
+          return { title: item.title, detail: item.detail || '' };
+        }
+        // Check for area/description structure (from LLM output)
+        if (item.area) {
+          return { title: item.area, detail: item.description || '' };
+        }
       }
       return { title: String(item), detail: '' };
     });
