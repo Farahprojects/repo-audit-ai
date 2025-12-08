@@ -1,14 +1,11 @@
 // @ts-nocheck
 // Worker Agent - Analyzes a single chunk of code
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response(null, { headers: corsHeaders });
+        return handleCorsPreflight();
     }
 
     try {
@@ -22,10 +19,7 @@ Deno.serve(async (req) => {
         const { chunkId, chunkName, files, prompt, repoUrl } = await req.json();
 
         if (!files || !prompt) {
-            return new Response(
-                JSON.stringify({ error: 'Missing required parameters: files and prompt' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            return createErrorResponse('Missing required parameters: files and prompt', 400);
         }
 
         console.log(`🔧 Worker starting analysis of chunk: ${chunkName} (${files.length} files)`);
@@ -102,21 +96,15 @@ ${fileContext}`;
 
         console.log(`✅ [${chunkId}] Analysis complete: score=${workerResult.localScore}, issues=${workerResult.issues?.length || 0}`);
 
-        return new Response(
-            JSON.stringify({
-                chunkId,
-                chunkName,
-                tokensAnalyzed: estimatedTokens,
-                ...workerResult, // localScore, confidence, issues, crossFileFlags, uncertainties
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createSuccessResponse({
+            chunkId,
+            chunkName,
+            tokensAnalyzed: estimatedTokens,
+            ...workerResult, // localScore, confidence, issues, crossFileFlags, uncertainties
+        });
 
     } catch (error) {
         console.error('Worker error:', error);
-        return new Response(
-            JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse(error, 500);
     }
 });

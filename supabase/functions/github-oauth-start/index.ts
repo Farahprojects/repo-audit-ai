@@ -2,16 +2,19 @@
 // GitHub OAuth Start - Secure Server-Side OAuth Initiation
 // Returns OAuth URL with CSRF-protected state token
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { validateSupabaseEnv, createSupabaseClient, handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Environment configuration
 const ENV = {
-  SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
-  SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  ...validateSupabaseEnv({
+    SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
+    SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  }),
   GITHUB_CLIENT_ID: Deno.env.get('GITHUB_CLIENT_ID')!,
   GITHUB_OAUTH_CALLBACK_URL: Deno.env.get('GITHUB_OAUTH_CALLBACK_URL')!,
 };
@@ -23,10 +26,7 @@ console.log('[github-oauth-start] ENV check:', {
   GITHUB_OAUTH_CALLBACK_URL: ENV.GITHUB_OAUTH_CALLBACK_URL || 'MISSING',
 });
 
-// Validate required env vars
-if (!ENV.SUPABASE_URL || !ENV.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing Supabase environment variables');
-}
+// Validate additional required env vars
 if (!ENV.GITHUB_CLIENT_ID) {
   throw new Error('Missing GITHUB_CLIENT_ID environment variable');
 }
@@ -34,7 +34,7 @@ if (!ENV.GITHUB_OAUTH_CALLBACK_URL) {
   throw new Error('Missing GITHUB_OAUTH_CALLBACK_URL environment variable - this must be set to your callback URL (e.g., http://localhost:8080)');
 }
 
-const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseClient(ENV);
 
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight

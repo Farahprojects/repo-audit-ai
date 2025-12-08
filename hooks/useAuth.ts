@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../src/integrations/supabase/client';
 
@@ -31,5 +31,11 @@ export function useAuth() {
     await supabase.auth.signOut();
   };
 
-  return { user, session, loading, signOut };
+  // Memoize the return object to prevent unnecessary re-renders
+  return useMemo(() => ({
+    user,
+    session,
+    loading,
+    signOut,
+  }), [user, session, loading]);
 }

@@ -1,10 +1,17 @@
 // @ts-nocheck
 // Coordinator Agent - Plans and synthesizes multi-agent audit
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import {
+    validateRequestBody,
+    validateAction,
+    validateGitHubUrl,
+    validateAuditTier,
+    ValidationError,
+    corsHeaders,
+    handleCorsPreflight,
+    createErrorResponse,
+    createSuccessResponse
+} from '../_shared/utils.ts';
 
 const SYNTHESIS_PROMPT = `You are the COORDINATOR AGENT synthesizing a multi-agent code audit.
 
@@ -35,7 +42,7 @@ Return ONLY valid JSON:
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response(null, { headers: corsHeaders });
+        return handleCorsPreflight();
     }
 
     try {
@@ -46,7 +53,45 @@ Deno.serve(async (req) => {
             throw new Error('GEMINI_API_KEY is not configured');
         }
 
-        const { action, workerFindings, tier, repoUrl } = await req.json();
+        // Validate request body
+        const body = await validateRequestBody(req);
+        const { action, workerFindings, tier, repoUrl } = body;
+
+        // Validate action parameter
+        if (!validateAction(action, ['synthesize'])) {
+            return createErrorResponse('Invalid action. Only "synthesize" is supported.', 400);
+        }
+
+        // Validate required parameters for synthesize action
+        if (!repoUrl || !tier || !workerFindings) {
+            return createErrorResponse('Missing required parameters: repoUrl, tier, and workerFindings', 400);
+        }
+
+        // Validate GitHub URL format
+        if (!validateGitHubUrl(repoUrl)) {
+            return createErrorResponse('Invalid repository URL format. Must be a valid GitHub.com URL.', 400);
+        }
+
+        // Validate audit tier
+        if (!validateAuditTier(tier)) {
+            return createErrorResponse(`Invalid audit tier: ${tier}. Valid tiers: shape, conventions, performance, security, supabase_deep_dive`, 400);
+        }
+
+        // Validate workerFindings structure
+        if (!Array.isArray(workerFindings) || workerFindings.length === 0) {
+            return createErrorResponse('workerFindings must be a non-empty array', 400);
+        }
+
+        // Validate each worker finding has required fields
+        for (let i = 0; i < workerFindings.length; i++) {
+            const finding = workerFindings[i];
+            if (!finding || typeof finding !== 'object') {
+                return createErrorResponse(`Invalid worker finding at index ${i}: must be an object`, 400);
+            }
+            if (!finding.chunkName || typeof finding.chunkName !== 'string') {
+                return createErrorResponse(`Invalid worker finding at index ${i}: missing or invalid chunkName`, 400);
+            }
+        }
 
         if (action === 'synthesize') {
             // Synthesis phase - merge all worker findings
@@ -131,22 +176,13 @@ Generate the final synthesis.`;
 
             console.log(`✅ Coordinator synthesis complete: score=${synthesisResult.healthScore}`);
 
-            return new Response(
-                JSON.stringify(synthesisResult),
-                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            return createSuccessResponse(synthesisResult);
         }
 
-        return new Response(
-            JSON.stringify({ error: 'Invalid action. Use: synthesize' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse('Invalid action. Use: synthesize', 400);
 
     } catch (error) {
         console.error('Coordinator error:', error);
-        return new Response(
-            JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse(error, 500);
     }
 });

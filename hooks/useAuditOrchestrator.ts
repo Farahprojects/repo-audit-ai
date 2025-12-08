@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ViewState, AuditStats, RepoReport, Issue, AuditRecord } from '../types';
 import { Tables } from '../src/integrations/supabase/types';
 import { AuditService } from '../services/auditService';
@@ -28,7 +28,7 @@ export const useAuditOrchestrator = ({
   const [scannerLogs, setScannerLogs] = useState<string[]>([]);
   const [scannerProgress, setScannerProgress] = useState(0);
 
-  const addLog = (msg: string) => setScannerLogs(prev => [...prev, msg]);
+  const addLog = useCallback((msg: string) => setScannerLogs(prev => [...prev, msg]), []);
 
   // Restore pending repo URL from localStorage on app load
   useEffect(() => {
@@ -39,13 +39,13 @@ export const useAuditOrchestrator = ({
     }
   }, []);
 
-  const handleAnalyze = (url: string) => {
+  const handleAnalyze = useCallback((url: string) => {
     setRepoUrl(url);
     setPreviousView('landing');
     navigate('preflight');
-  };
+  }, [navigate, setPreviousView]);
 
-  const handleSoftStart = (url: string) => {
+  const handleSoftStart = useCallback((url: string) => {
     // Check if user is authenticated
     if (user) {
       // If authenticated, start audit immediately
@@ -56,9 +56,9 @@ export const useAuditOrchestrator = ({
       setPendingRepoUrl(url);
       // Note: Auth modal handling should be in auth flow hook
     }
-  };
+  }, [user, handleAnalyze]);
 
-  const handleConfirmAudit = async (tier: string, stats: AuditStats) => {
+  const handleConfirmAudit = useCallback(async (tier: string, stats: AuditStats) => {
     setAuditStats(stats);
     navigate('scanning');
     setScannerLogs([]);
@@ -89,9 +89,9 @@ export const useAuditOrchestrator = ({
       addLog(`[System] Terminating process.`);
       console.error("Failed to generate report", e);
     }
-  };
+  }, [repoUrl, auditConfig, getGitHubToken, addLog, navigate]);
 
-  const handleRestart = () => {
+  const handleRestart = useCallback(() => {
     navigate('landing');
     setRepoUrl('');
     setReportData(null);
@@ -99,22 +99,23 @@ export const useAuditOrchestrator = ({
     setAuditStats(null);
     setScannerLogs([]);
     setScannerProgress(0);
-  };
+  }, [navigate]);
 
-  const handleViewHistoricalReport = async (audit: Tables<'audits'> & { extra_data?: any }) => {
+  const handleViewHistoricalReport = useCallback(async (audit: Tables<'audits'> & { extra_data?: any }) => {
     const result = await AuditService.processHistoricalAudit(audit);
     setRelatedAudits(result.relatedAudits);
     setHistoricalReportData(result.report);
     navigate('report');
-  };
+  }, [navigate]);
 
   // Handle switching to a different audit from history dropdown
-  const handleSelectAudit = (audit: AuditRecord) => {
+  const handleSelectAudit = useCallback((audit: AuditRecord) => {
     const report = AuditService.processSelectedAudit(audit);
     setHistoricalReportData(report);
-  };
+  }, []);
 
-  return {
+  // Memoize the return object to prevent unnecessary re-renders
+  return useMemo(() => ({
     // State
     repoUrl,
     setRepoUrl,
@@ -136,5 +137,24 @@ export const useAuditOrchestrator = ({
     handleRestart,
     handleViewHistoricalReport,
     handleSelectAudit,
-  };
+  }), [
+    repoUrl,
+    setRepoUrl,
+    auditStats,
+    reportData,
+    historicalReportData,
+    relatedAudits,
+    pendingRepoUrl,
+    setPendingRepoUrl,
+    auditConfig,
+    setAuditConfig,
+    scannerLogs,
+    scannerProgress,
+    handleAnalyze,
+    handleSoftStart,
+    handleConfirmAudit,
+    handleRestart,
+    handleViewHistoricalReport,
+    handleSelectAudit,
+  ]);
 };

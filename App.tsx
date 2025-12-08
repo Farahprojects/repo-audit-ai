@@ -6,62 +6,60 @@ import About from './components/About';
 import Contact from './components/Contact';
 import AuthModal from './components/AuthModal';
 import SEO from './components/SEO';
-import { ViewState } from './types';
-import { useAuth } from './hooks/useAuth';
-import { useGitHubAuth } from './hooks/useGitHubAuth';
-import { useAppRouter } from './hooks/useAppRouter';
-import { useAuditOrchestrator } from './hooks/useAuditOrchestrator';
-import { useAuthFlow } from './hooks/useAuthFlow';
-import { AppProviders } from './components/AppProviders';
+import { AppProviders, useAuthContext, useReportContext } from './components/AppProviders';
 import { LandingPage } from './components/LandingPage';
 import { AuditFlow } from './components/AuditFlow';
 import { DashboardPage } from './components/DashboardPage';
 
-const App: React.FC = () => {
-  const { user, signOut } = useAuth();
-  const { getGitHubToken } = useGitHubAuth();
-
-  // Navigation logic
-  const router = useAppRouter();
-
-  // Audit orchestration
-  const auditOrchestrator = useAuditOrchestrator({
-    user,
-    getGitHubToken,
-    navigate: router.navigate,
-    setPreviousView: router.setPreviousView,
-  });
-
-  // Authentication flow
-  const authFlow = useAuthFlow({
-    user,
-    view: router.view,
-    pendingRepoUrl: auditOrchestrator.pendingRepoUrl,
-    setPendingRepoUrl: auditOrchestrator.setPendingRepoUrl,
-    navigate: router.navigate,
-    setPreviousView: router.setPreviousView,
-  });
+const AppContent: React.FC = () => {
+  const { user, signOut } = useAuthContext();
+  const {
+    view,
+    previousView,
+    navigate,
+    isPublicPage,
+    getSEO,
+    repoUrl,
+    setRepoUrl,
+    auditStats,
+    reportData,
+    historicalReportData,
+    relatedAudits,
+    pendingRepoUrl,
+    setPendingRepoUrl,
+    scannerLogs,
+    scannerProgress,
+    handleAnalyze,
+    handleConfirmAudit,
+    handleRestart,
+    handleViewHistoricalReport,
+    handleSelectAudit,
+    isAuthOpen,
+    handleSoftStart,
+    openAuthModal,
+    closeAuthModal,
+  } = useReportContext();
 
   // Handle soft start (auth flow version)
-  const handleSoftStart = (url: string) => {
+  const handleSoftStartWrapper = (url: string) => {
     if (user) {
       // If authenticated, start audit immediately
-      auditOrchestrator.handleAnalyze(url);
+      handleAnalyze(url);
     } else {
       // If not authenticated, use auth flow
-      authFlow.handleSoftStart(url);
+      handleSoftStart(url);
     }
   };
 
-  const seoData = router.getSEO(auditOrchestrator.reportData);
+  const seoData = getSEO(reportData);
 
   const renderContent = () => {
-    switch (router.view) {
+    switch (view) {
       case 'landing':
         return (
           <LandingPage
-            onAnalyze={auditOrchestrator.handleAnalyze}
-            onSoftStart={handleSoftStart}
+            onAnalyze={handleAnalyze}
+            onSoftStart={handleSoftStartWrapper}
           />
         );
       case 'preflight':
@@ -69,23 +67,21 @@ const App: React.FC = () => {
       case 'report':
         return (
           <AuditFlow
-            view={router.view}
-            previousView={router.previousView}
-            repoUrl={auditOrchestrator.repoUrl}
-            scannerLogs={auditOrchestrator.scannerLogs}
-            scannerProgress={auditOrchestrator.scannerProgress}
-            reportData={auditOrchestrator.reportData}
-            historicalReportData={auditOrchestrator.historicalReportData}
-            relatedAudits={auditOrchestrator.relatedAudits}
-            onConfirmAudit={auditOrchestrator.handleConfirmAudit}
-            onCancelPreflight={() => router.navigate(router.previousView)}
-            onRestart={auditOrchestrator.handleRestart}
-            onSelectAudit={auditOrchestrator.handleSelectAudit}
+            view={view}
+            previousView={previousView}
+            repoUrl={repoUrl}
+            scannerLogs={scannerLogs}
+            scannerProgress={scannerProgress}
+            reportData={reportData}
+            historicalReportData={historicalReportData}
+            relatedAudits={relatedAudits}
+            onConfirmAudit={handleConfirmAudit}
+            onCancelPreflight={() => navigate(previousView)}
+            onRestart={handleRestart}
+            onSelectAudit={handleSelectAudit}
             onRunTier={(tier, url, config) => {
-              auditOrchestrator.setRepoUrl(url);
-              if (config) auditOrchestrator.setAuditConfig(config);
-              router.setPreviousView('report');
-              router.navigate('preflight');
+              setRepoUrl(url);
+              navigate('preflight');
             }}
           />
         );
@@ -98,27 +94,25 @@ const App: React.FC = () => {
       case 'dashboard':
         return (
           <DashboardPage
-            onNavigate={router.navigate}
-            onViewReport={auditOrchestrator.handleViewHistoricalReport}
+            onNavigate={navigate}
+            onViewReport={handleViewHistoricalReport}
             onStartAudit={(url, tier) => {
-              auditOrchestrator.setRepoUrl(url);
-              router.setPreviousView('dashboard');
-              router.navigate('preflight');
+              setRepoUrl(url);
+              navigate('preflight');
             }}
           />
         );
       default:
         return (
           <LandingPage
-            onAnalyze={auditOrchestrator.handleAnalyze}
-            onSoftStart={handleSoftStart}
+            onAnalyze={handleAnalyze}
+            onSoftStart={handleSoftStartWrapper}
           />
         );
     }
   };
 
   return (
-    <AppProviders>
     <div className="bg-background min-h-screen text-foreground font-sans antialiased tracking-tight">
       <SEO
         title={seoData.title}
@@ -126,11 +120,11 @@ const App: React.FC = () => {
         keywords={seoData.keywords}
       />
 
-        {router.isPublicPage && (
+      {isPublicPage && (
         <Navbar
-            currentView={router.view}
-            onNavigate={router.navigate}
-            onSignInClick={authFlow.openAuthModal}
+          currentView={view}
+          onNavigate={navigate}
+          onSignInClick={openAuthModal}
           user={user}
           onSignOut={signOut}
         />
@@ -138,13 +132,20 @@ const App: React.FC = () => {
 
       {renderContent()}
 
-        {router.isPublicPage && <Footer onNavigate={router.navigate} />}
+      {isPublicPage && <Footer onNavigate={navigate} />}
 
-        <AuthModal
-          isOpen={authFlow.isAuthOpen}
-          onClose={authFlow.closeAuthModal}
-        />
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={closeAuthModal}
+      />
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <AppProviders>
+      <AppContent />
     </AppProviders>
   );
 };

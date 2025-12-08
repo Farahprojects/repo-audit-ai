@@ -2,6 +2,8 @@
 // Cost Estimator Edge Function - Server-side token estimation
 // Keeps pricing logic secure and tamper-proof
 
+import { handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -116,7 +118,7 @@ function mapTier(frontendTier: string): AuditTier | null {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsPreflight();
   }
 
   try {
@@ -125,18 +127,12 @@ Deno.serve(async (req) => {
     // Action: estimate - get estimate for a single tier
     if (action === 'estimate') {
       if (!fingerprint || !tier) {
-        return new Response(
-          JSON.stringify({ error: 'Missing fingerprint or tier' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse('Missing fingerprint or tier', 400);
       }
 
       const backendTier = mapTier(tier);
       if (!backendTier) {
-        return new Response(
-          JSON.stringify({ error: `Invalid tier: ${tier}` }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse(`Invalid tier: ${tier}`, 400);
       }
 
       const estimated = estimateTokens(backendTier, fingerprint);
@@ -144,24 +140,18 @@ Deno.serve(async (req) => {
 
       console.log(`[cost-estimator] Tier: ${tier} -> ${backendTier}, Estimated: ${estimated}, Max: ${max}`);
 
-      return new Response(
-        JSON.stringify({
-          tier: backendTier,
-          estimatedTokens: estimated,
-          maxTokens: max,
-          formatted: formatTokens(estimated),
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createSuccessResponse({
+        tier: backendTier,
+        estimatedTokens: estimated,
+        maxTokens: max,
+        formatted: formatTokens(estimated),
+      });
     }
 
     // Action: estimateAll - get estimates for all tiers
     if (action === 'estimateAll') {
       if (!fingerprint) {
-        return new Response(
-          JSON.stringify({ error: 'Missing fingerprint' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse('Missing fingerprint', 400);
       }
 
       const estimates: Record<string, { estimatedTokens: number; maxTokens: number; formatted: string }> = {};
@@ -178,45 +168,27 @@ Deno.serve(async (req) => {
 
       console.log(`[cost-estimator] All tier estimates calculated for fingerprint with ${fingerprint.file_count} files`);
 
-      return new Response(
-        JSON.stringify({ estimates }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createSuccessResponse({ estimates });
     }
 
     // Action: mapTier - validate and map a frontend tier to backend tier
     if (action === 'mapTier') {
       if (!tier) {
-        return new Response(
-          JSON.stringify({ error: 'Missing tier' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse('Missing tier', 400);
       }
 
       const backendTier = mapTier(tier);
       if (!backendTier) {
-        return new Response(
-          JSON.stringify({ error: `Invalid tier: ${tier}` }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse(`Invalid tier: ${tier}`, 400);
       }
 
-      return new Response(
-        JSON.stringify({ frontendTier: tier, backendTier }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createSuccessResponse({ frontendTier: tier, backendTier });
     }
 
-    return new Response(
-      JSON.stringify({ error: 'Invalid action. Use: estimate, estimateAll, or mapTier' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return createErrorResponse('Invalid action. Use: estimate, estimateAll, or mapTier', 400);
 
   } catch (error) {
     console.error('[cost-estimator] Error:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return createErrorResponse(error, 500);
   }
 });

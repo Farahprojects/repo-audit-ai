@@ -1,25 +1,25 @@
 // @ts-nocheck - Deno runtime
 // Decrypt GitHub Token - Server-side decryption for secure token access
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { validateRequestBody, ValidationError, validateSupabaseEnv, createSupabaseClient, handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ENV = {
+// Environment configuration
+const ENV = validateSupabaseEnv({
   SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  TOKEN_ENCRYPTION_KEY: Deno.env.get('TOKEN_ENCRYPTION_KEY')!,
-};
+});
 
-// Validate required env vars
-if (!ENV.SUPABASE_URL || !ENV.SUPABASE_SERVICE_ROLE_KEY || !ENV.TOKEN_ENCRYPTION_KEY) {
-  throw new Error('Missing required environment variables');
+const TOKEN_ENCRYPTION_KEY = Deno.env.get('TOKEN_ENCRYPTION_KEY');
+if (!TOKEN_ENCRYPTION_KEY) {
+  throw new Error('TOKEN_ENCRYPTION_KEY is not configured');
 }
 
-const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseClient(ENV);
 
 // Crypto-based decryption
 async function decryptToken(encryptedData: string, secret: string): Promise<string> {
@@ -73,17 +73,14 @@ async function decryptToken(encryptedData: string, secret: string): Promise<stri
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return handleCorsPreflight();
   }
 
   try {
     // Get auth token from request
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+      return createErrorResponse('Missing authorization header', 401);
     }
 
     // Extract JWT token from Bearer header
@@ -102,27 +99,30 @@ Deno.serve(async (req: Request) => {
       }
     } catch (e) {
       console.error('[decrypt-github-token] Failed to decode JWT:', e);
-      return new Response(JSON.stringify({ error: 'Invalid token format' }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+      return createErrorResponse('Invalid token format', 401);
     }
 
     if (!userId) {
-      return new Response(JSON.stringify({ error: 'Could not extract user ID from token' }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+      return createErrorResponse('Could not extract user ID from token', 401);
     }
 
-    // Get request body
-    const { encryptedToken } = await req.json();
+    // Validate request body
+    const body = await validateRequestBody(req, 10 * 1024); // 10KB limit
+    const { encryptedToken } = body;
 
-    if (!encryptedToken) {
-      return new Response(JSON.stringify({ error: 'Missing encryptedToken parameter' }), {
-        status: 400,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+    // Validate encryptedToken parameter
+    if (!encryptedToken || typeof encryptedToken !== 'string') {
+      return createErrorResponse('Missing or invalid encryptedToken parameter', 400);
+    }
+
+    // Validate encryptedToken format (should be base64-like)
+    if (encryptedToken.length === 0 || encryptedToken.length > 10000) {
+      return createErrorResponse('Invalid encryptedToken length', 400);
+    }
+
+    // Basic format validation (should contain only base64 characters)
+    if (!/^[A-Za-z0-9+/=]+$/.test(encryptedToken)) {
+      return createErrorResponse('Invalid encryptedToken format', 400);
     }
 
     // Verify user owns this GitHub account
@@ -133,43 +133,22 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (accountError || !githubAccount) {
-      return new Response(JSON.stringify({ error: 'GitHub account not found' }), {
-        status: 404,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+      return createErrorResponse('GitHub account not found', 404);
     }
 
     // Verify the encrypted token matches what we have stored
     if (githubAccount.access_token_encrypted !== encryptedToken) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 403,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+      return createErrorResponse('Invalid token', 403);
     }
 
     // Decrypt the token
     const decryptedToken = await decryptToken(encryptedToken, ENV.TOKEN_ENCRYPTION_KEY);
 
-    return new Response(
-      JSON.stringify({
-        token: decryptedToken,
-      }),
-      {
-        status: 200,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      }
-    );
+    return createSuccessResponse({
+      token: decryptedToken,
+    });
   } catch (error) {
     console.error('Error in decrypt-github-token:', error);
-    return new Response(
-      JSON.stringify({
-        error: 'Internal server error',
-        message: error.message,
-      }),
-      {
-        status: 500,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      }
-    );
+    return createErrorResponse(error.message || 'Internal server error', 500);
   }
 });

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { supabase } from '../src/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -322,7 +322,8 @@ export function useGitHubAuth() {
         }
     }, [state.account]);
 
-    return {
+    // Memoize the return object to prevent unnecessary re-renders
+    return useMemo(() => ({
         isGitHubConnected: state.isConnected,
         isConnecting: state.isConnecting,
         error: state.error,
@@ -330,5 +331,5 @@ export function useGitHubAuth() {
         getGitHubToken,
         signInWithGitHub,
         disconnectGitHub,
-    };
+    }), [state.isConnected, state.isConnecting, state.error, state.account, getGitHubToken, signInWithGitHub, disconnectGitHub]);
 }

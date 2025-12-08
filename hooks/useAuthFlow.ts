@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ViewState } from '../types';
 
 interface UseAuthFlowProps {
@@ -41,21 +41,22 @@ export const useAuthFlow = ({
     }
   }, [user, pendingRepoUrl, navigate, setPreviousView, setPendingRepoUrl, view]);
 
-  const handleSoftStart = (url: string) => {
+  const handleSoftStart = useCallback((url: string) => {
     // If not authenticated, store URL and show sign-in
     localStorage.setItem('pendingRepoUrl', url);
     setPendingRepoUrl(url);
     setIsAuthOpen(true);
-  };
+  }, []);
 
-  const openAuthModal = () => setIsAuthOpen(true);
-  const closeAuthModal = () => setIsAuthOpen(false);
+  const openAuthModal = useCallback(() => setIsAuthOpen(true), []);
+  const closeAuthModal = useCallback(() => setIsAuthOpen(false), []);
 
-  return {
+  // Memoize the return object to prevent unnecessary re-renders
+  return useMemo(() => ({
     isAuthOpen,
     setIsAuthOpen,
     handleSoftStart,
     openAuthModal,
     closeAuthModal,
-  };
+  }), [isAuthOpen, setIsAuthOpen, handleSoftStart, openAuthModal, closeAuthModal]);
 };

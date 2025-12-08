@@ -1,7 +1,6 @@
 // @ts-nocheck
 // Audit Runner - Orchestration layer for 5-Pass "Magic Analysis" Pipeline
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Import Agents
 // Import Agents
@@ -10,11 +9,19 @@ import { runWorker } from '../_shared/agents/worker.ts';
 import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
 import { detectCapabilities } from './capabilities.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import {
+    validateRequestBody,
+    validateGitHubUrl,
+    validateAuditTier,
+    validateFilePath,
+    ValidationError,
+    validateSupabaseEnv,
+    createSupabaseClient,
+    getOptionalUserId,
+    handleCorsPreflight,
+    createErrorResponse,
+    createSuccessResponse
+} from '../_shared/utils.ts';
 
 // Canonical tier mapping - validates and maps frontend tiers
 const TIER_MAPPING: Record<string, string> = {
@@ -127,60 +134,81 @@ function normalizeRiskLevel(level: any): 'critical' | 'high' | 'medium' | 'low' 
   return null;
 }
 
-const ENV = {
-  SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
-  SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
-  GEMINI_API_KEY: Deno.env.get('GEMINI_API_KEY'),
-};
+// Environment configuration
+const ENV = validateSupabaseEnv({
+  SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
+  SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+});
+
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsPreflight();
   }
 
   try {
-    if (!ENV.GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const supabase = createClient(ENV.SUPABASE_URL!, ENV.SUPABASE_SERVICE_ROLE_KEY!);
+    const supabase = createSupabaseClient(ENV);
 
-    // Auth Check
-    const authHeader = req.headers.get('Authorization');
-    let userId: string | null = null;
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user } } = await supabase.auth.getUser(token);
-      userId = user?.id || null;
+    // Optional auth - audits can run without authentication for public repos
+    const userId = await getOptionalUserId(req, supabase);
+
+    // Validate request body
+    const body = await validateRequestBody(req);
+    const { repoUrl, files, tier: rawTier = 'security', estimatedTokens } = body;
+
+    // Validate required parameters
+    if (!repoUrl || !files) {
+      return createErrorResponse('Missing required parameters: repoUrl and files', 400);
     }
-
-    const { repoUrl, files, tier: rawTier = 'security', estimatedTokens } = await req.json();
 
     // Validate and map tier - reject invalid tiers
     const mappedTier = TIER_MAPPING[rawTier];
     if (!mappedTier || !VALID_TIERS.includes(mappedTier)) {
       console.warn(`[audit-runner] Rejected invalid tier: ${rawTier}`);
-      return new Response(
-        JSON.stringify({ error: `Invalid audit tier: ${rawTier}` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createErrorResponse(`Invalid audit tier: ${rawTier}. Valid tiers: ${VALID_TIERS.join(', ')}`, 400);
     }
     const tier = mappedTier;
 
-    if (!repoUrl || !files || !Array.isArray(files)) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required parameters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Validate files array
+    if (!Array.isArray(files) || files.length === 0) {
+      return createErrorResponse('files must be a non-empty array', 400);
     }
 
-    // Validate repoUrl format (must be a valid GitHub URL)
-    const githubUrlPattern = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/;
-    if (!githubUrlPattern.test(repoUrl)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid repository URL format' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Validate files array size (prevent DoS)
+    if (files.length > 10000) {
+      return createErrorResponse('Too many files (max 10,000)', 400);
+    }
+
+    // Validate GitHub URL format
+    if (!validateGitHubUrl(repoUrl)) {
+      return createErrorResponse('Invalid repository URL format. Must be a valid GitHub.com URL.', 400);
+    }
+
+    // Validate file objects structure
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file || typeof file !== 'object') {
+        return createErrorResponse(`Invalid file at index ${i}: must be an object`, 400);
+      }
+
+      if (!file.path || typeof file.path !== 'string') {
+        return createErrorResponse(`Invalid file path at index ${i}: must be a string`, 400);
+      }
+
+      // Validate file path (prevent path traversal)
+      if (!validateFilePath(file.path)) {
+        return createErrorResponse(`Invalid file path at index ${i}: path traversal not allowed`, 400);
+      }
+
+      // Validate file size if present
+      if (file.size !== undefined && (typeof file.size !== 'number' || file.size < 0 || file.size > 50 * 1024 * 1024)) {
+        return createErrorResponse(`Invalid file size at index ${i}: must be 0-50MB`, 400);
+      }
     }
 
     // Validate all file URLs are from trusted GitHub domains
@@ -191,15 +219,18 @@ serve(async (req) => {
 
     const invalidFiles = files.filter((f: any) => {
       if (!f.url) return false; // Files without URLs will be fetched later
+      if (typeof f.url !== 'string') return true;
       return !allowedUrlPatterns.some(pattern => pattern.test(f.url));
     });
 
     if (invalidFiles.length > 0) {
       console.warn(`Blocked request with invalid file URLs: ${invalidFiles.map((f: any) => f.url).join(', ')}`);
-      return new Response(
-        JSON.stringify({ error: 'Invalid file URLs detected' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createErrorResponse('Invalid file URLs detected. Only GitHub URLs are allowed.', 400);
+    }
+
+    // Validate estimatedTokens if provided
+    if (estimatedTokens !== undefined && (typeof estimatedTokens !== 'number' || estimatedTokens < 0 || estimatedTokens > 10000000)) {
+      return createErrorResponse('Invalid estimatedTokens: must be a positive number <= 10M', 400);
     }
 
     // Fetch the tierPrompt from the database
@@ -357,39 +388,33 @@ serve(async (req) => {
     }
 
     // Return Result with NORMALIZED data - frontend doesn't need to transform
-    return new Response(
-      JSON.stringify({
-        healthScore: finalReport.healthScore,
-        summary: finalReport.summary,
-        issues: dbIssues,
-        riskLevel: normalizedRiskLevel,
-        productionReady: finalReport.productionReady,
-        topStrengths: normalizedTopStrengths,
-        topIssues: normalizedTopWeaknesses, // Already normalized
-        suspiciousFiles: finalReport?.suspiciousFiles || null,
-        categoryAssessments: finalReport?.categoryAssessments || null,
-        seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
-        overallVerdict: finalReport?.overallVerdict || null,
-        meta: {
-          planValues: plan,
-          swarmCount: swarmResults.length,
-          duration: durationMs,
-          detectedStack,
-          tokenEstimates: {
-            client: estimatedTokens || null,
-            server: serverEstimatedTokens,
-            actual: totalTokens
-          }
+    return createSuccessResponse({
+      healthScore: finalReport.healthScore,
+      summary: finalReport.summary,
+      issues: dbIssues,
+      riskLevel: normalizedRiskLevel,
+      productionReady: finalReport.productionReady,
+      topStrengths: normalizedTopStrengths,
+      topIssues: normalizedTopWeaknesses, // Already normalized
+      suspiciousFiles: finalReport?.suspiciousFiles || null,
+      categoryAssessments: finalReport?.categoryAssessments || null,
+      seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
+      overallVerdict: finalReport?.overallVerdict || null,
+      meta: {
+        planValues: plan,
+        swarmCount: swarmResults.length,
+        duration: durationMs,
+        detectedStack,
+        tokenEstimates: {
+          client: estimatedTokens || null,
+          server: serverEstimatedTokens,
+          actual: totalTokens
         }
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+      }
+    });
 
   } catch (error) {
     console.error('Pipeline Error:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return createErrorResponse(error, 500);
   }
 });

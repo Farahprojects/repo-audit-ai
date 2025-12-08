@@ -131,7 +131,8 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
 
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
 
-  return {
+  // Memoize the return object to prevent unnecessary re-renders
+  return useMemo(() => ({
     // State
     activeTier,
     setActiveTier,
@@ -166,5 +167,33 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
     handleConnectSubmit,
     handleExportCSV,
     formatDate,
-  };
+  }), [
+    activeTier,
+    setActiveTier,
+    historyDropdownOpen,
+    setHistoryDropdownOpen,
+    upgradesDropdownOpen,
+    setUpgradesDropdownOpen,
+    copied,
+    dropdownPosition,
+    setDropdownPosition,
+    isConnectModalOpen,
+    setIsConnectModalOpen,
+    pendingDeepAuditTier,
+    pendingProvider,
+    auditsByTier,
+    completedTiers,
+    uncompletedTiers,
+    currentTier,
+    dropdownRef,
+    upgradesButtonRef,
+    tierButtonRefs,
+    handleTierClick,
+    handleUpgradesClick,
+    handleShare,
+    handleRunDeepAudit,
+    handleConnectSubmit,
+    handleExportCSV,
+    formatDate,
+  ]);
 };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { ViewState, RepoReport } from '../types';
 
 export interface SEOData {
@@ -11,23 +11,23 @@ export const useAppRouter = () => {
   const [view, setView] = useState<ViewState>('landing');
   const [previousView, setPreviousView] = useState<ViewState>('landing');
 
-  const navigate = (newView: ViewState) => {
+  const navigate = useCallback((newView: ViewState) => {
     setPreviousView(view);
     setView(newView);
-  };
+  }, [view]);
 
-  const goBack = () => {
+  const goBack = useCallback(() => {
     setView(previousView);
-  };
+  }, [previousView]);
 
-  const resetToLanding = () => {
+  const resetToLanding = useCallback(() => {
     setView('landing');
     setPreviousView('landing');
-  };
+  }, []);
 
-  const isPublicPage = ['landing', 'pricing', 'about', 'contact', 'preflight', 'dashboard', 'report'].includes(view);
+  const isPublicPage = useMemo(() => ['landing', 'pricing', 'about', 'contact', 'preflight', 'dashboard', 'report'].includes(view), [view]);
 
-  const getSEO = (reportData?: RepoReport | null): SEOData => {
+  const getSEO = useCallback((reportData?: RepoReport | null): SEOData => {
     switch (view) {
       case 'landing':
         return {
@@ -66,9 +66,10 @@ export const useAppRouter = () => {
           keywords: "ai code tools"
         };
     }
-  };
+  }, [view]);
 
-  return {
+  // Memoize the return object to prevent unnecessary re-renders
+  return useMemo(() => ({
     view,
     setView,
     previousView,
@@ -78,5 +79,5 @@ export const useAppRouter = () => {
     resetToLanding,
     isPublicPage,
     getSEO,
-  };
+  }), [view, setView, previousView, setPreviousView, navigate, goBack, resetToLanding, isPublicPage, getSEO]);
 };

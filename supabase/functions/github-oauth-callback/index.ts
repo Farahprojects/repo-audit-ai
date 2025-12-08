@@ -2,16 +2,19 @@
 // GitHub OAuth Callback Handler
 // Handles OAuth flow with proper encryption and CSRF validation
 
-import { SupabaseClient, createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { validateSupabaseEnv, createSupabaseClient, handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 } as Record<string, string>;
 
+// Environment configuration
 const ENV = {
-  SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
-  SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  ...validateSupabaseEnv({
+    SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
+    SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  }),
   TOKEN_ENCRYPTION_KEY: Deno.env.get('TOKEN_ENCRYPTION_KEY')!,
   GITHUB_CLIENT_ID: Deno.env.get('GITHUB_CLIENT_ID')!,
   GITHUB_CLIENT_SECRET: Deno.env.get('GITHUB_CLIENT_SECRET')!,
@@ -19,10 +22,7 @@ const ENV = {
   FRONTEND_URL: Deno.env.get('FRONTEND_URL')!,
 };
 
-// Validate required env vars
-if (!ENV.SUPABASE_URL || !ENV.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing required Supabase environment variables');
-}
+// Validate additional required env vars
 if (!ENV.FRONTEND_URL) {
   throw new Error('Missing FRONTEND_URL environment variable - required for OAuth redirects');
 }
@@ -32,8 +32,11 @@ if (!ENV.GITHUB_CLIENT_ID || !ENV.GITHUB_CLIENT_SECRET) {
 if (!ENV.GITHUB_OAUTH_CALLBACK_URL) {
   throw new Error('Missing GITHUB_OAUTH_CALLBACK_URL environment variable');
 }
+if (!ENV.TOKEN_ENCRYPTION_KEY) {
+  throw new Error('Missing TOKEN_ENCRYPTION_KEY environment variable');
+}
 
-const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseClient(ENV);
 
 // Crypto-based encryption using Web Crypto API
 async function encryptToken(token: string, secret: string): Promise<string> {

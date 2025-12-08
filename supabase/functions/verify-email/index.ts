@@ -4,25 +4,30 @@
 
 // Handles sending verification codes and verifying email addresses
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, getAuthUserIdFromRequest } from '../_shared/utils.ts';
+import {
+  corsHeaders,
+  getAuthUserIdFromRequest,
+  validateSupabaseEnv,
+  createSupabaseClient,
+  handleCorsPreflight,
+  createErrorResponse,
+  createSuccessResponse,
+  ValidationError
+} from '../_shared/utils.ts';
 
 const CORS_HEADERS = {
   ...corsHeaders,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const ENV = {
+// Environment configuration
+const ENV = validateSupabaseEnv({
   SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  ANON_KEY: Deno.env.get('SUPABASE_ANON_KEY')!,
-};
+  SUPABASE_ANON_KEY: Deno.env.get('SUPABASE_ANON_KEY')!,
+});
 
-if (!ENV.SUPABASE_URL || !ENV.SUPABASE_SERVICE_ROLE_KEY || !ENV.ANON_KEY) {
-  throw new Error('Missing required environment variables');
-}
-
-const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY, {
+const supabase = createSupabaseClient(ENV, {
   auth: {
     persistSession: false,
   },
@@ -48,11 +53,11 @@ Deno.serve(async (req: Request) => {
   // Handle CORS preflight
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: CORS_HEADERS });
+    return handleCorsPreflight();
   }
 
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return createErrorResponse('Method not allowed', 405);
   }
 
   try {
@@ -66,21 +71,21 @@ Deno.serve(async (req: Request) => {
     const { action, email, code } = body;
 
     if (!action) {
-      return jsonResponse({ error: 'Missing action parameter' }, 400);
+      return createErrorResponse('Missing action parameter', 400);
     }
 
     // Action: send_code
 
     if (action === 'send_code') {
       if (!email || typeof email !== 'string') {
-        return jsonResponse({ error: 'Missing or invalid email parameter' }, 400);
+        return createErrorResponse('Missing or invalid email parameter', 400);
       }
 
       // Validate email format
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        return jsonResponse({ error: 'Invalid email format' }, 400);
+        return createErrorResponse('Invalid email format', 400);
       }
 
       // Generate 6-digit code
@@ -143,7 +148,7 @@ Deno.serve(async (req: Request) => {
 
       if (templateError || !template) {
         console.error('[verify-email] Error fetching email template:', templateError);
-        return jsonResponse({ error: 'Failed to load email template' }, 500);
+        return createErrorResponse('Failed to load email template', 500);
       }
 
       // Replace placeholder with actual verification code
@@ -177,7 +182,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      return jsonResponse({
+      return createSuccessResponse({
         success: true,
         message: 'Verification code sent successfully',
         expiresAt: expiresAt.toISOString(),
@@ -188,11 +193,11 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'verify_code') {
       if (!email || typeof email !== 'string') {
-        return jsonResponse({ error: 'Missing or invalid email parameter' }, 400);
+        return createErrorResponse('Missing or invalid email parameter', 400);
       }
 
       if (!code || typeof code !== 'string') {
-        return jsonResponse({ error: 'Missing or invalid code parameter' }, 400);
+        return createErrorResponse('Missing or invalid code parameter', 400);
       }
 
       // Find matching code for user
@@ -209,11 +214,11 @@ Deno.serve(async (req: Request) => {
 
       if (codeError) {
         console.error('[verify-email] Error fetching code:', codeError);
-        return jsonResponse({ error: 'Failed to verify code' }, 500);
+        return createErrorResponse('Failed to verify code', 500);
       }
 
       if (!verificationCode) {
-        return jsonResponse({ error: 'Invalid verification code' }, 400);
+        return createErrorResponse('Invalid verification code', 400);
       }
 
       // Check if code is expired
@@ -226,7 +231,7 @@ Deno.serve(async (req: Request) => {
 
         await supabase.from('verification_codes').delete().eq('id', verificationCode.id);
 
-        return jsonResponse({ error: 'Verification code has expired' }, 400);
+        return createErrorResponse('Verification code has expired', 400);
       }
 
       // Update profile with verified email
@@ -242,29 +247,24 @@ Deno.serve(async (req: Request) => {
 
       if (updateError) {
         console.error('[verify-email] Error updating profile:', updateError);
-        return jsonResponse({ error: 'Failed to update profile' }, 500);
+        return createErrorResponse('Failed to update profile', 500);
       }
 
       // Delete used code
 
       await supabase.from('verification_codes').delete().eq('id', verificationCode.id);
 
-      return jsonResponse({
+      return createSuccessResponse({
         success: true,
         message: 'Email verified successfully',
         verified: true,
       });
     }
 
-    return jsonResponse({ error: 'Invalid action' }, 400);
+    return createErrorResponse('Invalid action', 400);
   } catch (error: any) {
     console.error('[verify-email] Error:', error);
-    return jsonResponse(
-      {
-        error: error.message || 'Internal server error',
-      },
-      500
-    );
+    return createErrorResponse(error.message || 'Internal server error', 500);
   }
 });
 
