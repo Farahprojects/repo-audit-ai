@@ -210,9 +210,9 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
             pushedAt: repoData.pushed_at
         };
 
-        // 5. Fetch tree for fingerprint
+        // 5. Fetch tree for fingerprint and file map
         const defaultBranch = branch || repoData.default_branch || 'main';
-        console.log(`🌳 [github-proxy] Fetching tree for fingerprint...`);
+        console.log(`🌳 [github-proxy] Fetching tree for fingerprint and file map...`);
         const treeRes = await client.fetchTree(owner, repo, defaultBranch);
         const treeData = await treeRes.json();
 
@@ -228,13 +228,34 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
             client.getHeaders()
         );
 
-        console.log(`✅ [github-proxy] PREFLIGHT SUCCESS - returning stats + fingerprint`);
+        // 7. Create filtered file map (same logic as handleTreeAction)
+        const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.rb', '.php', '.vue', '.svelte', '.css', '.scss', '.html', '.json', '.yaml', '.yml', '.md', '.txt', '.sql', '.sh', '.env.example'];
+        const excludePatterns = ['node_modules/', 'dist/', 'build/', '.git/', 'vendor/', '__pycache__/', '.next/', 'coverage/', '.docz/', 'storybook-static/'];
 
-        // 7. Return combined response
+        const filteredTree = treeData.tree.filter((item: any) => {
+            if (item.type !== 'blob') return false;
+            // Exclude common non-code directories
+            if (excludePatterns.some(pattern => item.path.includes(pattern))) return false;
+            // Include only code files
+            const ext = '.' + item.path.split('.').pop()?.toLowerCase();
+            return codeExtensions.includes(ext) || item.path.includes('Dockerfile') || item.path.includes('Makefile');
+        });
+
+        const fileMap = filteredTree.map((item: any) => ({
+            path: item.path,
+            size: item.size || 0,
+            type: 'file',
+            url: item.url // GitHub API blob URL
+        }));
+
+        console.log(`✅ [github-proxy] PREFLIGHT SUCCESS - returning stats + fingerprint + ${fileMap.length} files`);
+
+        // 8. Return combined response
         return new Response(
             JSON.stringify({
                 stats,
-                fingerprint
+                fingerprint,
+                fileMap
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

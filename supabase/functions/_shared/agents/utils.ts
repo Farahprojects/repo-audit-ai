@@ -172,7 +172,7 @@ export function isValidGitHubUrl(url: string): boolean {
     return ALLOWED_URL_PATTERNS.some(pattern => pattern.test(url));
 }
 
-export async function fetchFileContent(url: string): Promise<string> {
+export async function fetchFileContent(url: string, token?: string): Promise<string> {
     // Validate URL to prevent SSRF attacks
     if (!isValidGitHubUrl(url)) {
         console.warn(`Blocked fetch to untrusted URL: ${url}`);
@@ -183,7 +183,19 @@ export async function fetchFileContent(url: string): Promise<string> {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-        const res = await fetch(url, { signal: controller.signal });
+        const headers: Record<string, string> = {
+            'Accept': 'application/vnd.github.v3.raw',
+            'User-Agent': 'SCAI'
+        };
+
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const res = await fetch(url, {
+            signal: controller.signal,
+            headers
+        });
         clearTimeout(timeoutId);
 
         if (!res.ok) throw new Error(`Failed to fetch ${url}`);

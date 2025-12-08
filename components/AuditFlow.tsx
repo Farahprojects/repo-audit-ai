@@ -1,5 +1,6 @@
 import React from 'react';
-import { ViewState, RepoReport, AuditRecord } from '../types';
+import { ViewState, RepoReport, AuditRecord, AuditStats } from '../types';
+import { FileMapItem } from '../services/githubService';
 import PreflightModal from './PreflightModal';
 import Scanner from './Scanner';
 import ReportDashboard from './ReportDashboard';
@@ -13,7 +14,7 @@ interface AuditFlowProps {
   reportData: RepoReport | null;
   historicalReportData: RepoReport | null;
   relatedAudits: AuditRecord[];
-  onConfirmAudit: (tier: string, stats: any) => void;
+  onConfirmAudit: (tier: string, stats: AuditStats, fileMap: FileMapItem[], preflightId?: string) => void;
   onCancelPreflight: () => void;
   onRestart: () => void;
   onSelectAudit: (audit: AuditRecord) => void;

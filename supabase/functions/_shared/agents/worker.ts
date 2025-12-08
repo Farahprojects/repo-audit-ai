@@ -24,7 +24,7 @@ export async function runWorker(
 
     const fetchedContent = await Promise.all(filesToFetch.map(async f => {
         if (!f.url) return null;
-        const content = await fetchFileContent(f.url);
+        const content = await fetchFileContent(f.url, context.githubToken);
         return `--- ${f.path} ---\n${content}`;
     }));
 

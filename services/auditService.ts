@@ -1,7 +1,7 @@
 import { AuditStats, RepoReport, Issue, AuditRecord } from '../types';
 import { Tables } from '../src/integrations/supabase/types';
 import { generateAuditReport } from './geminiService';
-import { fetchRepoMap, parseGitHubUrl } from './githubService';
+import { FileMapItem, parseGitHubUrl } from './githubService';
 import { supabase } from '../src/integrations/supabase/client';
 import { CostEstimator } from './costEstimator';
 import { ErrorHandler, ErrorLogger } from './errorService';
@@ -41,12 +41,14 @@ export class AuditService {
     repoUrl: string,
     tier: string,
     auditStats: AuditStats,
+    fileMap: FileMapItem[],
     auditConfig: any,
     getGitHubToken: () => Promise<string | undefined>,
     onProgress: (log: string) => void,
-    onProgressUpdate: (progress: number) => void
+    onProgressUpdate: (progress: number) => void,
+    preflightId?: string  // Optional preflight ID for using stored preflight data
   ): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {
-    const auditContext = { repoUrl, tier, stats: auditStats };
+    const auditContext = { repoUrl, tier, stats: auditStats, fileCount: fileMap.length, hasPreflightId: !!preflightId };
 
     try {
       ErrorLogger.info('Starting audit execution', auditContext);
@@ -60,32 +62,22 @@ export class AuditService {
       onProgress(`[System] Initializing audit for ${repoInfo.owner}/${repoInfo.repo}...`);
       onProgressUpdate(10);
 
-      // Step 2: Fetch Files (Real API)
-      onProgress(`[Network] Connecting to GitHub API...`);
-      await new Promise(r => setTimeout(r, 500));
-
-      onProgress(`[Network] Downloading source tree (Map Only)...`);
-      // Pass GitHub token for private repo access
-      const githubToken = await ErrorHandler.withErrorHandling(
-        getGitHubToken,
-        'getGitHubToken',
-        auditContext
-      );
-
-      // NEW: Fetch Map, NOT Content
-      const fileMap = await ErrorHandler.withErrorHandling(
-        () => fetchRepoMap(repoInfo.owner, repoInfo.repo, githubToken || undefined),
-        'fetchRepoMap',
-        { ...auditContext, owner: repoInfo.owner, repo: repoInfo.repo }
-      );
-
-      onProgress(`[Success] Mapped ${fileMap.length} files.`);
+      // Step 2: Use pre-fetched file map
+      onProgress(`[System] Using pre-fetched file map with ${fileMap.length} files...`);
       onProgressUpdate(40);
 
       // Step 3: Parse
       onProgress(`[Agent: Parser] Analyzing structure...`);
       await new Promise(r => setTimeout(r, 800)); // Simulate AST parsing time
       onProgressUpdate(60);
+
+      // Step 3: Get GitHub token for file access
+      onProgress(`[Auth] Getting GitHub access token...`);
+      const githubToken = await ErrorHandler.withErrorHandling(
+        getGitHubToken,
+        'getGitHubToken',
+        { ...auditContext, operation: 'getTokenForAudit' }
+      );
 
       // Step 4: AI Audit (Real API)
       onProgress(`[Agent: Security] Sending metadata to Brain...`);
@@ -109,10 +101,11 @@ export class AuditService {
         }
       }
 
+      // Pass preflightId to generateAuditReport so backend can use stored preflight data
       const report = await ErrorHandler.withErrorHandling(
-        () => generateAuditReport(repoInfo.repo, auditStats, fileMap, tier, repoUrl, estimatedTokens, auditConfig),
+        () => generateAuditReport(repoInfo.repo, auditStats, fileMap, tier, repoUrl, estimatedTokens, auditConfig, githubToken, preflightId),
         'generateAuditReport',
-        { ...auditContext, estimatedTokens, fileCount: fileMap.length }
+        { ...auditContext, estimatedTokens, fileCount: fileMap.length, preflightId }
       );
 
       onProgress(`[Success] Report generated successfully.`);
@@ -168,43 +161,43 @@ export class AuditService {
 
   // Process historical audit data
   static async processHistoricalAudit(audit: Tables<'audits'> & { extra_data?: any }): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {
-      const issues = (audit.issues as unknown as Issue[]) || [];
-      const repoName = audit.repo_url.split('/').slice(-2).join('/');
-      const extraData = audit.extra_data || {};
+    const issues = (audit.issues as unknown as Issue[]) || [];
+    const repoName = audit.repo_url.split('/').slice(-2).join('/');
+    const extraData = audit.extra_data || {};
 
-      // Fetch all audits for this repo to enable tier navigation
-      const { data: allAudits } = await supabase
-        .from('audits')
-        .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
-        .eq('repo_url', audit.repo_url)
-        .order('created_at', { ascending: false });
+    // Fetch all audits for this repo to enable tier navigation
+    const { data: allAudits } = await supabase
+      .from('audits')
+      .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
+      .eq('repo_url', audit.repo_url)
+      .order('created_at', { ascending: false });
 
-      const stats: AuditStats = {
-        files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
-        tokens: 'N/A',
-        size: 'N/A',
-        language: 'Mixed',
-        languagePercent: 100
-      };
+    const stats: AuditStats = {
+      files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
+      tokens: 'N/A',
+      size: 'N/A',
+      language: 'Mixed',
+      languagePercent: 100
+    };
 
-      const report: RepoReport = {
-        repoName,
-        healthScore: audit.health_score || 0,
-        issues,
-        summary: audit.summary || 'No summary available',
-        stats,
-        // Use normalized data from server, with fallback for legacy data
-        topStrengths: this.ensureNormalized(extraData.topStrengths),
-        topIssues: this.ensureNormalized(extraData.topWeaknesses),
-        riskLevel: this.ensureRiskLevel(extraData.riskLevel),
-        productionReady: extraData.productionReady,
-        categoryAssessments: extraData.categoryAssessments,
-        seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,
-        suspiciousFiles: extraData.suspiciousFiles,
-        overallVerdict: extraData.overallVerdict,
-        tier: audit.tier,
-        auditId: audit.id,
-      };
+    const report: RepoReport = {
+      repoName,
+      healthScore: audit.health_score || 0,
+      issues,
+      summary: audit.summary || 'No summary available',
+      stats,
+      // Use normalized data from server, with fallback for legacy data
+      topStrengths: this.ensureNormalized(extraData.topStrengths),
+      topIssues: this.ensureNormalized(extraData.topWeaknesses),
+      riskLevel: this.ensureRiskLevel(extraData.riskLevel),
+      productionReady: extraData.productionReady,
+      categoryAssessments: extraData.categoryAssessments,
+      seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,
+      suspiciousFiles: extraData.suspiciousFiles,
+      overallVerdict: extraData.overallVerdict,
+      tier: audit.tier,
+      auditId: audit.id,
+    };
 
     return { report, relatedAudits: (allAudits || []) as unknown as AuditRecord[] };
   }

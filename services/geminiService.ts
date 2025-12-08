@@ -12,28 +12,42 @@ export const generateAuditReport = async (
   tier: string = 'shape',
   fullRepoUrl?: string,
   estimatedTokens?: number,
-  config?: any
+  config?: any,
+  githubToken?: string,
+  preflightId?: string  // Optional preflight ID for using cached preflight data
 ): Promise<RepoReport & { tierData?: any }> => {
   const context = {
     repoName,
     tier,
     fileCount: fileMap.length,
     estimatedTokens,
-    fullRepoUrl
+    fullRepoUrl,
+    hasPreflightId: !!preflightId
   };
 
   ErrorLogger.info('Starting audit report generation', context);
 
   try {
+    // Build request body - prefer preflightId if available
+    const requestBody: any = {
+      repoUrl: fullRepoUrl || `https://github.com/${repoName}`,
+      tier, // Pass tier as-is, backend validates
+      estimatedTokens,
+      config,
+      githubToken
+    };
+
+    // If preflightId is provided, the backend will fetch the preflight and extract files
+    // Otherwise, pass the files directly
+    if (preflightId) {
+      requestBody.preflightId = preflightId;
+    } else {
+      requestBody.files = fileMap;
+    }
+
     // Call Supabase edge function - tier validation happens server-side
     const { data, error } = await supabase.functions.invoke('audit-runner', {
-      body: {
-        repoUrl: fullRepoUrl || `https://github.com/${repoName}`,
-        files: fileMap,
-        tier, // Pass tier as-is, backend validates
-        estimatedTokens,
-        config
-      }
+      body: requestBody
     });
 
     if (error) {

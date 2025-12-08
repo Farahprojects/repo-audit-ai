@@ -159,11 +159,48 @@ serve(async (req) => {
 
     // Validate request body
     const body = await validateRequestBody(req);
-    const { repoUrl, files, tier: rawTier = 'security', estimatedTokens } = body;
+    const {
+      repoUrl,
+      files,
+      tier: rawTier = 'security',
+      estimatedTokens,
+      githubToken,
+      // NEW: Preflight support
+      preflightId,  // ID of an existing preflight record
+      preflight: preflightData  // Or full preflight object passed directly
+    } = body;
 
     // Validate required parameters
-    if (!repoUrl || !files) {
-      return createErrorResponse('Missing required parameters: repoUrl and files', 400);
+    // If preflight is provided, we can extract files from it
+    let fileMap = files;
+    let preflightRecord = preflightData;
+
+    // If preflightId is provided, fetch the preflight from database
+    if (preflightId && !preflightRecord) {
+      console.log(`📋 [audit-runner] Fetching preflight record: ${preflightId}`);
+      const { data: fetchedPreflight, error: preflightError } = await supabase
+        .from('preflights')
+        .select('*')
+        .eq('id', preflightId)
+        .single();
+
+      if (preflightError || !fetchedPreflight) {
+        console.error(`❌ [audit-runner] Failed to fetch preflight:`, preflightError);
+        return createErrorResponse('Invalid or expired preflight ID', 400);
+      }
+
+      preflightRecord = fetchedPreflight;
+      console.log(`✅ [audit-runner] Preflight loaded: ${preflightRecord.repo_url}, ${preflightRecord.file_count} files`);
+    }
+
+    // Extract files from preflight if not provided directly
+    if (preflightRecord && (!fileMap || fileMap.length === 0)) {
+      fileMap = preflightRecord.repo_map;
+      console.log(`📂 [audit-runner] Using file map from preflight: ${fileMap?.length || 0} files`);
+    }
+
+    if (!repoUrl || (!fileMap || fileMap.length === 0)) {
+      return createErrorResponse('Missing required parameters: repoUrl and files (or preflight)', 400);
     }
 
     // Validate and map tier - reject invalid tiers
@@ -175,12 +212,12 @@ serve(async (req) => {
     const tier = mappedTier;
 
     // Validate files array
-    if (!Array.isArray(files) || files.length === 0) {
+    if (!Array.isArray(fileMap) || fileMap.length === 0) {
       return createErrorResponse('files must be a non-empty array', 400);
     }
 
     // Validate files array size (prevent DoS)
-    if (files.length > 10000) {
+    if (fileMap.length > 10000) {
       return createErrorResponse('Too many files (max 10,000)', 400);
     }
 
@@ -190,8 +227,8 @@ serve(async (req) => {
     }
 
     // Validate file objects structure
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (let i = 0; i < fileMap.length; i++) {
+      const file = fileMap[i];
       if (!file || typeof file !== 'object') {
         return createErrorResponse(`Invalid file at index ${i}: must be an object`, 400);
       }
@@ -218,12 +255,12 @@ serve(async (req) => {
     }
     const [, declaredOwner, declaredRepo] = repoMatch;
     const cleanRepo = declaredRepo.replace(/\.git$/, '');
-    
+
     // Build case-insensitive pattern to match owner/repo in file URLs
     const ownerRepoPattern = new RegExp(`/${declaredOwner}/${cleanRepo}/`, 'i');
-    
+
     console.log(`🔒 URL Validation: Declared repo = ${declaredOwner}/${cleanRepo}`);
-    console.log(`🔒 First 3 file URLs:`, files.slice(0, 3).map((f: any) => f.url || f.path));
+    console.log(`🔒 First 3 file URLs:`, fileMap.slice(0, 3).map((f: any) => f.url || f.path));
 
     // Validate all file URLs are from trusted GitHub domains
     const allowedUrlPatterns = [
@@ -232,19 +269,19 @@ serve(async (req) => {
     ];
 
     // FAIL FAST: Check EVERY file URL matches the declared repository
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
+    for (let i = 0; i < fileMap.length; i++) {
+      const f = fileMap[i];
       if (!f.url) continue; // Files without URLs will be fetched later via path
       if (typeof f.url !== 'string') {
         return createErrorResponse(`File at index ${i} has invalid URL type`, 400);
       }
-      
+
       // Check domain is GitHub
       if (!allowedUrlPatterns.some(pattern => pattern.test(f.url))) {
         console.error(`🚨 SECURITY: Invalid domain in file URL at index ${i}: ${f.url}`);
         return createErrorResponse('Invalid file URL domain. Only GitHub URLs are allowed.', 400);
       }
-      
+
       // CRITICAL: Check URL contains the declared owner/repo
       if (!ownerRepoPattern.test(f.url)) {
         console.error(`🚨 SECURITY: File URL does not match declared repo!`);
@@ -280,7 +317,7 @@ serve(async (req) => {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 STARTING 5-PASS MAGIC ANALYSIS`);
     console.log(`📁 Repo: ${repoUrl}`);
-    console.log(`📄 Files: ${files.length}`);
+    console.log(`📄 Files: ${fileMap.length}`);
     console.log(`${'='.repeat(60)}\n`);
 
 
@@ -288,12 +325,12 @@ serve(async (req) => {
     // Front-end now sends fileMap (path/size/url), no content
 
     // Detect Capabilities based on file list
-    const detectedStack = detectCapabilities(files);
+    const detectedStack = detectCapabilities(fileMap);
     console.log('🕵️ Detected Stack:', detectedStack);
 
     const context: AuditContext = {
       repoUrl,
-      files: files.map(f => ({
+      files: fileMap.map(f => ({
         path: f.path,
         type: 'file',
         size: f.size,
@@ -302,14 +339,30 @@ serve(async (req) => {
         url: f.url
       })),
       tier,
-      detectedStack // Pass to agents if needed, but mainly for response
+      // Pass preflight data to agents - single source of truth
+      preflight: preflightRecord ? {
+        id: preflightRecord.id,
+        repo_url: preflightRecord.repo_url,
+        owner: preflightRecord.owner,
+        repo: preflightRecord.repo,
+        default_branch: preflightRecord.default_branch,
+        repo_map: preflightRecord.repo_map,
+        stats: preflightRecord.stats,
+        fingerprint: preflightRecord.fingerprint,
+        is_private: preflightRecord.is_private,
+        fetch_strategy: preflightRecord.fetch_strategy,
+        token_valid: preflightRecord.token_valid,
+        file_count: preflightRecord.file_count
+      } : undefined,
+      detectedStack, // Pass to agents if needed, but mainly for response
+      githubToken // Pass token for file access
     };
 
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 STARTING "CEO BRAIN" AUDIT`);
     console.log(`📁 Repo: ${repoUrl}`);
-    console.log(`🗺️ File Map Size: ${files.length} entries`);
+    console.log(`🗺️ File Map Size: ${fileMap.length} entries`);
     console.log(`${'='.repeat(60)}\n`);
 
     // --- SWARM PIPELINE EXECUTION ---
@@ -366,7 +419,7 @@ serve(async (req) => {
 
     // SERVER-SIDE TOKEN VALIDATION (Phase 4)
     // Calculate estimate server-side, don't trust client-provided value
-    const serverEstimatedTokens = calculateServerEstimate(tier, files);
+    const serverEstimatedTokens = calculateServerEstimate(tier, fileMap);
     console.log(`📊 Token Estimates - Client: ${estimatedTokens || 'N/A'}, Server: ${serverEstimatedTokens}`);
     if (estimatedTokens && Math.abs(estimatedTokens - serverEstimatedTokens) > serverEstimatedTokens * 0.5) {
       console.warn(`⚠️ Large discrepancy between client (${estimatedTokens}) and server (${serverEstimatedTokens}) estimates`);

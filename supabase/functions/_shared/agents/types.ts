@@ -7,10 +7,74 @@ export interface FileNode {
     language?: string;
 }
 
+/**
+ * PreflightData - Single source of truth for repository state
+ * 
+ * This data is computed once and stored in the database.
+ * Agents receive this data and should NEVER re-check:
+ * - Repository privacy status
+ * - Token validity
+ * - Fetch strategies
+ * - File structure
+ */
+export interface PreflightData {
+    id: string;
+    repo_url: string;
+    owner: string;
+    repo: string;
+    default_branch: string;
+
+    // Repository file map - list of all files with metadata
+    repo_map: FileNode[];
+
+    // Stats snapshot
+    stats: {
+        files: number;
+        tokens: string | number;
+        size: string | number;
+        language: string;
+        languagePercent: number;
+        defaultBranch?: string;
+        isPrivate?: boolean;
+    };
+
+    // Fingerprint for complexity analysis
+    fingerprint?: {
+        files: number;
+        functions: number;
+        classes: number;
+        imports: number;
+        exports: number;
+        branches: number;
+        loops: number;
+        comments: number;
+        blankLines: number;
+        language: string;
+        languagePercent: number;
+        totalLines: number;
+        codeLines: number;
+    };
+
+    // Access control flags
+    is_private: boolean;
+    fetch_strategy: 'public' | 'authenticated';
+
+    // Token validity (already validated)
+    token_valid: boolean;
+
+    // File count (cached for quick access)
+    file_count: number;
+}
+
 export interface AuditContext {
     repoUrl: string;
     files: FileNode[];
     tier: string;
+
+    // Preflight data - single source of truth
+    // When present, agents should use this instead of re-computing
+    preflight?: PreflightData;
+
     detectedStack?: {
         supabase: boolean;
         firebase: boolean;
@@ -20,6 +84,7 @@ export interface AuditContext {
         graphql: boolean;
         hasDockerfile: boolean;
     };
+    githubToken?: string;
     metadata?: any;
 }
 

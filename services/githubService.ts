@@ -2,7 +2,7 @@ import { AuditStats, ComplexityFingerprint } from '../types';
 import { supabase } from '../src/integrations/supabase/client';
 import { ErrorHandler, ErrorLogger } from './errorService';
 
-interface FileMapItem {
+export interface FileMapItem {
   path: string;
   size: number;
   type: string; // 'file' | 'dir'
@@ -196,7 +196,7 @@ export const fetchRepoPreflight = async (
   owner: string,
   repo: string,
   accessToken?: string
-): Promise<{ stats: AuditStats; fingerprint: ComplexityFingerprint }> => {
+): Promise<{ stats: AuditStats; fingerprint: ComplexityFingerprint; fileMap: FileMapItem[] }> => {
   console.log('🚀 [fetchRepoPreflight] Starting unified preflight for:', `${owner}/${repo}`);
   console.log('🚀 [fetchRepoPreflight] Access token provided:', !!accessToken);
 
@@ -235,11 +235,12 @@ export const fetchRepoPreflight = async (
     throw new Error(data.error);
   }
 
-  // Success - return combined stats + fingerprint
+  // Success - return combined stats + fingerprint + file map
   console.log('✅ [fetchRepoPreflight] Success! Returning combined data');
   return {
     stats: data.stats as AuditStats,
-    fingerprint: data.fingerprint as ComplexityFingerprint
+    fingerprint: data.fingerprint as ComplexityFingerprint,
+    fileMap: data.fileMap as FileMapItem[]
   };
 };
 

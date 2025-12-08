@@ -3,6 +3,7 @@ import { ViewState, AuditStats, RepoReport, Issue, AuditRecord } from '../types'
 import { Tables } from '../src/integrations/supabase/types';
 import { AuditService } from '../services/auditService';
 import { ErrorHandler, ErrorLogger } from '../services/errorService';
+import { FileMapItem } from '../services/githubService';
 
 interface UseAuditOrchestratorProps {
   user: any;
@@ -19,6 +20,7 @@ export const useAuditOrchestrator = ({
 }: UseAuditOrchestratorProps) => {
   const [repoUrl, setRepoUrl] = useState('');
   const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
+  const [fileMap, setFileMap] = useState<FileMapItem[]>([]);
   const [reportData, setReportData] = useState<RepoReport | null>(null);
   const [historicalReportData, setHistoricalReportData] = useState<RepoReport | null>(null);
   const [relatedAudits, setRelatedAudits] = useState<AuditRecord[]>([]);
@@ -59,9 +61,10 @@ export const useAuditOrchestrator = ({
     }
   }, [user, handleAnalyze]);
 
-  const handleConfirmAudit = useCallback(async (tier: string, stats: AuditStats) => {
-    ErrorLogger.info('Starting audit execution', { repoUrl, tier, statsSize: stats.files });
+  const handleConfirmAudit = useCallback(async (tier: string, stats: AuditStats, fileMapParam: FileMapItem[], preflightId?: string) => {
+    ErrorLogger.info('Starting audit execution', { repoUrl, tier, statsSize: stats.files, fileCount: fileMapParam.length, hasPreflightId: !!preflightId });
     setAuditStats(stats);
+    setFileMap(fileMapParam);
     navigate('scanning');
     setScannerLogs([]);
     setScannerProgress(0);
@@ -72,13 +75,15 @@ export const useAuditOrchestrator = ({
           repoUrl,
           tier,
           stats,
+          fileMapParam, // Pass the fileMap instead of refetching
           auditConfig,
           getGitHubToken,
           addLog,
-          setScannerProgress
+          setScannerProgress,
+          preflightId // Pass preflightId to use stored preflight data
         ),
         'executeAudit',
-        { repoUrl, tier, stats }
+        { repoUrl, tier, stats, fileCount: fileMapParam.length, preflightId }
       );
 
       // Clear config

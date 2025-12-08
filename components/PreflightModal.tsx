@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, Zap, AlertTriangle, Loader2 } from 'lucide-react';
 import { AuditStats, ComplexityFingerprint } from '../types';
-import { parseGitHubUrl, fetchRepoPreflight } from '../services/githubService';
+import { FileMapItem, parseGitHubUrl } from '../services/githubService';
+import { PreflightService, PreflightRecord, fetchPreflight } from '../services/preflightService';
 import { CostEstimator, AuditTier } from '../services/costEstimator';
 import GitHubConnectModal from './GitHubConnectModal';
 import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
 interface PreflightModalProps {
   repoUrl: string;
-  onConfirm: (tier: 'lite' | 'deep' | 'ultra', stats: AuditStats) => void;
+  onConfirm: (tier: 'lite' | 'deep' | 'ultra', stats: AuditStats, fileMap: FileMapItem[], preflightId?: string) => void;
   onCancel: () => void;
 }
 
@@ -25,11 +26,14 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   const [step, setStep] = useState<ModalStep>('analysis');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fileMap, setFileMap] = useState<FileMapItem[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [fingerprint, setFingerprint] = useState<ComplexityFingerprint | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [tierEstimates, setTierEstimates] = useState<TierEstimates | null>(null);
   const [estimatesLoading, setEstimatesLoading] = useState(false);
+  // NEW: Store the preflight ID for downstream use
+  const [preflightId, setPreflightId] = useState<string | null>(null);
 
   const { isGitHubConnected, getGitHubToken, signInWithGitHub, isConnecting } = useGitHubAuth();
 
@@ -52,26 +56,45 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     }
 
     try {
-      // UNIFIED PREFLIGHT - Single source of truth
-      // One API call returns both stats and fingerprint
-      // Backend handles all access control logic
-      console.log('🚀 [PreflightModal] Calling unified preflight...');
-      const { stats: statsData, fingerprint: fingerprintData } = await fetchRepoPreflight(
-        repoInfo.owner,
-        repoInfo.repo,
-        token
-      );
-      console.log('✅ [PreflightModal] Preflight successful, repo is accessible');
+      // Use the new PreflightService which stores data in the database
+      // This is the single source of truth for repository metadata
+      console.log('🚀 [PreflightModal] Calling PreflightService.getOrCreate...');
+      const response = await fetchPreflight(repoUrl, { userToken: token });
+
+      if (!response.success) {
+        // Check if this is a private repo error
+        if (PreflightService.requiresGitHubAuth(response)) {
+          console.log('🔐 [PreflightModal] Private repo detected, opening GitHub connect modal');
+          setStep('github-connect');
+          setError(null);
+          setLoading(false);
+          setIsLoading(false);
+          return;
+        }
+
+        // Other error
+        throw new Error(response.error || 'Failed to fetch repository');
+      }
+
+      const preflight = response.preflight!;
+      console.log('✅ [PreflightModal] Preflight loaded from', response.source, '- ID:', preflight.id);
+
+      // Store the preflight ID for downstream use
+      setPreflightId(preflight.id);
+
+      // Extract data from preflight using the service helper
+      const auditContext = PreflightService.toAuditContext(preflight);
 
       // Set combined data and proceed with tier selection
-      setStats({ ...statsData, fingerprint: fingerprintData });
-      setFingerprint(fingerprintData);
+      setStats(auditContext.stats);
+      setFingerprint(auditContext.fingerprint);
+      setFileMap(auditContext.fileMap);
       setStep('selection');
 
       // Fetch tier estimates from edge function
       setEstimatesLoading(true);
       try {
-        const estimates = await CostEstimator.getAllTierEstimatesAsync(fingerprintData);
+        const estimates = await CostEstimator.getAllTierEstimatesAsync(auditContext.fingerprint);
         setTierEstimates(estimates as unknown as TierEstimates);
       } catch (estimateError) {
         console.error('[PreflightModal] Failed to fetch estimates:', estimateError);
@@ -133,8 +156,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   }, [signInWithGitHub, getGitHubToken]);
 
   const handleTierSelect = useCallback((tier: 'lite' | 'deep' | 'ultra') => {
-    onConfirm(tier, stats!);
-  }, [onConfirm, stats]);
+    // Pass preflightId to allow the audit to use stored preflight data
+    onConfirm(tier, stats!, fileMap, preflightId || undefined);
+  }, [onConfirm, stats, fileMap, preflightId]);
 
   // Helper to get formatted estimate or fallback
   const getEstimateDisplay = (tier: keyof TierEstimates, fallback: string) => {
@@ -259,7 +283,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Perf Audit</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">N+1, leaks, re-renders, AI sins.</p>
                   <button
-                    onClick={() => onConfirm('performance' as any, stats!)}
+                    onClick={() => onConfirm('performance' as any, stats!, fileMap)}
                     className="w-full py-3 border border-slate-200 text-slate-600 rounded-full hover:bg-slate-50 font-medium transition-colors"
                   >
                     Run Perf
