@@ -650,10 +650,11 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
         document.body
       )}
       {/* Modal */}
-      <SupabaseConnectModal
+      <UniversalConnectModal
         isOpen={isConnectModalOpen}
         onClose={() => setIsConnectModalOpen(false)}
         onSubmit={handleConnectSubmit}
+        provider={pendingProvider}
       />
     </div>
   );
