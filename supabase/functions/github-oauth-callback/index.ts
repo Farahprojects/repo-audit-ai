@@ -157,31 +157,68 @@ Deno.serve(async (req: Request) => {
   // Helper function to create popup-compatible response
   const createPopupResponse = (success: boolean, message: string) => {
     const action = success ? 'github-oauth-success' : 'github-oauth-error';
-    const redirectUrl = success
-      ? `${ENV.FRONTEND_URL}/?github=connected`
-      : `${ENV.FRONTEND_URL}/?github=error&message=${encodeURIComponent(message)}`;
+    const frontendOrigin = ENV.FRONTEND_URL.replace(/\/$/, ''); // Remove trailing slash
 
+    // Use localStorage as a reliable cross-origin communication mechanism
+    // The popup sets localStorage, then the parent window detects it via storage event
     return new Response(
       `<!DOCTYPE html>
 <html>
 <head>
-  <title>${success ? 'GitHub Connection Successful' : 'GitHub Connection Error'}</title>
+  <title>${success ? 'GitHub Connected' : 'Connection Error'}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; }
+    .container { text-align: center; padding: 2rem; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    p { color: #64748b; margin: 0; }
+  </style>
 </head>
 <body>
+  <div class="container">
+    <div class="spinner"></div>
+    <p>${success ? 'Connected! Closing...' : 'Error occurred. Closing...'}</p>
+  </div>
   <script>
-    if (window.opener) {
-      // Popup window - send message to parent
-      window.opener.postMessage({
+    (function() {
+      const result = {
         type: '${action}',
-        ${success ? '' : `message: ${JSON.stringify(message)},`}
-      }, '*');
-      window.close();
-    } else {
-      // Regular window - redirect
-      window.location.href = ${JSON.stringify(redirectUrl)};
-    }
+        success: ${success},
+        message: ${JSON.stringify(message)},
+        timestamp: Date.now()
+      };
+      
+      // Method 1: Try postMessage to opener (works if same-origin or opener exists)
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage(result, '${frontendOrigin}');
+          console.log('[OAuth Popup] postMessage sent to opener');
+        } catch (e) {
+          console.log('[OAuth Popup] postMessage failed:', e);
+        }
+      }
+      
+      // Method 2: Use localStorage as fallback (works cross-origin within same browser)
+      try {
+        localStorage.setItem('github_oauth_result', JSON.stringify(result));
+        console.log('[OAuth Popup] Result stored in localStorage');
+      } catch (e) {
+        console.log('[OAuth Popup] localStorage failed:', e);
+      }
+      
+      // Close popup after brief delay
+      setTimeout(function() {
+        window.close();
+      }, 500);
+      
+      // Fallback: If window doesn't close after 2s, redirect
+      setTimeout(function() {
+        if (!window.closed) {
+          window.location.href = '${frontendOrigin}/?github=${success ? 'connected' : 'error'}';
+        }
+      }, 2000);
+    })();
   </script>
-  <p>${success ? 'GitHub connection successful! This window should close automatically.' : `Error: ${message}. This window should close automatically.`}</p>
 </body>
 </html>`,
       {
