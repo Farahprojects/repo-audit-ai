@@ -186,16 +186,55 @@ function handleError(error: any) {
     console.error('GitHub Proxy Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
 
-    // Check for rate limit in error message (naive check)
+    // Parse HTTP status code from error message
+    const statusMatch = message.match(/(\d{3})/);
+    const statusCode = statusMatch ? parseInt(statusMatch[1]) : null;
+
+    console.log('[handleError] Parsing error:', { message, statusCode });
+
+    // Rate limit check
     if (message.includes('403') && message.includes('rate limit')) {
         return new Response(
-            JSON.stringify({ error: 'GitHub API rate limit exceeded' }),
+            JSON.stringify({ 
+                error: 'GitHub API rate limit exceeded',
+                errorCode: 'RATE_LIMIT',
+                requiresAuth: false,
+                isDefinitelyMissing: false
+            }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
 
+    // Determine error type and structured response
+    let errorCode = 'UNKNOWN';
+    let requiresAuth = false;
+    let isDefinitelyMissing = false;
+
+    if (statusCode === 404) {
+        // 404 could be private OR misspelled - can't know without auth
+        errorCode = 'GITHUB_404';
+        requiresAuth = true;
+        isDefinitelyMissing = false;
+    } else if (statusCode === 401) {
+        errorCode = 'GITHUB_401';
+        requiresAuth = true;
+        isDefinitelyMissing = false;
+    } else if (statusCode === 403) {
+        errorCode = 'GITHUB_403';
+        requiresAuth = true;
+        isDefinitelyMissing = false;
+    } else if (statusCode) {
+        errorCode = `GITHUB_${statusCode}`;
+    }
+
+    // Always return 200 OK with structured error data
     return new Response(
-        JSON.stringify({ error: message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+            error: message,
+            errorCode,
+            requiresAuth,
+            isDefinitelyMissing
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 }
