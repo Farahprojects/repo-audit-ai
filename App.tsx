@@ -11,7 +11,7 @@ import About from './components/About';
 import Contact from './components/Contact';
 import AuthModal from './components/AuthModal';
 import SEO from './components/SEO';
-import { ViewState, AuditStats, RepoReport, Issue } from './types';
+import { ViewState, AuditStats, RepoReport, Issue, AuditRecord } from './types';
 import { Tables } from './src/integrations/supabase/types';
 import { generateAuditReport } from './services/geminiService';
 import { fetchRepoMap, parseGitHubUrl } from './services/githubService';
@@ -29,6 +29,7 @@ const App: React.FC = () => {
   const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
   const [reportData, setReportData] = useState<RepoReport | null>(null);
   const [historicalReportData, setHistoricalReportData] = useState<RepoReport | null>(null);
+  const [relatedAudits, setRelatedAudits] = useState<AuditRecord[]>([]);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [pendingRepoUrl, setPendingRepoUrl] = useState<string | null>(null);
 
@@ -132,7 +133,23 @@ const App: React.FC = () => {
       addLog(`[System] Finalizing health score: ${report.healthScore}/100`);
       setScannerProgress(100);
 
-      setReportData(report);
+      // Attach tier info to the report
+      const enrichedReport: RepoReport = {
+        ...report,
+        tier: tier,
+      };
+
+      setReportData(enrichedReport);
+      
+      // Fetch all audits for this repo to populate tier navigation
+      const { data: allAudits } = await supabase
+        .from('audits')
+        .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
+        .eq('repo_url', repoUrl)
+        .order('created_at', { ascending: false });
+      
+      setRelatedAudits(allAudits || []);
+      
       // Short delay to let user see 100%
       setTimeout(() => setView('report'), 1000);
 
@@ -185,10 +202,19 @@ const App: React.FC = () => {
     return undefined;
   };
 
-  const handleViewHistoricalReport = (audit: Tables<'audits'> & { extra_data?: any }) => {
+  const handleViewHistoricalReport = async (audit: Tables<'audits'> & { extra_data?: any }) => {
     const issues = (audit.issues as unknown as Issue[]) || [];
     const repoName = audit.repo_url.split('/').slice(-2).join('/');
     const extraData = audit.extra_data || {};
+
+    // Fetch all audits for this repo to enable tier navigation
+    const { data: allAudits } = await supabase
+      .from('audits')
+      .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
+      .eq('repo_url', audit.repo_url)
+      .order('created_at', { ascending: false });
+
+    setRelatedAudits(allAudits || []);
 
     const stats: AuditStats = {
       files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
@@ -213,10 +239,47 @@ const App: React.FC = () => {
       seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,
       suspiciousFiles: extraData.suspiciousFiles,
       overallVerdict: extraData.overallVerdict,
+      tier: audit.tier,
+      auditId: audit.id,
     };
 
     setHistoricalReportData(report);
     setView('report');
+  };
+
+  // Handle switching to a different audit from history dropdown
+  const handleSelectAudit = (audit: AuditRecord) => {
+    const issues = (audit.issues as Issue[]) || [];
+    const repoName = audit.repo_url.split('/').slice(-2).join('/');
+    const extraData = audit.extra_data || {};
+
+    const stats: AuditStats = {
+      files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
+      tokens: 'N/A',
+      size: 'N/A',
+      language: 'Mixed',
+      languagePercent: 100
+    };
+
+    const report: RepoReport = {
+      repoName,
+      healthScore: audit.health_score || 0,
+      issues,
+      summary: audit.summary || 'No summary available',
+      stats,
+      topStrengths: parseStrengthsOrIssues(extraData.topStrengths),
+      topIssues: parseStrengthsOrIssues(extraData.topWeaknesses),
+      riskLevel: normalizeRiskLevel(extraData.riskLevel),
+      productionReady: extraData.productionReady,
+      categoryAssessments: extraData.categoryAssessments,
+      seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,
+      suspiciousFiles: extraData.suspiciousFiles,
+      overallVerdict: extraData.overallVerdict,
+      tier: audit.tier,
+      auditId: audit.id,
+    };
+
+    setHistoricalReportData(report);
   };
 
   const isPublicPage = ['landing', 'pricing', 'about', 'contact', 'preflight', 'dashboard', 'report'].includes(view);
@@ -302,10 +365,13 @@ const App: React.FC = () => {
         return displayData ? (
           <ReportDashboard
             data={displayData}
+            relatedAudits={relatedAudits}
             onRestart={handleRestart}
+            onSelectAudit={handleSelectAudit}
             onRunTier={(tier, url) => {
-              // Temporarily disabled - clean slate for upgrade flow
-              console.log('Upgrade clicked:', tier, url);
+              setRepoUrl(url);
+              setPreviousView('report');
+              setView('preflight');
             }}
           />
         ) : null;

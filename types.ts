@@ -85,4 +85,18 @@ export interface RepoReport {
   overallVerdict?: string;
   productionReady?: boolean;
   riskLevel?: 'critical' | 'high' | 'medium' | 'low';
+  tier?: string;
+  auditId?: string;
+}
+
+// Audit record from database (for history)
+export interface AuditRecord {
+  id: string;
+  repo_url: string;
+  tier: string;
+  health_score: number | null;
+  summary: string | null;
+  created_at: string;
+  issues: any;
+  extra_data: any;
 }

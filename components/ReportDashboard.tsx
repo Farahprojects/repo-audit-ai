@@ -1,32 +1,64 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
-import { RepoReport } from '../types';
-import { CATEGORIES } from '../constants';
+import { RepoReport, AuditRecord } from '../types';
 import IssueCard from './IssueCard';
-import { Download, Share2, GitBranch, Check, FileText, Star, AlertTriangle, User, FileQuestion, Shield, Zap, Database, FileCode, Rocket, Wrench, FolderTree, ChevronRight, ChevronDown } from 'lucide-react';
-import { TierUpsellPanel, AuditTier } from './TierBadges';
+import { Download, Share2, GitBranch, Check, FileText, Star, AlertTriangle, User, FileQuestion, Shield, Zap, Database, FileCode, Rocket, Wrench, FolderTree, ChevronDown, TrendingUp, Layers, Plus, Clock } from 'lucide-react';
+import { TIERS, AuditTier, TierUpsellPanel } from './TierBadges';
 
 interface ReportDashboardProps {
-  data: RepoReport & { tier?: string };
+  data: RepoReport;
+  relatedAudits: AuditRecord[];
   onRestart: () => void;
   onRunTier?: (tier: AuditTier, repoUrl: string) => void;
-  completedTiers?: string[];
+  onSelectAudit?: (audit: AuditRecord) => void;
 }
 
-const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRunTier, completedTiers = [] }) => {
-  const [activeCategory, setActiveCategory] = useState<string>('Overview');
-  const [copied, setCopied] = useState(false);
+const ReportDashboard: React.FC<ReportDashboardProps> = ({ 
+  data, 
+  relatedAudits, 
+  onRestart, 
+  onRunTier, 
+  onSelectAudit 
+}) => {
+  // Group audits by tier
+  const auditsByTier = useMemo(() => {
+    const grouped: Record<string, AuditRecord[]> = {};
+    relatedAudits.forEach(audit => {
+      if (!grouped[audit.tier]) {
+        grouped[audit.tier] = [];
+      }
+      grouped[audit.tier].push(audit);
+    });
+    return grouped;
+  }, [relatedAudits]);
+
+  // Get list of completed tiers (those with at least one audit)
+  const completedTiers = useMemo(() => Object.keys(auditsByTier), [auditsByTier]);
+
+  // Get the current tier from the displayed data
+  const currentTier = data.tier || 'shape';
+
+  const [activeTier, setActiveTier] = useState<string>(currentTier);
+  const [historyDropdownOpen, setHistoryDropdownOpen] = useState<string | null>(null);
   const [upgradesDropdownOpen, setUpgradesDropdownOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const upgradesButtonRef = useRef<HTMLButtonElement>(null);
+  const tierButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
-          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
-        setUpgradesDropdownOpen(false);
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        const clickedOnTierButton = Object.values(tierButtonRefs.current).some(
+          (ref: HTMLButtonElement | null) => ref && ref.contains(event.target as Node)
+        );
+        const clickedOnUpgradesButton = upgradesButtonRef.current?.contains(event.target as Node);
+        if (!clickedOnTierButton && !clickedOnUpgradesButton) {
+          setHistoryDropdownOpen(null);
+          setUpgradesDropdownOpen(false);
+        }
       }
     };
 
@@ -34,27 +66,53 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredIssues = activeCategory === 'Overview'
-    ? data.issues
-    : data.issues.filter(i => i.category === activeCategory);
+  // Update active tier when data changes
+  useEffect(() => {
+    if (data.tier) {
+      setActiveTier(data.tier);
+    }
+  }, [data.tier, data.auditId]);
 
-  const getCount = (catId: string) => {
-    if (catId === 'Overview') return data.issues.length;
-    return data.issues.filter(i => i.category === catId).length;
+  const handleTierClick = (tierId: string, buttonElement: HTMLButtonElement) => {
+    // If clicking on the active tier, toggle history dropdown
+    if (tierId === activeTier && auditsByTier[tierId]?.length > 1) {
+      const rect = buttonElement.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX
+      });
+      setHistoryDropdownOpen(historyDropdownOpen === tierId ? null : tierId);
+      setUpgradesDropdownOpen(false);
+    } else if (auditsByTier[tierId]?.length > 0) {
+      // Switch to the most recent audit of this tier
+      const latestAudit = auditsByTier[tierId][0];
+      onSelectAudit?.(latestAudit);
+      setActiveTier(tierId);
+      setHistoryDropdownOpen(null);
+    }
   };
 
-  const healthColor = data.healthScore > 80 ? 'text-success'
-    : data.healthScore > 60 ? 'text-warning'
-      : 'text-critical';
+  const handleUpgradesClick = () => {
+    if (!upgradesDropdownOpen && upgradesButtonRef.current) {
+      const rect = upgradesButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX
+      });
+    }
+    setUpgradesDropdownOpen(!upgradesDropdownOpen);
+    setHistoryDropdownOpen(null);
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleExportPDF = () => {
-    window.print();
   };
 
   const handleExportCSV = () => {
@@ -79,18 +137,10 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
     document.body.removeChild(link);
   };
 
-  const handleUpgradesClick = () => {
-    if (!upgradesDropdownOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX
-      });
-    }
-    setUpgradesDropdownOpen(!upgradesDropdownOpen);
-  };
+  // Get tiers that haven't been run yet
+  const uncompletedTiers = TIERS.filter(t => !completedTiers.includes(t.id));
 
-  const riskBadgeColor = {
+  const riskBadgeColor: Record<string, string> = {
     critical: 'bg-red-100 text-red-700 border-red-200',
     high: 'bg-orange-100 text-orange-700 border-orange-200',
     medium: 'bg-amber-100 text-amber-700 border-amber-200',
@@ -141,39 +191,49 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
             <span>Last scanned just now</span>
           </div>
 
-          {/* Third Row: Navigation + Actions */}
+          {/* Third Row: Tier Navigation + Actions */}
           <div className="flex items-center justify-between relative">
-            {/* Category Navigation - Left */}
+            {/* Tier Tabs - Left */}
             <div className="flex items-center gap-1 overflow-x-auto">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${
-                    activeCategory === cat.id
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                  }`}
-                >
-                  <cat.icon className="w-4 h-4" />
-                  {cat.label}
-                  {cat.id !== 'Overview' && getCount(cat.id) > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                      activeCategory === cat.id
-                        ? 'bg-white/20 text-white'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {getCount(cat.id)}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {/* Completed tier tabs */}
+              {TIERS.filter(tier => completedTiers.includes(tier.id)).map((tier) => {
+                const Icon = tier.icon;
+                const auditCount = auditsByTier[tier.id]?.length || 0;
+                const isActive = activeTier === tier.id;
+                
+                return (
+                  <button
+                    key={tier.id}
+                    ref={(el) => { tierButtonRefs.current[tier.id] = el; }}
+                    onClick={(e) => handleTierClick(tier.id, e.currentTarget)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${
+                      isActive
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {tier.shortName}
+                    {auditCount > 1 && (
+                      <span className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        <Clock className="w-2.5 h-2.5" />
+                        {auditCount}
+                      </span>
+                    )}
+                    {auditCount > 1 && (
+                      <ChevronDown className={`w-3 h-3 transition-transform ${historyDropdownOpen === tier.id ? 'rotate-180' : ''}`} />
+                    )}
+                  </button>
+                );
+              })}
 
-              {/* Upgrades Dropdown Button */}
-              {onRunTier && (
+              {/* Run New Tier Button */}
+              {onRunTier && uncompletedTiers.length > 0 && (
                 <div className="relative inline-block ml-1">
                   <button
-                    ref={buttonRef}
+                    ref={upgradesButtonRef}
                     onClick={handleUpgradesClick}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${
                       upgradesDropdownOpen
@@ -181,8 +241,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                     }`}
                   >
-                    <Zap className="w-4 h-4" />
-                    Upgrades
+                    <Plus className="w-4 h-4" />
+                    Run New Tier
                     <ChevronDown className={`w-3 h-3 transition-transform ${upgradesDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
@@ -211,7 +271,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
 
         <div className="p-8 max-w-5xl mx-auto space-y-8 print:p-0 print:mt-4">
 
-          {activeCategory === 'Overview' && (
+          {/* Always show content for the active tier (no category filter needed) */}
+          {(
             <>
               {/* Executive Summary */}
               <div className="animate-fade-in">
@@ -362,28 +423,25 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
           {/* Issues List */}
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-              {activeCategory === 'Overview' ? 'All Findings' : `${activeCategory} Findings`}
-              <span className="bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full border border-slate-200 font-medium">{filteredIssues.length}</span>
+              All Findings
+              <span className="bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full border border-slate-200 font-medium">{data.issues.length}</span>
             </h3>
 
-            {filteredIssues.length === 0 ? (
+            {data.issues.length === 0 ? (
               <div className="text-center py-16 bg-surface border border-dashed border-slate-300 rounded-lg">
                 <div className="w-12 h-12 bg-white border border-slate-200 rounded-full flex items-center justify-center mx-auto mb-3">
                   <Check className="w-6 h-6 text-emerald-500" />
                 </div>
                 <h4 className="text-foreground font-medium text-sm mb-1">All Clear</h4>
-                <p className="text-slate-500 text-xs">No issues detected in this category.</p>
+                <p className="text-slate-500 text-xs">No issues detected.</p>
               </div>
             ) : (
-              filteredIssues.map((issue) => (
+              data.issues.map((issue) => (
                 <div key={issue.id} className="break-inside-avoid">
                   <IssueCard issue={{
                     ...issue,
-                    // TODO: Remove this mock data after verification
                     sections: issue.sections && issue.sections.length > 0 ? issue.sections : [
                       { label: "Explanation", content: issue.description },
-                      { label: "Impact", content: "This is a mock impact section to verify the UI rendering of the new design blocks." },
-                      { label: "Recommendation", content: "This is a mock recommendation section." }
                     ]
                   }} />
                 </div>
@@ -393,8 +451,57 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
         </div>
       </main>
 
+      {/* History Dropdown Portal */}
+      {historyDropdownOpen && dropdownPosition && auditsByTier[historyDropdownOpen] && ReactDOM.createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-[9999] p-2 max-h-80 overflow-y-auto"
+          style={{
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+          }}
+        >
+          <div className="text-xs font-medium text-slate-500 px-3 py-2 border-b border-slate-100 mb-1">
+            Audit History
+          </div>
+          {auditsByTier[historyDropdownOpen].map((audit, index) => {
+            const isCurrentAudit = audit.id === data.auditId;
+            return (
+              <button
+                key={audit.id}
+                onClick={() => {
+                  onSelectAudit?.(audit);
+                  setHistoryDropdownOpen(null);
+                }}
+                className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-left ${
+                  isCurrentAudit 
+                    ? 'bg-slate-100' 
+                    : 'hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {isCurrentAudit && <Check className="w-4 h-4 text-emerald-500" />}
+                  <div>
+                    <span className="text-sm text-slate-700 block">
+                      {formatDate(audit.created_at)}
+                    </span>
+                  </div>
+                </div>
+                <span className={`text-sm font-semibold ${
+                  (audit.health_score || 0) > 80 ? 'text-emerald-600' :
+                  (audit.health_score || 0) > 60 ? 'text-amber-600' : 'text-red-600'
+                }`}>
+                  {audit.health_score || 0}/100
+                </span>
+              </button>
+            );
+          })}
+        </div>,
+        document.body
+      )}
+
       {/* Upgrades Dropdown Portal */}
-      {upgradesDropdownOpen && dropdownPosition && ReactDOM.createPortal(
+      {upgradesDropdownOpen && dropdownPosition && onRunTier && ReactDOM.createPortal(
         <div
           ref={dropdownRef}
           className="fixed w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-[9999] p-4 max-h-96 overflow-y-auto"
