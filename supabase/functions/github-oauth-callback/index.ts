@@ -12,6 +12,7 @@ const CORS_HEADERS = {
 const ENV = {
   SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  TOKEN_ENCRYPTION_KEY: Deno.env.get('TOKEN_ENCRYPTION_KEY')!,
   GITHUB_CLIENT_ID: Deno.env.get('GITHUB_CLIENT_ID')!,
   GITHUB_CLIENT_SECRET: Deno.env.get('GITHUB_CLIENT_SECRET')!,
   GITHUB_OAUTH_CALLBACK_URL:
@@ -324,7 +325,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Store/update GitHub account connection with proper encryption
-    const encryptedToken = await encryptToken(accessToken, ENV.SUPABASE_SERVICE_ROLE_KEY);
+    const encryptedToken = await encryptToken(accessToken, ENV.TOKEN_ENCRYPTION_KEY);
 
     const { error: upsertError } = await supabase.from('github_accounts').upsert(
       {

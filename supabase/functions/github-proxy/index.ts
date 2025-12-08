@@ -64,9 +64,9 @@ serve(async (req) => {
               .single();
 
             if (!error && githubAccount) {
-              // Decrypt token server-side
+              // Decrypt token server-side using dedicated encryption key
               const encryptedToken = githubAccount.access_token_encrypted;
-              const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+              const secret = Deno.env.get('TOKEN_ENCRYPTION_KEY')!;
 
               // Simple decryption logic (same as in decrypt-github-token function)
               try {
