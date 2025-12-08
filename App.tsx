@@ -119,24 +119,24 @@ const App: React.FC = () => {
 
   return (
     <AppProviders>
-      <div className="bg-background min-h-screen text-foreground font-sans antialiased tracking-tight">
-        <SEO
-          title={seoData.title}
-          description={seoData.description}
-          keywords={seoData.keywords}
-        />
+    <div className="bg-background min-h-screen text-foreground font-sans antialiased tracking-tight">
+      <SEO
+        title={seoData.title}
+        description={seoData.description}
+        keywords={seoData.keywords}
+      />
 
         {router.isPublicPage && (
-          <Navbar
+        <Navbar
             currentView={router.view}
             onNavigate={router.navigate}
             onSignInClick={authFlow.openAuthModal}
-            user={user}
-            onSignOut={signOut}
-          />
-        )}
+          user={user}
+          onSignOut={signOut}
+        />
+      )}
 
-        {renderContent()}
+      {renderContent()}
 
         {router.isPublicPage && <Footer onNavigate={router.navigate} />}
 
@@ -144,7 +144,7 @@ const App: React.FC = () => {
           isOpen={authFlow.isAuthOpen}
           onClose={authFlow.closeAuthModal}
         />
-      </div>
+    </div>
     </AppProviders>
   );
 };

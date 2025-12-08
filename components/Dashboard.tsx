@@ -4,7 +4,7 @@ import { supabase } from '../src/integrations/supabase/client';
 import { Tables } from '../src/integrations/supabase/types';
 import { Calendar, ExternalLink, TrendingUp, FileText, RefreshCw, AlertCircle, Eye, Search, Zap, AlertTriangle } from 'lucide-react';
 import TierBadges, { TIERS, AuditTier } from './TierBadges';
-import { parseGitHubUrl, fetchRepoStats } from '../services/githubService';
+import { parseGitHubUrl } from '../services/githubService';
 import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
 type Audit = Tables<'audits'> & { tier?: string };
@@ -70,16 +70,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
     try {
       const trimmedUrl = newRepoUrl.trim();
 
-      // Parse the URL
+      // Parse the URL - basic validation only
       const repoInfo = parseGitHubUrl(trimmedUrl);
       if (!repoInfo) {
         throw new Error("Please enter a complete GitHub repository URL (e.g., https://github.com/owner/repository-name)");
       }
 
-      // Try to fetch repository stats to validate it exists
-      const githubToken = await getGitHubToken();
-      await fetchRepoStats(repoInfo.owner, repoInfo.repo, githubToken || undefined);
-
+      // Skip validation - let PreflightModal handle access control
       // If validation succeeds, proceed with audit
       if (onStartAudit) {
         onStartAudit(trimmedUrl, 'shape');
