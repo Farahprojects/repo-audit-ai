@@ -31,11 +31,12 @@ export function useAuth() {
     await supabase.auth.signOut();
   };
 
-  // Memoize the return object to prevent unnecessary re-renders
-  return useMemo(() => ({
+  // Return individual values to prevent unnecessary re-renders
+  // Components can now selectively subscribe to only the values they need
+  return {
     user,
     session,
     loading,
     signOut,
-  }), [user, session, loading]);
+  };
 }

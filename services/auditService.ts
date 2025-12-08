@@ -4,6 +4,7 @@ import { generateAuditReport } from './geminiService';
 import { fetchRepoMap, parseGitHubUrl } from './githubService';
 import { supabase } from '../src/integrations/supabase/client';
 import { CostEstimator } from './costEstimator';
+import { ErrorHandler, ErrorLogger } from './errorService';
 
 export class AuditService {
   // Data normalization helpers for legacy data compatibility
@@ -45,9 +46,15 @@ export class AuditService {
     onProgress: (log: string) => void,
     onProgressUpdate: (progress: number) => void
   ): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {
+    const auditContext = { repoUrl, tier, stats: auditStats };
+
     try {
+      ErrorLogger.info('Starting audit execution', auditContext);
+
       const repoInfo = parseGitHubUrl(repoUrl);
-      if (!repoInfo) throw new Error("Invalid URL");
+      if (!repoInfo) {
+        throw new Error("Invalid repository URL format");
+      }
 
       // Step 1: Initialize
       onProgress(`[System] Initializing audit for ${repoInfo.owner}/${repoInfo.repo}...`);
@@ -59,9 +66,18 @@ export class AuditService {
 
       onProgress(`[Network] Downloading source tree (Map Only)...`);
       // Pass GitHub token for private repo access
-      const githubToken = await getGitHubToken();
+      const githubToken = await ErrorHandler.withErrorHandling(
+        getGitHubToken,
+        'getGitHubToken',
+        auditContext
+      );
+
       // NEW: Fetch Map, NOT Content
-      const fileMap = await fetchRepoMap(repoInfo.owner, repoInfo.repo, githubToken || undefined);
+      const fileMap = await ErrorHandler.withErrorHandling(
+        () => fetchRepoMap(repoInfo.owner, repoInfo.repo, githubToken || undefined),
+        'fetchRepoMap',
+        { ...auditContext, owner: repoInfo.owner, repo: repoInfo.repo }
+      );
 
       onProgress(`[Success] Mapped ${fileMap.length} files.`);
       onProgressUpdate(40);
@@ -78,16 +94,26 @@ export class AuditService {
       // Get estimated tokens from server-side cost estimator
       let estimatedTokens: number | undefined;
       if (auditStats.fingerprint) {
-        try {
-          const estimate = await CostEstimator.estimateTokensAsync(tier, auditStats.fingerprint);
-          estimatedTokens = estimate.estimatedTokens;
-        } catch (err) {
-          console.warn('Failed to get token estimate:', err);
+        const tokenResult = await ErrorHandler.safeAsync(
+          () => CostEstimator.estimateTokensAsync(tier, auditStats.fingerprint),
+          undefined,
+          { ...auditContext, operation: 'estimateTokens' }
+        );
+
+        if (tokenResult.success) {
+          estimatedTokens = tokenResult.data.estimatedTokens;
+          ErrorLogger.debug('Token estimation successful', { estimatedTokens });
+        } else {
+          ErrorLogger.warn('Token estimation failed, continuing without estimate', tokenResult.error);
           // Continue without estimate - server will calculate anyway
         }
       }
 
-      const report = await generateAuditReport(repoInfo.repo, auditStats, fileMap, tier, repoUrl, estimatedTokens, auditConfig);
+      const report = await ErrorHandler.withErrorHandling(
+        () => generateAuditReport(repoInfo.repo, auditStats, fileMap, tier, repoUrl, estimatedTokens, auditConfig),
+        'generateAuditReport',
+        { ...auditContext, estimatedTokens, fileCount: fileMap.length }
+      );
 
       onProgress(`[Success] Report generated successfully.`);
       onProgress(`[System] Finalizing health score: ${report.healthScore}/100`);
@@ -100,16 +126,43 @@ export class AuditService {
       };
 
       // Fetch all audits for this repo to populate tier navigation
-      const { data: allAudits } = await supabase
-        .from('audits')
-        .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
-        .eq('repo_url', repoUrl)
-        .order('created_at', { ascending: false });
+      const auditResult = await ErrorHandler.safeAsync(
+        async () => {
+          const { data, error } = await supabase
+            .from('audits')
+            .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
+            .eq('repo_url', repoUrl)
+            .order('created_at', { ascending: false });
 
-      return { report: enrichedReport, relatedAudits: allAudits || [] };
+          if (error) throw new Error(`Database error: ${error.message}`);
+          return data || [];
+        },
+        [],
+        { ...auditContext, operation: 'fetchRelatedAudits' }
+      );
 
-    } catch (e: any) {
-      throw new Error(e.message);
+      const relatedAudits = auditResult.success ? auditResult.data : [];
+
+      ErrorLogger.info('Audit execution completed successfully', {
+        ...auditContext,
+        issuesFound: report.issues.length,
+        healthScore: report.healthScore,
+        relatedAuditsCount: relatedAudits.length
+      });
+
+      return { report: enrichedReport, relatedAudits };
+
+    } catch (error) {
+      // Re-throw with proper context if it's already an AppError
+      if (error instanceof Error) {
+        ErrorLogger.error('Audit execution failed', error, auditContext);
+        throw error;
+      }
+
+      // Wrap unknown errors
+      const wrappedError = new Error(`Audit execution failed: ${String(error)}`);
+      ErrorLogger.error('Audit execution failed with unknown error', wrappedError, auditContext);
+      throw wrappedError;
     }
   }
 

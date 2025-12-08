@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { RepoReport, AuditRecord, AuditTier } from '../types';
 import { TIERS } from '../components/TierBadges';
 import { ConnectProvider } from '../components/UniversalConnectModal';
@@ -48,7 +48,7 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
     }
   }, [data.tier, data.auditId]);
 
-  const handleTierClick = (tierId: string, buttonElement: HTMLButtonElement) => {
+  const handleTierClick = useCallback((tierId: string, buttonElement: HTMLButtonElement) => {
     // If clicking on the active tier, toggle history dropdown (always show for completed tiers)
     if (tierId === activeTier && auditsByTier[tierId]?.length > 0) {
       const rect = buttonElement.getBoundingClientRect();
@@ -65,9 +65,9 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
       setActiveTier(tierId);
       setHistoryDropdownOpen(null);
     }
-  };
+  }, [activeTier, auditsByTier, onSelectAudit, historyDropdownOpen]);
 
-  const handleUpgradesClick = () => {
+  const handleUpgradesClick = useCallback(() => {
     if (!upgradesDropdownOpen && upgradesButtonRef.current) {
       const rect = upgradesButtonRef.current.getBoundingClientRect();
       setDropdownPosition({
@@ -77,34 +77,34 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
     }
     setUpgradesDropdownOpen(!upgradesDropdownOpen);
     setHistoryDropdownOpen(null);
-  };
+  }, [upgradesDropdownOpen]);
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = useCallback((dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  }, []);
 
-  const handleShare = () => {
+  const handleShare = useCallback(() => {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, []);
 
-  const handleRunDeepAudit = (tierId: string, provider: string) => {
+  const handleRunDeepAudit = useCallback((tierId: string, provider: string) => {
     setPendingDeepAuditTier(tierId);
     setPendingProvider(provider as ConnectProvider);
     setIsConnectModalOpen(true);
-  };
+  }, []);
 
-  const handleConnectSubmit = (config: any) => {
+  const handleConnectSubmit = useCallback((config: any) => {
     if (onRunTier && pendingDeepAuditTier) {
       onRunTier(pendingDeepAuditTier as AuditTier, `https://github.com/${data.repoName}`, config);
     }
     setIsConnectModalOpen(false);
     setPendingDeepAuditTier(null);
-  };
+  }, [onRunTier, pendingDeepAuditTier, data.repoName]);
 
-  const handleExportCSV = () => {
+  const handleExportCSV = useCallback(() => {
     const headers = ['ID', 'Title', 'Severity', 'Category', 'File Path', 'Line Number', 'Description'];
     const rows = data.issues.map(issue => [
       issue.id,
@@ -124,15 +124,16 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+  }, [data.issues, data.repoName]);
 
   // Get tiers that haven't been run yet
   const uncompletedTiers = TIERS.filter(t => !completedTiers.includes(t.id));
 
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
 
-  // Memoize the return object to prevent unnecessary re-renders
-  return useMemo(() => ({
+  // Return individual values to prevent unnecessary re-renders
+  // Components can now selectively subscribe to only the values they need
+  return {
     // State
     activeTier,
     setActiveTier,
@@ -167,33 +168,5 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
     handleConnectSubmit,
     handleExportCSV,
     formatDate,
-  }), [
-    activeTier,
-    setActiveTier,
-    historyDropdownOpen,
-    setHistoryDropdownOpen,
-    upgradesDropdownOpen,
-    setUpgradesDropdownOpen,
-    copied,
-    dropdownPosition,
-    setDropdownPosition,
-    isConnectModalOpen,
-    setIsConnectModalOpen,
-    pendingDeepAuditTier,
-    pendingProvider,
-    auditsByTier,
-    completedTiers,
-    uncompletedTiers,
-    currentTier,
-    dropdownRef,
-    upgradesButtonRef,
-    tierButtonRefs,
-    handleTierClick,
-    handleUpgradesClick,
-    handleShare,
-    handleRunDeepAudit,
-    handleConnectSubmit,
-    handleExportCSV,
-    formatDate,
-  ]);
+  };
 };

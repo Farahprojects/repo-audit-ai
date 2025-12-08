@@ -1,5 +1,6 @@
 import { AuditStats, ComplexityFingerprint } from '../types';
 import { supabase } from '../src/integrations/supabase/client';
+import { ErrorHandler, ErrorLogger } from './errorService';
 
 interface FileMapItem {
   path: string;
@@ -74,55 +75,72 @@ export const fetchRepoStats = async (
   repo: string,
   accessToken?: string
 ): Promise<AuditStats> => {
-  console.log('🔍 [fetchRepoStats] Starting repo analysis for:', `${owner}/${repo}`);
-  console.log('🔍 [fetchRepoStats] Access token provided:', !!accessToken);
+  const context = { owner, repo, hasToken: !!accessToken, operation: 'fetchRepoStats' };
+  ErrorLogger.info('Starting repository stats fetch', context);
 
-  // Call github-proxy edge function
-  console.log('🔍 [fetchRepoStats] Calling github-proxy edge function...');
-  const { data, error } = await supabase.functions.invoke('github-proxy', {
-    body: { owner, repo, action: 'stats', userToken: accessToken }
-  });
+  try {
+    // Call github-proxy edge function
+    const { data, error } = await supabase.functions.invoke('github-proxy', {
+      body: { owner, repo, action: 'stats', userToken: accessToken }
+    });
 
-  console.log('🔍 [fetchRepoStats] Edge function response:', { data, error });
+    if (error) {
+      ErrorHandler.handleGitHubError(error, 'invoke-github-proxy-stats', context);
+    }
 
-  if (error) {
-    console.error('❌ [fetchRepoStats] GitHub proxy error:', error);
-    throw new Error(error.message || 'Failed to fetch repository');
+    if (data?.error) {
+      ErrorLogger.warn('GitHub proxy returned structured error', undefined, { ...context, errorData: data });
+
+      // Handle specific error codes with deterministic logic
+      if (data.errorCode === 'RATE_LIMIT') {
+        throw new Error('GitHub API rate limit exceeded. Please try again later.');
+      }
+
+      if (data.errorCode === 'OWNER_NOT_FOUND') {
+        // Owner doesn't exist - URL is definitely wrong
+        const error = new Error('Repository owner does not exist. Please check the URL spelling.');
+        ErrorLogger.warn('Owner not found', error, context);
+        throw error;
+      }
+
+      if (data.errorCode === 'PRIVATE_REPO') {
+        // Repo exists but is private - we already checked owner exists
+        const error = new Error('PRIVATE_REPO:Repository exists but is private. Connect your GitHub account to access private repositories.');
+        ErrorLogger.info('Repository is private', error, context);
+        throw error;
+      }
+
+      // Handle legacy requiresAuth flag (fallback for any edge cases)
+      if (data.requiresAuth && !accessToken) {
+        const error = new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
+        ErrorLogger.info('Repository requires authentication', error, context);
+        throw error;
+      }
+
+      // Generic error fallback
+      const error = new Error(data.error || 'Unknown GitHub API error');
+      ErrorLogger.error('GitHub proxy returned generic error', error, { ...context, errorData: data });
+      throw error;
+    }
+
+    if (!data || typeof data !== 'object') {
+      const error = new Error('Invalid response format from GitHub proxy');
+      ErrorLogger.error('GitHub proxy returned invalid data format', error, context);
+      throw error;
+    }
+
+    ErrorLogger.info('Repository stats fetch completed successfully', { ...context, fileCount: data.files });
+    return data as AuditStats;
+
+  } catch (error) {
+    // Re-throw if already handled
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    // Handle unexpected errors
+    ErrorHandler.handleGitHubError(error, 'fetch-repo-stats', context);
   }
-
-  if (data?.error) {
-    console.log('⚠️ [fetchRepoStats] Structured error response:', data);
-
-    // Handle specific error codes with deterministic logic
-    if (data.errorCode === 'RATE_LIMIT') {
-      throw new Error('GitHub API rate limit exceeded. Please try again later.');
-    }
-
-    if (data.errorCode === 'OWNER_NOT_FOUND') {
-      // Owner doesn't exist - URL is definitely wrong
-      console.log('❌ [fetchRepoStats] Owner does not exist - URL is wrong');
-      throw new Error('Repository owner does not exist. Please check the URL spelling.');
-    }
-
-    if (data.errorCode === 'PRIVATE_REPO') {
-      // Repo exists but is private - we already checked owner exists
-      console.log('🔐 [fetchRepoStats] Repo exists but is private');
-      throw new Error('PRIVATE_REPO:Repository exists but is private. Connect your GitHub account to access private repositories.');
-    }
-
-    // Handle legacy requiresAuth flag (fallback for any edge cases)
-    if (data.requiresAuth && !accessToken) {
-      console.log('🔐 [fetchRepoStats] Unauthenticated - could be private repo');
-      throw new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
-    }
-
-    // Generic error fallback
-    console.log('❌ [fetchRepoStats] Generic error:', data.error);
-    throw new Error(data.error);
-  }
-
-  console.log('✅ [fetchRepoStats] Success! Returning stats:', data);
-  return data as AuditStats;
 };
 
 /**
@@ -234,34 +252,63 @@ export const fetchRepoMap = async (
   repo: string,
   accessToken?: string
 ): Promise<FileMapItem[]> => {
-  // Step 1: Get file tree
-  const { data: treeData, error: treeError } = await supabase.functions.invoke('github-proxy', {
-    body: { owner, repo, userToken: accessToken }
-  });
+  const context = { owner, repo, hasToken: !!accessToken, operation: 'fetchRepoMap' };
+  ErrorLogger.info('Starting repository map fetch', context);
 
-  if (treeError) {
-    console.error('GitHub proxy tree error:', treeError);
-    throw new Error(treeError.message || 'Failed to fetch repository tree');
+  try {
+    // Step 1: Get file tree
+    const { data: treeData, error: treeError } = await supabase.functions.invoke('github-proxy', {
+      body: { owner, repo, userToken: accessToken }
+    });
+
+    if (treeError) {
+      ErrorHandler.handleGitHubError(treeError, 'invoke-github-proxy-tree', context);
+    }
+
+    if (treeData?.error) {
+      const error = new Error(treeData.error || 'GitHub proxy returned error');
+      ErrorLogger.error('GitHub proxy tree returned error', error, { ...context, errorData: treeData });
+      throw error;
+    }
+
+    if (!treeData?.tree) {
+      const error = new Error('No file tree data received from GitHub proxy');
+      ErrorLogger.error('GitHub proxy returned no tree data', error, context);
+      throw error;
+    }
+
+    if (treeData.tree.length === 0) {
+      const error = new Error('No files found in repository');
+      ErrorLogger.warn('Repository appears to be empty', error, context);
+      throw error;
+    }
+
+    // Step 2: Transform to lightweight map
+    const fileMap: FileMapItem[] = treeData.tree
+      .filter((f: any) => f.type === 'blob') // Only files, not dirs
+      .map((f: any) => ({
+        path: f.path,
+        size: f.size || 0,
+        type: 'file',
+        url: f.url // API URL
+      }));
+
+    if (fileMap.length === 0) {
+      const error = new Error('No code files found in repository (only directories)');
+      ErrorLogger.warn('No code files found after filtering', error, { ...context, totalItems: treeData.tree.length });
+      throw error;
+    }
+
+    ErrorLogger.info('Repository map fetch completed', { ...context, filesMapped: fileMap.length });
+    return fileMap;
+
+  } catch (error) {
+    // Re-throw if already handled
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    // Handle unexpected errors
+    ErrorHandler.handleGitHubError(error, 'fetch-repo-map', context);
   }
-
-  if (treeData?.error) {
-    throw new Error(treeData.error);
-  }
-
-  if (!treeData?.tree || treeData.tree.length === 0) {
-    throw new Error('No code files found in repository');
-  }
-
-  // Step 2: Transform to lightweight map
-  const fileMap: FileMapItem[] = treeData.tree
-    .filter((f: any) => f.type === 'blob') // Only files, not dirs
-    .map((f: any) => ({
-      path: f.path,
-      size: f.size || 0,
-      type: 'file',
-      url: f.url // API URL
-    }));
-
-  console.log(`🗺️ Generated map for ${fileMap.length} files`);
-  return fileMap;
 };

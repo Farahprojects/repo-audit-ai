@@ -6,27 +6,21 @@ import About from './components/About';
 import Contact from './components/Contact';
 import AuthModal from './components/AuthModal';
 import SEO from './components/SEO';
-import { AppProviders, useAuthContext, useReportContext } from './components/AppProviders';
+import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useAuthFlowContext } from './components/AppProviders';
 import { LandingPage } from './components/LandingPage';
 import { AuditFlow } from './components/AuditFlow';
 import { DashboardPage } from './components/DashboardPage';
 
 const AppContent: React.FC = () => {
   const { user, signOut } = useAuthContext();
+  const { view, previousView, navigate, isPublicPage, getSEO } = useRouterContext();
   const {
-    view,
-    previousView,
-    navigate,
-    isPublicPage,
-    getSEO,
     repoUrl,
     setRepoUrl,
     auditStats,
     reportData,
     historicalReportData,
     relatedAudits,
-    pendingRepoUrl,
-    setPendingRepoUrl,
     scannerLogs,
     scannerProgress,
     handleAnalyze,
@@ -34,11 +28,8 @@ const AppContent: React.FC = () => {
     handleRestart,
     handleViewHistoricalReport,
     handleSelectAudit,
-    isAuthOpen,
-    handleSoftStart,
-    openAuthModal,
-    closeAuthModal,
-  } = useReportContext();
+  } = useAuditContext();
+  const { isAuthOpen, handleSoftStart, openAuthModal, closeAuthModal } = useAuthFlowContext();
 
   // Handle soft start (auth flow version)
   const handleSoftStartWrapper = (url: string) => {

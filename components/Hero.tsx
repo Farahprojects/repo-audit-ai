@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Shield, Cpu, Layout, ArrowRight, Github, CheckCircle } from 'lucide-react';
 
 interface HeroProps {
@@ -10,7 +10,7 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze, onSoftStart }) => {
   const [url, setUrl] = useState('');
   const [acceptedUrl, setAcceptedUrl] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (url.trim().length > 0) {
       if (onSoftStart) {
@@ -21,17 +21,17 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze, onSoftStart }) => {
         onAnalyze(url);
       }
     }
-  };
+  }, [url, onSoftStart, onAnalyze]);
 
-  const handleRunAudit = () => {
+  const handleRunAudit = useCallback(() => {
     if (acceptedUrl) {
       onAnalyze(acceptedUrl);
     }
-  };
+  }, [acceptedUrl, onAnalyze]);
 
-  const handleChangeUrl = () => {
+  const handleChangeUrl = useCallback(() => {
     setAcceptedUrl(null);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-background pt-32">

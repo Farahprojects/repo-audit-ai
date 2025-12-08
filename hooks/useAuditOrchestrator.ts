@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ViewState, AuditStats, RepoReport, Issue, AuditRecord } from '../types';
 import { Tables } from '../src/integrations/supabase/types';
 import { AuditService } from '../services/auditService';
+import { ErrorHandler, ErrorLogger } from '../services/errorService';
 
 interface UseAuditOrchestratorProps {
   user: any;
@@ -59,24 +60,36 @@ export const useAuditOrchestrator = ({
   }, [user, handleAnalyze]);
 
   const handleConfirmAudit = useCallback(async (tier: string, stats: AuditStats) => {
+    ErrorLogger.info('Starting audit execution', { repoUrl, tier, statsSize: stats.files });
     setAuditStats(stats);
     navigate('scanning');
     setScannerLogs([]);
     setScannerProgress(0);
 
     try {
-      const result = await AuditService.executeAudit(
-        repoUrl,
-        tier,
-        stats,
-        auditConfig,
-        getGitHubToken,
-        addLog,
-        setScannerProgress
+      const result = await ErrorHandler.withErrorHandling(
+        () => AuditService.executeAudit(
+          repoUrl,
+          tier,
+          stats,
+          auditConfig,
+          getGitHubToken,
+          addLog,
+          setScannerProgress
+        ),
+        'executeAudit',
+        { repoUrl, tier, stats }
       );
 
       // Clear config
       setAuditConfig(null);
+
+      ErrorLogger.info('Audit completed successfully', {
+        repoUrl,
+        tier,
+        issuesFound: result.report.issues.length,
+        healthScore: result.report.healthScore
+      });
 
       setReportData(result.report);
       setRelatedAudits(result.relatedAudits);
@@ -84,10 +97,15 @@ export const useAuditOrchestrator = ({
       // Short delay to let user see 100%
       setTimeout(() => navigate('report'), 1000);
 
-    } catch (e: any) {
-      addLog(`[Error] Audit Failed: ${e.message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown audit error';
+      ErrorLogger.error('Audit execution failed', error, { repoUrl, tier, stats });
+
+      addLog(`[Error] Audit Failed: ${errorMessage}`);
       addLog(`[System] Terminating process.`);
-      console.error("Failed to generate report", e);
+
+      // Navigate back to preflight on error
+      setTimeout(() => navigate('preflight'), 2000);
     }
   }, [repoUrl, auditConfig, getGitHubToken, addLog, navigate]);
 
@@ -114,8 +132,9 @@ export const useAuditOrchestrator = ({
     setHistoricalReportData(report);
   }, []);
 
-  // Memoize the return object to prevent unnecessary re-renders
-  return useMemo(() => ({
+  // Return individual values to prevent unnecessary re-renders
+  // Components can now selectively subscribe to only the values they need
+  return {
     // State
     repoUrl,
     setRepoUrl,
@@ -137,24 +156,5 @@ export const useAuditOrchestrator = ({
     handleRestart,
     handleViewHistoricalReport,
     handleSelectAudit,
-  }), [
-    repoUrl,
-    setRepoUrl,
-    auditStats,
-    reportData,
-    historicalReportData,
-    relatedAudits,
-    pendingRepoUrl,
-    setPendingRepoUrl,
-    auditConfig,
-    setAuditConfig,
-    scannerLogs,
-    scannerProgress,
-    handleAnalyze,
-    handleSoftStart,
-    handleConfirmAudit,
-    handleRestart,
-    handleViewHistoricalReport,
-    handleSelectAudit,
-  ]);
+  };
 };

@@ -68,8 +68,9 @@ export const useAppRouter = () => {
     }
   }, [view]);
 
-  // Memoize the return object to prevent unnecessary re-renders
-  return useMemo(() => ({
+  // Return individual values to prevent unnecessary re-renders
+  // Components can now selectively subscribe to only the values they need
+  return {
     view,
     setView,
     previousView,
@@ -79,5 +80,5 @@ export const useAppRouter = () => {
     resetToLanding,
     isPublicPage,
     getSEO,
-  }), [view, setView, previousView, setPreviousView, navigate, goBack, resetToLanding, isPublicPage, getSEO]);
+  };
 };

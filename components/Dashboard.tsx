@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ViewState } from '../types';
 import { supabase } from '../src/integrations/supabase/client';
 import { Tables } from '../src/integrations/supabase/types';
@@ -55,13 +55,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
     }
   };
 
-  const handleViewReport = (audit: Audit) => {
+  const handleViewReport = useCallback((audit: Audit) => {
     if (onViewReport) {
       onViewReport(audit);
     }
-  };
+  }, [onViewReport]);
 
-  const handleStartNewAudit = async () => {
+  const handleStartNewAudit = useCallback(async () => {
     if (!newRepoUrl.trim()) return;
 
     setValidating(true);
@@ -85,13 +85,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
       setRepoError(error.message || "Repository not found. Please check the URL and try again.");
       setValidating(false); // Don't navigate if there's an error
     }
-  };
+  }, [newRepoUrl, onStartAudit]);
 
-  const handleUpgradeTier = (repoUrl: string, tier: AuditTier) => {
+  const handleUpgradeTier = useCallback((repoUrl: string, tier: AuditTier) => {
     if (onStartAudit) {
       onStartAudit(repoUrl, tier);
     }
-  };
+  }, [onStartAudit]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {

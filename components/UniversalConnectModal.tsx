@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Database, Key, Server, Globe } from 'lucide-react';
 
 export type ConnectProvider = 'supabase' | 'firebase' | 'postgres' | 'mysql' | 'planetscale' | 'neon' | 'generic';
@@ -24,9 +24,9 @@ export const UniversalConnectModal: React.FC<UniversalConnectModalProps> = ({
         setFormData({});
     }, [provider, isOpen]);
 
-    const handleChange = (field: string, value: string) => {
+    const handleChange = useCallback((field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
-    };
+    }, []);
 
     if (!isOpen) return null;
 

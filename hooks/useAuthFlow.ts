@@ -51,12 +51,13 @@ export const useAuthFlow = ({
   const openAuthModal = useCallback(() => setIsAuthOpen(true), []);
   const closeAuthModal = useCallback(() => setIsAuthOpen(false), []);
 
-  // Memoize the return object to prevent unnecessary re-renders
-  return useMemo(() => ({
+  // Return individual values to prevent unnecessary re-renders
+  // Components can now selectively subscribe to only the values they need
+  return {
     isAuthOpen,
     setIsAuthOpen,
     handleSoftStart,
     openAuthModal,
     closeAuthModal,
-  }), [isAuthOpen, setIsAuthOpen, handleSoftStart, openAuthModal, closeAuthModal]);
+  };
 };

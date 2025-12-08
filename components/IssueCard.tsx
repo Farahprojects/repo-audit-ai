@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Issue } from '../types';
 import { AlertTriangle, AlertOctagon, Info, ChevronDown, Wand2, Check } from 'lucide-react';
 
@@ -10,7 +10,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
   const [expanded, setExpanded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
 
-  const handleCopyPrompt = (e: React.MouseEvent) => {
+  const handleCopyPrompt = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
 
     // Build prompt dynamically to avoid empty fields
@@ -32,7 +32,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     navigator.clipboard.writeText(prompt);
     setPromptCopied(true);
     setTimeout(() => setPromptCopied(false), 2000);
-  };
+  }, [issue.title, issue.description, issue.filePath, issue.lineNumber, issue.badCode]);
 
   const getSeverityIcon = () => {
     switch (issue.severity) {

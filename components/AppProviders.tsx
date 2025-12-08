@@ -25,16 +25,27 @@ export const useAuthContext = () => {
   return context;
 };
 
-// Report Context
-interface ReportContextType {
-  // Router state and functions
+// Router Context
+interface RouterContextType {
   view: ViewState;
   previousView: ViewState;
   navigate: (view: ViewState) => void;
   isPublicPage: boolean;
   getSEO: (reportData?: RepoReport | null) => { title: string; description: string; keywords: string };
+}
 
-  // Audit orchestrator state and functions
+const RouterContext = createContext<RouterContextType | undefined>(undefined);
+
+export const useRouterContext = () => {
+  const context = useContext(RouterContext);
+  if (!context) {
+    throw new Error('useRouterContext must be used within a RouterProvider');
+  }
+  return context;
+};
+
+// Audit Context
+interface AuditContextType {
   repoUrl: string;
   setRepoUrl: (url: string) => void;
   auditStats: AuditStats | null;
@@ -50,20 +61,32 @@ interface ReportContextType {
   handleRestart: () => void;
   handleViewHistoricalReport: (audit: any) => Promise<void>;
   handleSelectAudit: (audit: AuditRecord) => void;
+}
 
-  // Auth flow state and functions
+const AuditContext = createContext<AuditContextType | undefined>(undefined);
+
+export const useAuditContext = () => {
+  const context = useContext(AuditContext);
+  if (!context) {
+    throw new Error('useAuditContext must be used within an AuditProvider');
+  }
+  return context;
+};
+
+// Auth Flow Context
+interface AuthFlowContextType {
   isAuthOpen: boolean;
   handleSoftStart: (url: string) => void;
   openAuthModal: () => void;
   closeAuthModal: () => void;
 }
 
-const ReportContext = createContext<ReportContextType | undefined>(undefined);
+const AuthFlowContext = createContext<AuthFlowContextType | undefined>(undefined);
 
-export const useReportContext = () => {
-  const context = useContext(ReportContext);
+export const useAuthFlowContext = () => {
+  const context = useContext(AuthFlowContext);
   if (!context) {
-    throw new Error('useReportContext must be used within a ReportProvider');
+    throw new Error('useAuthFlowContext must be used within an AuthFlowProvider');
   }
   return context;
 };
@@ -73,19 +96,16 @@ interface AppProvidersProps {
 }
 
 export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
-  // Auth hook - returns new object on every render, so we memoize the value
+  // Auth hook
   const auth = useAuth();
 
-  // Memoize auth context value to prevent re-renders
-  const authValue = useMemo(() => auth, [auth.user, auth.session, auth.loading]);
-
-  // Router hook - returns new object on every render, so we memoize the value
+  // Router hook
   const router = useAppRouter();
 
   // GitHub auth hook
   const { getGitHubToken } = useGitHubAuth();
 
-  // Audit orchestrator hook - returns new object on every render, so we memoize the value
+  // Audit orchestrator hook
   const auditOrchestrator = useAuditOrchestrator({
     user: auth.user,
     getGitHubToken,
@@ -93,7 +113,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     setPreviousView: router.setPreviousView,
   });
 
-  // Auth flow hook - returns new object on every render, so we memoize the value
+  // Auth flow hook
   const authFlow = useAuthFlow({
     user: auth.user,
     view: router.view,
@@ -103,16 +123,23 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     setPreviousView: router.setPreviousView,
   });
 
-  // Memoize report context value to prevent re-renders
-  const reportValue = useMemo(() => ({
-    // Router
+  // Memoize individual context values to prevent unnecessary re-renders
+  const authValue = useMemo(() => ({
+    user: auth.user,
+    session: auth.session,
+    loading: auth.loading,
+    signOut: auth.signOut,
+  }), [auth.user, auth.session, auth.loading, auth.signOut]);
+
+  const routerValue = useMemo(() => ({
     view: router.view,
     previousView: router.previousView,
     navigate: router.navigate,
     isPublicPage: router.isPublicPage,
     getSEO: router.getSEO,
+  }), [router.view, router.previousView, router.navigate, router.isPublicPage, router.getSEO]);
 
-    // Audit orchestrator
+  const auditValue = useMemo(() => ({
     repoUrl: auditOrchestrator.repoUrl,
     setRepoUrl: auditOrchestrator.setRepoUrl,
     auditStats: auditOrchestrator.auditStats,
@@ -128,18 +155,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     handleRestart: auditOrchestrator.handleRestart,
     handleViewHistoricalReport: auditOrchestrator.handleViewHistoricalReport,
     handleSelectAudit: auditOrchestrator.handleSelectAudit,
-
-    // Auth flow
-    isAuthOpen: authFlow.isAuthOpen,
-    handleSoftStart: authFlow.handleSoftStart,
-    openAuthModal: authFlow.openAuthModal,
-    closeAuthModal: authFlow.closeAuthModal,
   }), [
-    router.view,
-    router.previousView,
-    router.navigate,
-    router.isPublicPage,
-    router.getSEO,
     auditOrchestrator.repoUrl,
     auditOrchestrator.setRepoUrl,
     auditOrchestrator.auditStats,
@@ -155,17 +171,24 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     auditOrchestrator.handleRestart,
     auditOrchestrator.handleViewHistoricalReport,
     auditOrchestrator.handleSelectAudit,
-    authFlow.isAuthOpen,
-    authFlow.handleSoftStart,
-    authFlow.openAuthModal,
-    authFlow.closeAuthModal,
   ]);
+
+  const authFlowValue = useMemo(() => ({
+    isAuthOpen: authFlow.isAuthOpen,
+    handleSoftStart: authFlow.handleSoftStart,
+    openAuthModal: authFlow.openAuthModal,
+    closeAuthModal: authFlow.closeAuthModal,
+  }), [authFlow.isAuthOpen, authFlow.handleSoftStart, authFlow.openAuthModal, authFlow.closeAuthModal]);
 
   return (
     <AuthContext.Provider value={authValue}>
-      <ReportContext.Provider value={reportValue}>
-        {children}
-      </ReportContext.Provider>
+      <RouterContext.Provider value={routerValue}>
+        <AuditContext.Provider value={auditValue}>
+          <AuthFlowContext.Provider value={authFlowValue}>
+            {children}
+          </AuthFlowContext.Provider>
+        </AuditContext.Provider>
+      </RouterContext.Provider>
     </AuthContext.Provider>
   );
 };

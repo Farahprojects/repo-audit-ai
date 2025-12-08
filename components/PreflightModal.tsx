@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, Zap, AlertTriangle, Loader2 } from 'lucide-react';
 import { AuditStats, ComplexityFingerprint } from '../types';
 import { parseGitHubUrl, fetchRepoPreflight } from '../services/githubService';
@@ -112,10 +112,10 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   }, [repoUrl]);
 
   // Handle GitHub OAuth connection - awaits completion before continuing
-  const handleGitHubConnect = async () => {
+  const handleGitHubConnect = useCallback(async () => {
     console.log('🔐 [PreflightModal] Starting GitHub OAuth flow...');
     const result = await signInWithGitHub();
-    
+
     if (result.success) {
       console.log('✅ [PreflightModal] GitHub OAuth succeeded, fetching token...');
       const token = await getGitHubToken();
@@ -130,11 +130,11 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       console.error('❌ [PreflightModal] GitHub OAuth failed:', result.error);
       setError(result.error || 'GitHub connection failed');
     }
-  };
+  }, [signInWithGitHub, getGitHubToken]);
 
-  const handleTierSelect = (tier: 'lite' | 'deep' | 'ultra') => {
+  const handleTierSelect = useCallback((tier: 'lite' | 'deep' | 'ultra') => {
     onConfirm(tier, stats!);
-  };
+  }, [onConfirm, stats]);
 
   // Helper to get formatted estimate or fallback
   const getEstimateDisplay = (tier: keyof TierEstimates, fallback: string) => {

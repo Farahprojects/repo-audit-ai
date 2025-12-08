@@ -1,74 +1,34 @@
-export type ViewState = 'landing' | 'pricing' | 'about' | 'contact' | 'dashboard' | 'preflight' | 'scanning' | 'report';
+export interface ViewState {
+  landing: 'landing';
+  preflight: 'preflight';
+  scanning: 'scanning';
+  report: 'report';
+  pricing: 'pricing';
+  about: 'about';
+  contact: 'contact';
+  dashboard: 'dashboard';
+}
 
-export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security' | 'supabase_deep_dive';
-export type Severity = 'Critical' | 'Warning' | 'Info' | 'Clean';
-
-export type Category = 'Security' | 'Performance' | 'Architecture';
-
-export interface IssueSection {
-  label: string;
-  content: string;
+export interface AuditStats {
+  files: number;
+  tokens: string | number;
+  size: string | number;
+  language: string;
+  languagePercent: number;
+  fingerprint?: ComplexityFingerprint;
 }
 
 export interface Issue {
   id: string;
   title: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  category: string;
   description: string;
-  category: Category;
-  severity: Severity;
-  filePath: string;
-  lineNumber: number;
-  badCode: string;
-  fixedCode: string;
-  sections?: IssueSection[];
-}
-
-export interface AuditStats {
-  files: number;
-  tokens: string;
-  size: string;
-  language: string;
-  languagePercent: number;
-  defaultBranch?: string;
-  stars?: number;
-  forks?: number;
-  issues?: number;
-  watchers?: number;
-  isPrivate?: boolean;
-  hasWiki?: boolean;
-  hasPages?: boolean;
-  archived?: boolean;
-  disabled?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  pushedAt?: string;
-  fingerprint?: ComplexityFingerprint;
-}
-
-export interface StrengthOrIssue {
-  title: string;
-  detail: string;
-}
-
-export interface SuspiciousFiles {
-  present: string[];
-  missing: string[];
-}
-
-export interface CategoryAssessments {
-  architecture: string;
-  codeQuality: string;
-  security: string;
-  dependencies: string;
-  database: string;
-  documentation: string;
-  deployment: string;
-  maintenance: string;
-}
-
-export interface SeniorDeveloperAssessment {
-  isSeniorLevel: boolean;
-  justification: string;
+  filePath?: string;
+  lineNumber?: number;
+  codeSnippet?: string;
+  tags?: string[];
+  suggestedFix?: string;
 }
 
 export interface RepoReport {
@@ -77,69 +37,93 @@ export interface RepoReport {
   issues: Issue[];
   summary: string;
   stats: AuditStats;
-  // Enhanced report fields
-  topStrengths?: StrengthOrIssue[];
-  topIssues?: StrengthOrIssue[];
-  suspiciousFiles?: SuspiciousFiles;
-  categoryAssessments?: CategoryAssessments;
-  seniorDeveloperAssessment?: SeniorDeveloperAssessment;
+  topStrengths?: { title: string; detail: string }[];
+  topIssues?: { title: string; detail: string }[];
+  suspiciousFiles?: string[];
+  categoryAssessments?: any;
+  seniorDeveloperAssessment?: any;
   overallVerdict?: string;
   productionReady?: boolean;
   riskLevel?: 'critical' | 'high' | 'medium' | 'low';
+  detectedStack?: string;
   tier?: string;
   auditId?: string;
-  detectedStack?: {
-    supabase: boolean;
-    firebase: boolean;
-    prisma: boolean;
-    drizzle: boolean;
-    neon: boolean;
-    graphql: boolean;
-    hasDockerfile: boolean;
-  };
 }
 
-export interface ComplexityFingerprint {
-  // Basic metrics (already available)
-  file_count: number;
-  total_size_kb: number;
-  token_estimate: number;
-
-  // Language breakdown
-  language_mix: Record<string, number>; // { ts: 65, python: 30, sql: 5 }
-  primary_language: string;
-
-  // File type counts (NEW - computed from tree)
-  sql_files: number;
-  config_files: number;  // yaml, json, toml, env
-  frontend_files: number; // tsx, jsx, vue, svelte
-  backend_files: number;  // ts, py, go, rs (in src/server/api folders)
-  test_files: number;
-
-  // Detection flags (already have some via techStack)
-  has_supabase: boolean;
-  has_docker: boolean;
-  has_env_files: boolean;
-  has_tests: boolean;
-  is_monorepo: boolean;
-
-  // Dependency info (if package.json accessible)
-  dependency_count: number;
-
-  // API surface hints
-  api_endpoints_estimated: number; // Based on route file patterns
-}
-
-// Audit record from database (for history)
 export interface AuditRecord {
   id: string;
   repo_url: string;
   tier: string;
-  health_score: number | null;
-  summary: string | null;
+  health_score: number;
+  summary: string;
   created_at: string;
-  issues: any;
-  extra_data: any;
-  estimated_tokens?: number;
-  total_tokens?: number;
+  issues: Issue[];
+  extra_data?: any;
+}
+
+export interface ComplexityFingerprint {
+  files: number;
+  functions: number;
+  classes: number;
+  imports: number;
+  exports: number;
+  branches: number;
+  loops: number;
+  comments: number;
+  blankLines: number;
+  language: string;
+  languagePercent: number;
+  totalLines: number;
+  codeLines: number;
+}
+
+// Error types for proper error handling
+export class AppError extends Error {
+  public readonly code: string;
+  public readonly statusCode: number;
+  public readonly context?: Record<string, any>;
+  public readonly isRetryable: boolean;
+
+  constructor(
+    message: string,
+    code: string,
+    statusCode: number = 500,
+    context?: Record<string, any>,
+    isRetryable: boolean = false
+  ) {
+    super(message);
+    this.name = 'AppError';
+    this.code = code;
+    this.statusCode = statusCode;
+    this.context = context;
+    this.isRetryable = isRetryable;
+  }
+}
+
+export class GitHubError extends AppError {
+  constructor(message: string, code: string, context?: Record<string, any>) {
+    super(message, code, 400, context, code === 'RATE_LIMIT');
+    this.name = 'GitHubError';
+  }
+}
+
+export class GeminiError extends AppError {
+  constructor(message: string, code: string, context?: Record<string, any>) {
+    super(message, code, 500, context, true);
+    this.name = 'GeminiError';
+  }
+}
+
+export class AuthenticationError extends AppError {
+  constructor(message: string, context?: Record<string, any>) {
+    super(message, 'AUTH_ERROR', 401, context, false);
+    this.name = 'AuthenticationError';
+  }
+}
+
+export class NetworkError extends AppError {
+  constructor(message: string, context?: Record<string, any>) {
+    super(message, 'NETWORK_ERROR', 0, context, true);
+    this.name = 'NetworkError';
+  }
 }

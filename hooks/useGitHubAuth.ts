@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { supabase } from '../src/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { ErrorHandler, ErrorLogger } from '../services/errorService';
+import { AuthenticationError } from '../types';
 
 interface GitHubAccount {
     id: string;
@@ -34,39 +36,71 @@ export function useGitHubAuth() {
 
     // Fetch GitHub account data
     const fetchGitHubAccount = useCallback(async () => {
-        if (!session?.user?.id) return;
+        if (!session?.user?.id) {
+            ErrorLogger.debug('Skipping GitHub account fetch - no user session');
+            return;
+        }
 
         try {
-            const { data, error } = await supabase
-                .from('github_accounts')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .maybeSingle();
+            const result = await ErrorHandler.safeAsync(
+                async () => {
+                    const { data, error } = await supabase
+                        .from('github_accounts')
+                        .select('*')
+                        .eq('user_id', session.user.id)
+                        .maybeSingle();
 
-            if (error) {
-                // Only log non-"not found" errors
-                if (error.code !== 'PGRST116') {
-                    console.error('Error fetching GitHub account:', error);
+                    if (error) {
+                        // Only treat "not found" as non-error (expected for new users)
+                        if (error.code !== 'PGRST116') {
+                            throw new Error(`Database error: ${error.message}`);
+                        }
+                        return null; // No account found - this is normal
+                    }
+
+                    return data;
+                },
+                null, // fallback to null
+                { userId: session.user.id, operation: 'fetchGitHubAccount' }
+            );
+
+            if (result.success) {
+                if (result.data) {
+                    ErrorLogger.debug('GitHub account found', { userId: session.user.id, login: result.data.login });
+                    setState(prev => ({
+                        ...prev,
+                        isConnected: true,
+                        account: result.data as GitHubAccount,
+                        error: null,
+                    }));
+                } else {
+                    ErrorLogger.debug('No GitHub account found for user', { userId: session.user.id });
+                    setState(prev => ({
+                        ...prev,
+                        isConnected: false,
+                        account: null,
+                        token: null,
+                        error: null,
+                    }));
                 }
-                return;
-            }
-
-            if (data) {
-                setState(prev => ({
-                    ...prev,
-                    isConnected: true,
-                    account: data as GitHubAccount,
-                }));
             } else {
+                ErrorLogger.warn('Failed to fetch GitHub account', result.error, { userId: session.user.id });
                 setState(prev => ({
                     ...prev,
                     isConnected: false,
                     account: null,
                     token: null,
+                    error: result.error.message,
                 }));
             }
         } catch (err) {
-            console.error('Error in fetchGitHubAccount:', err);
+            // This should not happen due to safeAsync, but just in case
+            const error = err instanceof Error ? err : new Error('Unknown error in fetchGitHubAccount');
+            ErrorLogger.error('Unexpected error in fetchGitHubAccount', error, { userId: session.user.id });
+            setState(prev => ({
+                ...prev,
+                error: 'Failed to load GitHub account data',
+            }));
         }
     }, [session?.user?.id]);
 
@@ -77,22 +111,59 @@ export function useGitHubAuth() {
 
     // Get decrypted GitHub token
     const getGitHubToken = useCallback(async (): Promise<string | null> => {
-        if (!state.account?.access_token_encrypted) return null;
+        if (!state.account?.access_token_encrypted) {
+            ErrorLogger.debug('No encrypted token available');
+            return null;
+        }
 
         try {
-            // Call edge function to decrypt token
-            const { data, error } = await supabase.functions.invoke('decrypt-github-token', {
-                body: { encryptedToken: state.account.access_token_encrypted }
-            });
+            const result = await ErrorHandler.safeAsync(
+                async () => {
+                    const { data, error } = await supabase.functions.invoke('decrypt-github-token', {
+                        body: { encryptedToken: state.account.access_token_encrypted }
+                    });
 
-            if (error) {
-                console.error('Error decrypting GitHub token:', error);
+                    if (error) {
+                        throw new AuthenticationError(`Token decryption failed: ${error.message}`, {
+                            operation: 'decryptToken',
+                            accountId: state.account?.id
+                        });
+                    }
+
+                    if (!data?.token) {
+                        throw new AuthenticationError('No token received from decryption service', {
+                            operation: 'decryptToken',
+                            accountId: state.account?.id
+                        });
+                    }
+
+                    return data.token;
+                },
+                null,
+                { accountId: state.account?.id, operation: 'getGitHubToken' }
+            );
+
+            if (result.success) {
+                ErrorLogger.debug('GitHub token decrypted successfully');
+                return result.data;
+            } else {
+                ErrorLogger.error('Failed to decrypt GitHub token', result.error);
+                // Update state to reflect the error
+                setState(prev => ({
+                    ...prev,
+                    error: result.error.message,
+                    token: null,
+                }));
                 return null;
             }
-
-            return data.token;
         } catch (err) {
-            console.error('Error getting GitHub token:', err);
+            const error = err instanceof Error ? err : new Error('Unknown error getting GitHub token');
+            ErrorLogger.error('Unexpected error in getGitHubToken', error, { accountId: state.account?.id });
+            setState(prev => ({
+                ...prev,
+                error: 'Failed to access GitHub token',
+                token: null,
+            }));
             return null;
         }
     }, [state.account]);
@@ -100,6 +171,7 @@ export function useGitHubAuth() {
     // Sign in with GitHub OAuth using popup flow
     // Returns a Promise that resolves when OAuth completes (success or error)
     const signInWithGitHub = useCallback((): Promise<{ success: boolean; error?: string }> => {
+        ErrorLogger.info('Starting GitHub OAuth flow');
         setState(prev => ({ ...prev, isConnecting: true, error: null }));
 
         return new Promise(async (resolve) => {
@@ -108,15 +180,18 @@ export function useGitHubAuth() {
                 const { data, error: invokeError } = await supabase.functions.invoke('github-oauth-start');
 
                 if (invokeError) {
-                    console.error('Error starting GitHub OAuth:', invokeError);
-                    const errorMsg = 'Failed to initiate GitHub connection';
+                    const error = new Error(`Failed to start OAuth: ${invokeError.message}`);
+                    ErrorLogger.error('GitHub OAuth initiation failed', error, { invokeError });
+                    const errorMsg = 'Failed to initiate GitHub connection. Please try again.';
                     setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
                     resolve({ success: false, error: errorMsg });
                     return;
                 }
 
                 if (!data?.url || !data?.state) {
-                    const errorMsg = 'Invalid response from OAuth service';
+                    const error = new Error('OAuth service returned invalid response - missing URL or state');
+                    ErrorLogger.error('Invalid OAuth service response', error, { data });
+                    const errorMsg = 'OAuth service error. Please try again.';
                     setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
                     resolve({ success: false, error: errorMsg });
                     return;
@@ -141,7 +216,9 @@ export function useGitHubAuth() {
                 );
 
                 if (!popup) {
-                    const errorMsg = 'Popup blocked. Please allow popups for this site.';
+                    const error = new Error('Browser blocked OAuth popup - popups may be disabled');
+                    ErrorLogger.warn('OAuth popup blocked', error);
+                    const errorMsg = 'Popup blocked. Please allow popups for this site and try again.';
                     setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
                     resolve({ success: false, error: errorMsg });
                     return;
@@ -161,9 +238,14 @@ export function useGitHubAuth() {
                     resolved = true;
                     cleanup();
                     popup.close();
-                    console.log('✅ [useGitHubAuth] OAuth success');
-                    
+                    ErrorLogger.info('GitHub OAuth completed successfully');
+
                     fetchGitHubAccount().then(() => {
+                        setState(prev => ({ ...prev, isConnecting: false, error: null }));
+                        resolve({ success: true });
+                    }).catch((error) => {
+                        ErrorLogger.error('Failed to refresh account after OAuth success', error);
+                        // Still resolve as success since OAuth worked
                         setState(prev => ({ ...prev, isConnecting: false, error: null }));
                         resolve({ success: true });
                     });
@@ -174,7 +256,8 @@ export function useGitHubAuth() {
                     resolved = true;
                     cleanup();
                     popup.close();
-                    console.error('❌ [useGitHubAuth] OAuth error:', errorMsg);
+                    const error = new Error(errorMsg);
+                    ErrorLogger.error('GitHub OAuth failed', error);
                     setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
                     resolve({ success: false, error: errorMsg });
                 };
@@ -277,8 +360,9 @@ export function useGitHubAuth() {
                 }, 5 * 60 * 1000);
 
             } catch (err) {
-                console.error('Error in GitHub OAuth:', err);
-                const errorMsg = 'Failed to connect to GitHub';
+                const error = err instanceof Error ? err : new Error('Unknown OAuth error');
+                ErrorLogger.critical('Unexpected error in GitHub OAuth flow', error);
+                const errorMsg = 'An unexpected error occurred during GitHub connection. Please try again.';
                 setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
                 resolve({ success: false, error: errorMsg });
             }
@@ -287,43 +371,58 @@ export function useGitHubAuth() {
 
     // Disconnect GitHub
     const disconnectGitHub = useCallback(async () => {
-        if (!state.account) return false;
+        if (!state.account) {
+            ErrorLogger.warn('Attempted to disconnect GitHub account but no account found');
+            return false;
+        }
 
         if (!confirm('Are you sure you want to disconnect your GitHub account? You will need to reconnect to access repositories.')) {
+            ErrorLogger.info('User cancelled GitHub account disconnection');
             return false;
         }
 
         try {
-            const { error } = await (supabase
-                .from('github_accounts' as any)
-                .delete()
-                .eq('user_id', state.account.user_id) as unknown as Promise<{ error: any }>);
+            const result = await ErrorHandler.safeAsync(
+                async () => {
+                    const { error } = await (supabase
+                        .from('github_accounts' as any)
+                        .delete()
+                        .eq('user_id', state.account.user_id) as unknown as Promise<{ error: any }>);
 
-            if (error) {
-                console.error('Failed to disconnect GitHub account:', error);
-                setState(prev => ({ ...prev, error: 'Failed to disconnect GitHub account' }));
+                    if (error) {
+                        throw new Error(`Database deletion failed: ${error.message}`);
+                    }
+                },
+                undefined,
+                { userId: state.account.user_id, accountId: state.account.id, operation: 'disconnectGitHub' }
+            );
+
+            if (result.success) {
+                ErrorLogger.info('GitHub account disconnected successfully', { userId: state.account.user_id });
+                setState(prev => ({
+                    ...prev,
+                    isConnected: false,
+                    account: null,
+                    token: null,
+                    error: null,
+                }));
+                return true;
+            } else {
+                ErrorLogger.error('Failed to disconnect GitHub account', result.error);
+                setState(prev => ({ ...prev, error: result.error.message }));
                 return false;
             }
-
-            setState(prev => ({
-                ...prev,
-                isConnected: false,
-                account: null,
-                token: null,
-                error: null,
-            }));
-
-            return true;
         } catch (err) {
-            console.error('Error disconnecting GitHub account:', err);
-            const errorMsg = err instanceof Error ? err.message : 'Failed to disconnect GitHub account';
-            setState(prev => ({ ...prev, error: errorMsg }));
+            const error = err instanceof Error ? err : new Error('Unknown error during GitHub disconnection');
+            ErrorLogger.error('Unexpected error disconnecting GitHub account', error, { accountId: state.account.id });
+            setState(prev => ({ ...prev, error: 'An unexpected error occurred while disconnecting' }));
             return false;
         }
     }, [state.account]);
 
-    // Memoize the return object to prevent unnecessary re-renders
-    return useMemo(() => ({
+    // Return individual values to prevent unnecessary re-renders
+    // Components can now selectively subscribe to only the values they need
+    return {
         isGitHubConnected: state.isConnected,
         isConnecting: state.isConnecting,
         error: state.error,
@@ -331,5 +430,5 @@ export function useGitHubAuth() {
         getGitHubToken,
         signInWithGitHub,
         disconnectGitHub,
-    }), [state.isConnected, state.isConnecting, state.error, state.account, getGitHubToken, signInWithGitHub, disconnectGitHub]);
+    };
 }

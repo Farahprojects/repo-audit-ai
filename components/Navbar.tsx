@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Menu, X, User, LogOut, ChevronDown } from 'lucide-react';
 import { ViewState } from '../types';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -50,10 +50,10 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
     { id: 'dashboard', label: 'Dashboard', requiresAuth: true },
   ];
 
-  const handleNavClick = (view: ViewState) => {
+  const handleNavClick = useCallback((view: ViewState) => {
     onNavigate(view);
     setIsMenuOpen(false);
-  };
+  }, [onNavigate]);
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 border-b ${isMenuOpen ? 'bg-background border-transparent' : 'bg-background/80 backdrop-blur-md border-border'

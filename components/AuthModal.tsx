@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { X, Github, Mail, ArrowRight, Loader2, Apple, Linkedin } from 'lucide-react';
 import { supabase } from '../src/integrations/supabase/client';
 
@@ -18,7 +18,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -58,7 +58,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [mode, email, password, onClose]);
 
   const signInWithProvider = async (provider: 'google' | 'github' | 'apple') => {
     setLoading(true);
