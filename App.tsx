@@ -153,13 +153,43 @@ const App: React.FC = () => {
     setScannerProgress(0);
   };
 
+  // Helper to parse "Title: Detail" strings into structured objects
+  const parseStrengthsOrIssues = (items: any[]): { title: string; detail: string }[] => {
+    if (!items || !Array.isArray(items)) return [];
+    return items.map(item => {
+      if (typeof item === 'string') {
+        const colonIndex = item.indexOf(':');
+        if (colonIndex > 0) {
+          return {
+            title: item.substring(0, colonIndex).trim(),
+            detail: item.substring(colonIndex + 1).trim()
+          };
+        }
+        return { title: item, detail: '' };
+      }
+      // Already an object with title/detail
+      if (item && typeof item === 'object' && item.title) {
+        return { title: item.title, detail: item.detail || '' };
+      }
+      return { title: String(item), detail: '' };
+    });
+  };
+
+  // Normalize riskLevel to lowercase
+  const normalizeRiskLevel = (level: any): 'critical' | 'high' | 'medium' | 'low' | undefined => {
+    if (!level) return undefined;
+    const normalized = String(level).toLowerCase();
+    if (['critical', 'high', 'medium', 'low'].includes(normalized)) {
+      return normalized as 'critical' | 'high' | 'medium' | 'low';
+    }
+    return undefined;
+  };
+
   const handleViewHistoricalReport = (audit: Tables<'audits'> & { extra_data?: any }) => {
-    // Explicitly cast the JSON data to the Issue[] type
     const issues = (audit.issues as unknown as Issue[]) || [];
-    const repoName = audit.repo_url.split('/').slice(-2).join('/'); // Extract owner/repo format
+    const repoName = audit.repo_url.split('/').slice(-2).join('/');
     const extraData = audit.extra_data || {};
 
-    // Create basic stats if not available
     const stats: AuditStats = {
       files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
       tokens: 'N/A',
@@ -174,10 +204,10 @@ const App: React.FC = () => {
       issues,
       summary: audit.summary || 'No summary available',
       stats,
-      // Map extra_data fields to RepoReport structure
-      topStrengths: extraData.topStrengths,
-      topIssues: extraData.topWeaknesses,
-      riskLevel: extraData.riskLevel,
+      // Transform extra_data fields with proper parsing
+      topStrengths: parseStrengthsOrIssues(extraData.topStrengths),
+      topIssues: parseStrengthsOrIssues(extraData.topWeaknesses),
+      riskLevel: normalizeRiskLevel(extraData.riskLevel),
       productionReady: extraData.productionReady,
       categoryAssessments: extraData.categoryAssessments,
       seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,

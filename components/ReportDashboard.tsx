@@ -243,52 +243,50 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ data, onRestart, onRu
                 </div>
               )}
 
-              {/* Top Strengths & Issues Grid */}
-              {(data.topStrengths || data.topIssues) && (
-                <div className="grid md:grid-cols-2 gap-6 animate-fade-in">
+              {/* Top Strengths & Issues - Clean List Design */}
+              {(data.topStrengths?.length || data.topIssues?.length) ? (
+                <div className="space-y-6 animate-fade-in">
                   {/* Strengths */}
                   {data.topStrengths && data.topStrengths.length > 0 && (
-                    <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-5">
-                      <h3 className="font-semibold text-emerald-800 mb-4 flex items-center gap-2">
-                        <Star className="w-4 h-4" />
-                        Top {data.topStrengths.length} Strengths
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-foreground flex items-center gap-2">
+                        <Star className="w-4 h-4 text-emerald-500" />
+                        Key Strengths
                       </h3>
-                      <ul className="space-y-3">
+                      <div className="space-y-2">
                         {data.topStrengths.map((strength, i) => (
-                          <li key={i} className="flex gap-3">
-                            <ChevronRight className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <span className="font-medium text-emerald-900 text-sm">{strength.title}</span>
-                              <p className="text-emerald-700 text-xs mt-0.5">{strength.detail}</p>
-                            </div>
-                          </li>
+                          <div key={i} className="border-l-2 border-emerald-400 pl-4 py-2 bg-emerald-50/30 rounded-r-lg">
+                            <span className="font-medium text-foreground text-sm block">{strength.title}</span>
+                            {strength.detail && (
+                              <p className="text-muted-foreground text-sm mt-1 leading-relaxed">{strength.detail}</p>
+                            )}
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
 
-                  {/* Issues */}
+                  {/* Weaknesses/Issues */}
                   {data.topIssues && data.topIssues.length > 0 && (
-                    <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-5">
-                      <h3 className="font-semibold text-amber-800 mb-4 flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4" />
-                        Top {data.topIssues.length} Issues
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-foreground flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        Areas for Improvement
                       </h3>
-                      <ul className="space-y-3">
+                      <div className="space-y-2">
                         {data.topIssues.map((issue, i) => (
-                          <li key={i} className="flex gap-3">
-                            <ChevronRight className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <span className="font-medium text-amber-900 text-sm">{issue.title}</span>
-                              <p className="text-amber-700 text-xs mt-0.5">{issue.detail}</p>
-                            </div>
-                          </li>
+                          <div key={i} className="border-l-2 border-amber-400 pl-4 py-2 bg-amber-50/30 rounded-r-lg">
+                            <span className="font-medium text-foreground text-sm block">{issue.title}</span>
+                            {issue.detail && (
+                              <p className="text-muted-foreground text-sm mt-1 leading-relaxed">{issue.detail}</p>
+                            )}
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
               {/* Category Assessments */}
               {data.categoryAssessments && (
