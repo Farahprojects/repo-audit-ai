@@ -111,20 +111,25 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     initLoad();
   }, [repoUrl]);
 
-  useEffect(() => {
-    const retryWithToken = async () => {
-      if (isGitHubConnected && step === 'github-connect') {
-        const token = await getGitHubToken();
-        if (token) {
-          loadStats(token);
-        }
-      }
-    };
-    retryWithToken();
-  }, [isGitHubConnected, step]);
-
+  // Handle GitHub OAuth connection - awaits completion before continuing
   const handleGitHubConnect = async () => {
-    await signInWithGitHub(window.location.href);
+    console.log('🔐 [PreflightModal] Starting GitHub OAuth flow...');
+    const result = await signInWithGitHub();
+    
+    if (result.success) {
+      console.log('✅ [PreflightModal] GitHub OAuth succeeded, fetching token...');
+      const token = await getGitHubToken();
+      if (token) {
+        console.log('🚀 [PreflightModal] Token retrieved, continuing to loadStats...');
+        loadStats(token);
+      } else {
+        console.error('❌ [PreflightModal] Failed to get token after successful OAuth');
+        setError('Failed to retrieve GitHub access token');
+      }
+    } else {
+      console.error('❌ [PreflightModal] GitHub OAuth failed:', result.error);
+      setError(result.error || 'GitHub connection failed');
+    }
   };
 
   const handleTierSelect = (tier: 'lite' | 'deep' | 'ultra') => {
