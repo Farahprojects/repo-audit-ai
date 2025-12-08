@@ -233,6 +233,12 @@ serve(async (req) => {
         issues: dbIssues,
         riskLevel: finalReport.riskLevel,
         productionReady: finalReport.productionReady,
+        topStrengths: finalReport?.topStrengths || [],
+        topIssues: finalReport?.topWeaknesses || [], // Map topWeaknesses to topIssues for frontend
+        suspiciousFiles: finalReport?.suspiciousFiles || null,
+        categoryAssessments: finalReport?.categoryAssessments || null,
+        seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
+        overallVerdict: finalReport?.overallVerdict || null,
         meta: {
           planValues: plan,
           swarmCount: swarmResults.length,
