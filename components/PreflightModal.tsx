@@ -81,6 +81,10 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
         setIsPrivateRepo(true);
         setError(message.replace('PRIVATE_REPO:', ''));
         setStep('github-connect');
+      } else if (message.includes('Repository owner does not exist')) {
+        // Owner doesn't exist - URL is definitely wrong
+        setError(message);
+        setIsPrivateRepo(false);
       } else {
         setError(message);
       }
@@ -266,20 +270,22 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
       </div>
 
-      {/* Error popup overlay */}
+        {/* Error popup overlay */}
       {error && !isPrivateRepo && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
             <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Unable to Access Repository</h3>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">
+              {error.includes('owner does not exist') ? 'Invalid Repository URL' : 'Unable to Access Repository'}
+            </h3>
             <p className="text-slate-500 mb-8">{error}</p>
             <button
               onClick={onCancel}
               className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-medium transition-colors shadow-lg"
             >
-              Try Another Repo
+              {error.includes('owner does not exist') ? 'Check URL Spelling' : 'Try Another Repo'}
             </button>
           </div>
         </div>

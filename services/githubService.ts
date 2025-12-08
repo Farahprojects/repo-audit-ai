@@ -93,20 +93,25 @@ export const fetchRepoStats = async (
   if (data?.error) {
     console.log('⚠️ [fetchRepoStats] Structured error response:', data);
 
-    // Handle rate limit
+    // Handle specific error codes with deterministic logic
     if (data.errorCode === 'RATE_LIMIT') {
       throw new Error('GitHub API rate limit exceeded. Please try again later.');
     }
 
-    // Handle structured error responses from edge function
-    if (data.requiresAuth) {
-      // User already authenticated but still got error = definitely doesn't exist
-      if (accessToken) {
-        console.log('🔐 [fetchRepoStats] User authenticated but repo not found - check spelling');
-        throw new Error('Repository not found. Please check the URL spelling and try again.');
-      }
-      
-      // User NOT authenticated - could be private repo, prompt for auth
+    if (data.errorCode === 'OWNER_NOT_FOUND') {
+      // Owner doesn't exist - URL is definitely wrong
+      console.log('❌ [fetchRepoStats] Owner does not exist - URL is wrong');
+      throw new Error('Repository owner does not exist. Please check the URL spelling.');
+    }
+
+    if (data.errorCode === 'PRIVATE_REPO') {
+      // Repo exists but is private - we already checked owner exists
+      console.log('🔐 [fetchRepoStats] Repo exists but is private');
+      throw new Error('PRIVATE_REPO:Repository exists but is private. Connect your GitHub account to access private repositories.');
+    }
+
+    // Handle legacy requiresAuth flag (fallback for any edge cases)
+    if (data.requiresAuth && !accessToken) {
       console.log('🔐 [fetchRepoStats] Unauthenticated - could be private repo');
       throw new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
     }

@@ -29,6 +29,14 @@ export class GitHubAPIClient {
         return this.request(`/repos/${owner}/${repo}/contents/${path}?ref=${branch}`);
     }
 
+    async fetchUser(owner: string) {
+        return this.request(`/users/${owner}`);
+    }
+
+    async fetchOrg(owner: string) {
+        return this.request(`/orgs/${owner}`);
+    }
+
     private async request(endpoint: string) {
         const response = await fetch(`${this.baseUrl}${endpoint}`, {
             headers: this.headers

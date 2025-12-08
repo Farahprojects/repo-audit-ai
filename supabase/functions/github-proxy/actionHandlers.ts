@@ -11,9 +11,26 @@ export async function handleStatsAction(client: GitHubAPIClient, owner: string, 
     console.log(`🔍 [github-proxy] Fetching stats for: ${owner}/${repo}`);
 
     try {
+        // First, check if the owner exists
+        const ownerExists = await checkOwnerExists(client, owner);
+        if (!ownerExists) {
+            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
+            return new Response(
+                JSON.stringify({
+                    error: 'Repository owner does not exist. Please check the URL spelling.',
+                    errorCode: 'OWNER_NOT_FOUND',
+                    requiresAuth: false,
+                    isDefinitelyMissing: true
+                }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Owner exists, now try to fetch repo
         const repoRes = await client.fetchRepo(owner, repo);
         const repoData = await repoRes.json();
 
+        // If we get here, repo exists and is public
         const langRes = await client.fetchLanguages(owner, repo);
         const langData = await langRes.json();
 
@@ -59,7 +76,7 @@ export async function handleStatsAction(client: GitHubAPIClient, owner: string, 
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     } catch (error) {
-        return handleError(error);
+        return handleError(error, owner, repo);
     }
 }
 
@@ -67,9 +84,26 @@ export async function handleFingerprintAction(client: GitHubAPIClient, owner: st
     console.log(`🔍 [github-proxy] Generating fingerprint for: ${owner}/${repo}`);
 
     try {
+        // First, check if the owner exists
+        const ownerExists = await checkOwnerExists(client, owner);
+        if (!ownerExists) {
+            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
+            return new Response(
+                JSON.stringify({
+                    error: 'Repository owner does not exist. Please check the URL spelling.',
+                    errorCode: 'OWNER_NOT_FOUND',
+                    requiresAuth: false,
+                    isDefinitelyMissing: true
+                }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Owner exists, now try to fetch repo
         const repoRes = await client.fetchRepo(owner, repo);
         const repoData = await repoRes.json();
 
+        // If we get here, repo exists and is accessible
         const langRes = await client.fetchLanguages(owner, repo);
         const langData = await langRes.json();
 
@@ -92,15 +126,30 @@ export async function handleFingerprintAction(client: GitHubAPIClient, owner: st
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     } catch (error) {
-        return handleError(error);
+        return handleError(error, owner, repo);
     }
 }
 
 export async function handleContentAction(client: GitHubAPIClient, owner: string, repo: string, filePath: string, branch?: string) {
     console.log(`Fetching file: ${owner}/${repo}/${filePath}`);
-    const defaultBranch = branch || 'main';
 
     try {
+        // First, check if the owner exists
+        const ownerExists = await checkOwnerExists(client, owner);
+        if (!ownerExists) {
+            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
+            return new Response(
+                JSON.stringify({
+                    error: 'Repository owner does not exist. Please check the URL spelling.',
+                    errorCode: 'OWNER_NOT_FOUND',
+                    requiresAuth: false,
+                    isDefinitelyMissing: true
+                }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        const defaultBranch = branch || 'main';
         const fileRes = await client.fetchFile(owner, repo, filePath, defaultBranch);
         const fileData = await fileRes.json();
 
@@ -114,12 +163,27 @@ export async function handleContentAction(client: GitHubAPIClient, owner: string
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     } catch (error) {
-        return handleError(error);
+        return handleError(error, owner, repo);
     }
 }
 
 export async function handleTreeAction(client: GitHubAPIClient, owner: string, repo: string, branch?: string) {
     try {
+        // First, check if the owner exists
+        const ownerExists = await checkOwnerExists(client, owner);
+        if (!ownerExists) {
+            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
+            return new Response(
+                JSON.stringify({
+                    error: 'Repository owner does not exist. Please check the URL spelling.',
+                    errorCode: 'OWNER_NOT_FOUND',
+                    requiresAuth: false,
+                    isDefinitelyMissing: true
+                }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
         const repoRes = await client.fetchRepo(owner, repo);
         const repoData = await repoRes.json();
         const defaultBranch = branch || repoData.default_branch || 'main';
@@ -157,7 +221,7 @@ export async function handleTreeAction(client: GitHubAPIClient, owner: string, r
         );
 
     } catch (error) {
-        return handleError(error);
+        return handleError(error, owner, repo);
     }
 }
 
@@ -182,7 +246,24 @@ function detectTechStack(tree: any[]) {
     };
 }
 
-function handleError(error: any) {
+async function checkOwnerExists(client: GitHubAPIClient, owner: string): Promise<boolean> {
+    try {
+        // Try user endpoint first
+        await client.fetchUser(owner);
+        return true;
+    } catch (userError) {
+        try {
+            // If user endpoint fails, try org endpoint
+            await client.fetchOrg(owner);
+            return true;
+        } catch (orgError) {
+            // Both user and org endpoints failed - owner doesn't exist
+            return false;
+        }
+    }
+}
+
+function handleError(error: any, owner?: string, repo?: string) {
     console.error('GitHub Proxy Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
 
@@ -190,13 +271,13 @@ function handleError(error: any) {
     const statusMatch = message.match(/(\d{3})/);
     const statusCode = statusMatch ? parseInt(statusMatch[1]) : null;
 
-    console.log('[handleError] Parsing error:', { message, statusCode });
+    console.log('[handleError] Parsing error:', { message, statusCode, owner, repo });
 
     // Rate limit check
     if (message.includes('403') && message.includes('rate limit')) {
         return new Response(
-            JSON.stringify({ 
-                error: 'GitHub API rate limit exceeded',
+            JSON.stringify({
+                error: 'GitHub API rate limit exceeded. Please try again later.',
                 errorCode: 'RATE_LIMIT',
                 requiresAuth: false,
                 isDefinitelyMissing: false
@@ -205,32 +286,51 @@ function handleError(error: any) {
         );
     }
 
-    // Determine error type and structured response
+    // If we have owner/repo context and status is 404, we can be more specific
+    if (owner && repo && statusCode === 404) {
+        console.log(`[handleError] 404 for ${owner}/${repo} - this is a private repo (owner was already validated)`);
+        return new Response(
+            JSON.stringify({
+                error: `Repository "${owner}/${repo}" exists but is private. Connect your GitHub account to access private repositories.`,
+                errorCode: 'PRIVATE_REPO',
+                requiresAuth: true,
+                isDefinitelyMissing: false
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+
+    // Handle other error types
     let errorCode = 'UNKNOWN';
     let requiresAuth = false;
     let isDefinitelyMissing = false;
+    let errorMessage = message;
 
-    if (statusCode === 404) {
-        // 404 could be private OR misspelled - can't know without auth
+    if (statusCode === 404 && !owner) {
+        // 404 without owner context - could be anything
         errorCode = 'GITHUB_404';
+        errorMessage = 'Repository not found. Please check the URL spelling or connect your GitHub account for private repositories.';
         requiresAuth = true;
         isDefinitelyMissing = false;
     } else if (statusCode === 401) {
         errorCode = 'GITHUB_401';
+        errorMessage = 'Authentication required. Please connect your GitHub account.';
         requiresAuth = true;
         isDefinitelyMissing = false;
     } else if (statusCode === 403) {
         errorCode = 'GITHUB_403';
+        errorMessage = 'Access forbidden. This might be a private repository or you may have exceeded your API limits.';
         requiresAuth = true;
         isDefinitelyMissing = false;
     } else if (statusCode) {
         errorCode = `GITHUB_${statusCode}`;
+        errorMessage = `GitHub API error: ${message}`;
     }
 
     // Always return 200 OK with structured error data
     return new Response(
-        JSON.stringify({ 
-            error: message,
+        JSON.stringify({
+            error: errorMessage,
             errorCode,
             requiresAuth,
             isDefinitelyMissing
