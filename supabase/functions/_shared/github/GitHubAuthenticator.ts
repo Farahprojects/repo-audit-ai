@@ -1,3 +1,5 @@
+// @ts-ignore - Deno types are available at runtime in Supabase Edge Functions
+declare const Deno: { env: { get(key: string): string | undefined } };
 
 export class GitHubAuthenticator {
     private static instance: GitHubAuthenticator;
@@ -51,7 +53,8 @@ export class GitHubAuthenticator {
             }
 
             if (userId) {
-                // Import Supabase client
+                // Import Supabase client - @ts-ignore for ESM URL imports
+                // @ts-ignore
                 const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
                 const supabase = createClient(
                     Deno.env.get('SUPABASE_URL')!,
