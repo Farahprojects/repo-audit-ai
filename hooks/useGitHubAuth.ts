@@ -153,57 +153,115 @@ export function useGitHubAuth() {
                     clearInterval(checkClosed);
                     clearTimeout(timeout);
                     window.removeEventListener('message', messageHandler);
+                    window.removeEventListener('storage', storageHandler);
                 };
 
-                // Listen for postMessage from popup (primary mechanism)
+                const handleSuccess = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    cleanup();
+                    popup.close();
+                    console.log('✅ [useGitHubAuth] OAuth success');
+                    
+                    fetchGitHubAccount().then(() => {
+                        setState(prev => ({ ...prev, isConnecting: false, error: null }));
+                        resolve({ success: true });
+                    });
+                };
+
+                const handleError = (errorMsg: string) => {
+                    if (resolved) return;
+                    resolved = true;
+                    cleanup();
+                    popup.close();
+                    console.error('❌ [useGitHubAuth] OAuth error:', errorMsg);
+                    setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
+                    resolve({ success: false, error: errorMsg });
+                };
+
+                // Method 1: Listen for postMessage from popup
                 const messageHandler = (event: MessageEvent) => {
                     if (resolved) return;
-                    
                     if (event.data?.type === 'github-oauth-success') {
-                        resolved = true;
-                        cleanup();
-                        popup.close();
-                        console.log('✅ [useGitHubAuth] OAuth success via postMessage');
-                        
-                        // Refetch GitHub account then resolve
-                        fetchGitHubAccount().then(() => {
-                            setState(prev => ({ ...prev, isConnecting: false, error: null }));
-                            resolve({ success: true });
-                        });
+                        handleSuccess();
                     } else if (event.data?.type === 'github-oauth-error') {
-                        resolved = true;
-                        cleanup();
-                        popup.close();
-                        const errorMsg = event.data.message || 'Failed to connect GitHub account';
-                        console.error('❌ [useGitHubAuth] OAuth error via postMessage:', errorMsg);
-                        setState(prev => ({ ...prev, isConnecting: false, error: errorMsg }));
-                        resolve({ success: false, error: errorMsg });
+                        handleError(event.data.message || 'Failed to connect GitHub account');
+                    }
+                };
+
+                // Method 2: Listen for localStorage changes (fallback for cross-origin)
+                const storageHandler = (event: StorageEvent) => {
+                    if (resolved) return;
+                    if (event.key === 'github_oauth_result' && event.newValue) {
+                        try {
+                            const result = JSON.parse(event.newValue);
+                            localStorage.removeItem('github_oauth_result'); // Clean up
+                            
+                            if (result.type === 'github-oauth-success') {
+                                handleSuccess();
+                            } else if (result.type === 'github-oauth-error') {
+                                handleError(result.message || 'Failed to connect GitHub account');
+                            }
+                        } catch (e) {
+                            console.error('[useGitHubAuth] Failed to parse storage result:', e);
+                        }
                     }
                 };
 
                 window.addEventListener('message', messageHandler);
+                window.addEventListener('storage', storageHandler);
+
+                // Check for existing localStorage result (in case storage event was missed)
+                const checkLocalStorage = () => {
+                    if (resolved) return;
+                    const stored = localStorage.getItem('github_oauth_result');
+                    if (stored) {
+                        try {
+                            const result = JSON.parse(stored);
+                            localStorage.removeItem('github_oauth_result');
+                            
+                            if (result.type === 'github-oauth-success') {
+                                handleSuccess();
+                            } else if (result.type === 'github-oauth-error') {
+                                handleError(result.message || 'Failed to connect GitHub account');
+                            }
+                        } catch (e) {
+                            console.error('[useGitHubAuth] Failed to parse stored result:', e);
+                        }
+                    }
+                };
 
                 // Fallback: check if popup closed manually (user cancelled)
                 const checkClosed = setInterval(() => {
                     if (resolved) return;
                     
+                    // Also check localStorage periodically
+                    checkLocalStorage();
+                    
                     if (popup.closed) {
-                        resolved = true;
-                        cleanup();
-                        console.log('⚠️ [useGitHubAuth] Popup closed without postMessage, checking account...');
-                        
-                        // Check if connection was successful by refetching GitHub account
-                        fetchGitHubAccount().then(() => {
-                            setState(prev => {
-                                const wasSuccessful = prev.isConnected;
-                                if (wasSuccessful) {
-                                    resolve({ success: true });
-                                } else {
-                                    resolve({ success: false, error: 'Authorization cancelled or failed' });
-                                }
-                                return { ...prev, isConnecting: false };
-                            });
-                        });
+                        // Give a brief moment for storage events to fire
+                        setTimeout(() => {
+                            if (resolved) return;
+                            checkLocalStorage();
+                            
+                            if (!resolved) {
+                                resolved = true;
+                                cleanup();
+                                console.log('⚠️ [useGitHubAuth] Popup closed, checking account...');
+                                
+                                fetchGitHubAccount().then(() => {
+                                    setState(prev => {
+                                        const wasSuccessful = prev.isConnected;
+                                        if (wasSuccessful) {
+                                            resolve({ success: true });
+                                        } else {
+                                            resolve({ success: false, error: 'Authorization cancelled or failed' });
+                                        }
+                                        return { ...prev, isConnecting: false };
+                                    });
+                                });
+                            }
+                        }, 300);
                     }
                 }, 500);
 
