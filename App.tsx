@@ -162,6 +162,7 @@ const App: React.FC = () => {
     const stats: AuditStats = {
       files: issues.length > 0 ? Math.max(...issues.map((i: any) => i.filePath ? 1 : 0).concat([1])) : 1,
       tokens: 'N/A',
+      size: 'N/A',
       language: 'Mixed',
       languagePercent: 100
     };
