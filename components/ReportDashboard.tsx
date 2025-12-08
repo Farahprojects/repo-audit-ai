@@ -3,22 +3,24 @@ import ReactDOM from 'react-dom';
 import { RepoReport, AuditRecord } from '../types';
 import IssueCard from './IssueCard';
 import { Download, Share2, GitBranch, Check, FileText, Star, AlertTriangle, User, FileQuestion, Shield, Zap, Database, FileCode, Rocket, Wrench, FolderTree, ChevronDown, TrendingUp, Layers, Plus, Clock } from 'lucide-react';
+import { DeepAuditUpsell } from './DeepAuditUpsell';
+import { UniversalConnectModal, ConnectProvider } from './UniversalConnectModal';
 import { TIERS, AuditTier, TierUpsellPanel } from './TierBadges';
 
 interface ReportDashboardProps {
   data: RepoReport;
   relatedAudits: AuditRecord[];
   onRestart: () => void;
-  onRunTier?: (tier: AuditTier, repoUrl: string) => void;
+  onRunTier?: (tier: AuditTier, repoUrl: string, config?: any) => void;
   onSelectAudit?: (audit: AuditRecord) => void;
 }
 
-const ReportDashboard: React.FC<ReportDashboardProps> = ({ 
-  data, 
-  relatedAudits, 
-  onRestart, 
-  onRunTier, 
-  onSelectAudit 
+const ReportDashboard: React.FC<ReportDashboardProps> = ({
+  data,
+  relatedAudits,
+  onRestart,
+  onRunTier,
+  onSelectAudit
 }) => {
   // Group audits by tier
   const auditsByTier = useMemo(() => {
@@ -43,6 +45,10 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
   const [upgradesDropdownOpen, setUpgradesDropdownOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [pendingDeepAuditTier, setPendingDeepAuditTier] = useState<string | null>(null);
+  const [pendingProvider, setPendingProvider] = useState<ConnectProvider>('generic');
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const upgradesButtonRef = useRef<HTMLButtonElement>(null);
   const tierButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -115,6 +121,20 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleRunDeepAudit = (tierId: string, provider: string) => {
+    setPendingDeepAuditTier(tierId);
+    setPendingProvider(provider as ConnectProvider);
+    setIsConnectModalOpen(true);
+  };
+
+  const handleConnectSubmit = (config: any) => {
+    if (onRunTier && pendingDeepAuditTier) {
+      onRunTier(pendingDeepAuditTier as AuditTier, `https://github.com/${data.repoName}`, config);
+    }
+    setIsConnectModalOpen(false);
+    setPendingDeepAuditTier(null);
+  };
+
   const handleExportCSV = () => {
     const headers = ['ID', 'Title', 'Severity', 'Category', 'File Path', 'Line Number', 'Description'];
     const rows = data.issues.map(issue => [
@@ -139,6 +159,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
 
   // Get tiers that haven't been run yet
   const uncompletedTiers = TIERS.filter(t => !completedTiers.includes(t.id));
+
 
   const riskBadgeColor: Record<string, string> = {
     critical: 'bg-red-100 text-red-700 border-red-200',
@@ -200,24 +221,22 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
                 const Icon = tier.icon;
                 const auditCount = auditsByTier[tier.id]?.length || 0;
                 const isActive = activeTier === tier.id;
-                
+
                 return (
                   <button
                     key={tier.id}
                     ref={(el) => { tierButtonRefs.current[tier.id] = el; }}
                     onClick={(e) => handleTierClick(tier.id, e.currentTarget)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${
-                      isActive
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${isActive
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                      }`}
                   >
                     <Icon className="w-4 h-4" />
                     {tier.shortName}
                     {auditCount > 1 && (
-                      <span className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-                      }`}>
+                      <span className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}>
                         <Clock className="w-2.5 h-2.5" />
                         {auditCount}
                       </span>
@@ -233,11 +252,10 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
                   <button
                     ref={upgradesButtonRef}
                     onClick={handleUpgradesClick}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${
-                      upgradesDropdownOpen
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${upgradesDropdownOpen
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                      }`}
                   >
                     <Plus className="w-4 h-4" />
                     Add Audit Type
@@ -398,6 +416,14 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
                 </div>
               ) : null}
 
+              {/* Deep Audit Upsell - Only if onRunTier is available */}
+              {onRunTier && (
+                <DeepAuditUpsell
+                  report={data}
+                  onRunDeepAudit={handleRunDeepAudit}
+                />
+              )}
+
               {/* Category Assessments */}
               {data.categoryAssessments && (
                 <div className="animate-fade-in">
@@ -522,11 +548,10 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
                   onSelectAudit?.(audit);
                   setHistoryDropdownOpen(null);
                 }}
-                className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-left ${
-                  isCurrentAudit 
-                    ? 'bg-slate-100' 
-                    : 'hover:bg-slate-50'
-                }`}
+                className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-left ${isCurrentAudit
+                  ? 'bg-slate-100'
+                  : 'hover:bg-slate-50'
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   {isCurrentAudit && <Check className="w-4 h-4 text-emerald-500" />}
@@ -536,10 +561,9 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
                     </span>
                   </div>
                 </div>
-                <span className={`text-sm font-semibold ${
-                  (audit.health_score || 0) > 80 ? 'text-emerald-600' :
+                <span className={`text-sm font-semibold ${(audit.health_score || 0) > 80 ? 'text-emerald-600' :
                   (audit.health_score || 0) > 60 ? 'text-amber-600' : 'text-red-600'
-                }`}>
+                  }`}>
                   {audit.health_score || 0}/100
                 </span>
               </button>
@@ -603,9 +627,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
                   }}
                   className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors text-left group"
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                    isCompleted ? 'bg-emerald-100 group-hover:bg-emerald-200' : 'bg-slate-100 group-hover:bg-slate-200'
-                  }`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isCompleted ? 'bg-emerald-100 group-hover:bg-emerald-200' : 'bg-slate-100 group-hover:bg-slate-200'
+                    }`}>
                     <Icon className={`w-5 h-5 ${isCompleted ? 'text-emerald-600' : 'text-slate-600'}`} />
                   </div>
                   <div className="flex-1">
@@ -626,6 +649,12 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
         </div>,
         document.body
       )}
+      {/* Modal */}
+      <SupabaseConnectModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
+        onSubmit={handleConnectSubmit}
+      />
     </div>
   );
 };

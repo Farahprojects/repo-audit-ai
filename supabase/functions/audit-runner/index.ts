@@ -9,6 +9,7 @@ import { runPlanner } from '../_shared/agents/planner.ts';
 import { runWorker } from '../_shared/agents/worker.ts';
 import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
+import { detectCapabilities } from './capabilities.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,7 +66,7 @@ serve(async (req) => {
       /^https:\/\/raw\.githubusercontent\.com\//,
       /^https:\/\/api\.github\.com\//,
     ];
-    
+
     const invalidFiles = files.filter((f: any) => {
       if (!f.url) return false; // Files without URLs will be fetched later
       return !allowedUrlPatterns.some(pattern => pattern.test(f.url));
@@ -99,8 +100,14 @@ serve(async (req) => {
     console.log(`📄 Files: ${files.length}`);
     console.log(`${'='.repeat(60)}\n`);
 
+
     // Initialize Context (Metadata Only)
     // Front-end now sends fileMap (path/size/url), no content
+
+    // Detect Capabilities based on file list
+    const detectedStack = detectCapabilities(files);
+    console.log('🕵️ Detected Stack:', detectedStack);
+
     const context: AuditContext = {
       repoUrl,
       files: files.map(f => ({
@@ -111,8 +118,10 @@ serve(async (req) => {
         content: undefined,
         url: f.url
       })),
-      tier
+      tier,
+      detectedStack // Pass to agents if needed, but mainly for response
     };
+
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 STARTING "CEO BRAIN" AUDIT`);
@@ -227,7 +236,8 @@ serve(async (req) => {
         meta: {
           planValues: plan,
           swarmCount: swarmResults.length,
-          duration: durationMs
+          duration: durationMs,
+          detectedStack // Return to frontend
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

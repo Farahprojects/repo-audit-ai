@@ -18,11 +18,13 @@ export const generateAuditReport = async (
   fileMap: any[], // Was fileContents
   tier: string = 'shape',
   fullRepoUrl?: string, // Add optional full URL parameter
-  estimatedTokens?: number // Add estimated tokens parameter
+  estimatedTokens?: number, // Add estimated tokens parameter
+  config?: any // Add optional config for deep audits
 ): Promise<RepoReport & { tierData?: any }> => {
 
   // Map frontend tier to backend tier
-  const backendTier = TIER_MAPPING[tier] || 'shape';
+  // If tier is specific (like supabase_deep_dive), use it directly if not in mapping, or add to mapping.
+  const backendTier = TIER_MAPPING[tier] || tier;
 
   // Call Supabase edge function instead of direct API
   const { data, error } = await supabase.functions.invoke('audit-runner', {
@@ -30,7 +32,8 @@ export const generateAuditReport = async (
       repoUrl: fullRepoUrl || `https://github.com/${repoName}`,
       files: fileMap, // Send the MAP, not the content
       tier: backendTier,
-      estimatedTokens
+      estimatedTokens,
+      config // Pass extra config
     }
   });
 

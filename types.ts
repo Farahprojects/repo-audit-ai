@@ -88,6 +88,15 @@ export interface RepoReport {
   riskLevel?: 'critical' | 'high' | 'medium' | 'low';
   tier?: string;
   auditId?: string;
+  detectedStack?: {
+    supabase: boolean;
+    firebase: boolean;
+    prisma: boolean;
+    drizzle: boolean;
+    neon: boolean;
+    graphql: boolean;
+    hasDockerfile: boolean;
+  };
 }
 
 export interface ComplexityFingerprint {

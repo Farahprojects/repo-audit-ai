@@ -32,6 +32,7 @@ const App: React.FC = () => {
   const [relatedAudits, setRelatedAudits] = useState<AuditRecord[]>([]);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [pendingRepoUrl, setPendingRepoUrl] = useState<string | null>(null);
+  const [auditConfig, setAuditConfig] = useState<any>(null);
 
   // Real-time Scanner State
   const [scannerLogs, setScannerLogs] = useState<string[]>([]);
@@ -141,12 +142,16 @@ const App: React.FC = () => {
           'security': 'security',
           'shape': 'shape',
           'conventions': 'conventions',
+          'supabase_deep_dive': 'supabase_deep_dive',
         };
         const backendTier = tierMapping[tier] || 'shape';
         estimatedTokens = CostEstimator.estimateTokens(backendTier as any, stats.fingerprint);
       }
 
-      const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier, repoUrl, estimatedTokens);
+      const report = await generateAuditReport(repoInfo.repo, stats, fileMap, tier, repoUrl, estimatedTokens, auditConfig);
+
+      // Clear config
+      setAuditConfig(null);
 
       addLog(`[Success] Report generated successfully.`);
       addLog(`[System] Finalizing health score: ${report.healthScore}/100`);
@@ -159,16 +164,16 @@ const App: React.FC = () => {
       };
 
       setReportData(enrichedReport);
-      
+
       // Fetch all audits for this repo to populate tier navigation
       const { data: allAudits } = await supabase
         .from('audits')
         .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
         .eq('repo_url', repoUrl)
         .order('created_at', { ascending: false });
-      
+
       setRelatedAudits(allAudits || []);
-      
+
       // Short delay to let user see 100%
       setTimeout(() => setView('report'), 1000);
 
@@ -387,8 +392,9 @@ const App: React.FC = () => {
             relatedAudits={relatedAudits}
             onRestart={handleRestart}
             onSelectAudit={handleSelectAudit}
-            onRunTier={(tier, url) => {
+            onRunTier={(tier, url, config) => {
               setRepoUrl(url);
+              if (config) setAuditConfig(config);
               setPreviousView('report');
               setView('preflight');
             }}

@@ -11,6 +11,15 @@ export interface AuditContext {
     repoUrl: string;
     files: FileNode[];
     tier: string;
+    detectedStack?: {
+        supabase: boolean;
+        firebase: boolean;
+        prisma: boolean;
+        drizzle: boolean;
+        neon: boolean;
+        graphql: boolean;
+        hasDockerfile: boolean;
+    };
     metadata?: any;
 }
 
