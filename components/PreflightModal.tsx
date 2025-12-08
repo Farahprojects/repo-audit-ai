@@ -25,7 +25,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   const [step, setStep] = useState<ModalStep>('analysis');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isPrivateRepo, setIsPrivateRepo] = useState(false);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [fingerprint, setFingerprint] = useState<ComplexityFingerprint | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +43,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     setIsLoading(true);
     setLoading(true);
     setError(null);
-    setIsPrivateRepo(false);
 
     const repoInfo = parseGitHubUrl(repoUrl);
     if (!repoInfo) {
@@ -54,11 +52,20 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     }
 
     try {
-      const [statsData, fingerprintData] = await Promise.all([
-        fetchRepoStats(repoInfo.owner, repoInfo.repo, token),
-        fetchRepoFingerprint(repoInfo.owner, repoInfo.repo, token)
-      ]);
+      // SEQUENTIAL FETCH STRATEGY
+      // Try stats first - acts as access check for private repos
+      // If this throws PRIVATE_REPO error, we catch it below and show modal
+      // If successful, then fetch fingerprint for cost estimation
+      console.log('📊 [PreflightModal] Fetching repo stats (access check)...');
+      const statsData = await fetchRepoStats(repoInfo.owner, repoInfo.repo, token);
+      console.log('✅ [PreflightModal] Stats fetched successfully, repo is accessible');
 
+      // If we got here, repo is accessible - now get fingerprint for cost estimation
+      console.log('🔍 [PreflightModal] Fetching fingerprint for cost calculation...');
+      const fingerprintData = await fetchRepoFingerprint(repoInfo.owner, repoInfo.repo, token);
+      console.log('✅ [PreflightModal] Fingerprint fetched successfully');
+
+      // Both succeeded - proceed with tier selection
       setStats({ ...statsData, fingerprint: fingerprintData });
       setFingerprint(fingerprintData);
       setStep('selection');
@@ -81,13 +88,14 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       if (message.includes('PRIVATE_REPO:')) {
         // Private repo detected - show GitHub connect modal, NO error message
         console.log('🔐 [PreflightModal] Private repo detected, opening GitHub connect modal');
-        setIsPrivateRepo(true);
         setStep('github-connect');
         setError(null);
+        setLoading(false); // Stop loading immediately to show modal
+        setIsLoading(false);
+        return; // Exit early, skip finally block
       } else if (message.includes('Repository owner does not exist')) {
         // Owner doesn't exist - URL is definitely wrong
         setError(message);
-        setIsPrivateRepo(false);
       } else {
         setError(message);
       }
@@ -138,9 +146,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
   // IMPORTANT: Check for github-connect step FIRST, before loading check
   // This ensures the connect modal shows even if loading state hasn't fully resolved
-  console.log('🔍 [PreflightModal] Render state:', { step, isPrivateRepo, error, loading });
+  console.log('🔍 [PreflightModal] Render state:', { step, error, loading });
 
-  if (step === 'github-connect' && isPrivateRepo) {
+  if (step === 'github-connect') {
     console.log('🎯 [PreflightModal] Showing GitHubConnectModal');
     return (
       <GitHubConnectModal
@@ -278,8 +286,8 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
       </div>
 
-        {/* Error popup overlay */}
-      {error && !isPrivateRepo && (
+      {/* Error popup overlay */}
+      {error && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
             <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
