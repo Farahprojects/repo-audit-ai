@@ -135,19 +135,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     return fallback;
   };
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-xl">
-        <div className="flex flex-col items-center">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-primary rounded-full animate-spin mb-6"></div>
-          <p className="text-slate-900 font-bold text-lg">Scanning Structure...</p>
-          <p className="text-slate-500 text-sm">Fetching manifest files</p>
-        </div>
-      </div>
-    );
-  }
-
-  console.log('🔍 [PreflightModal] Render state:', { step, isPrivateRepo, error });
+  // IMPORTANT: Check for github-connect step FIRST, before loading check
+  // This ensures the connect modal shows even if loading state hasn't fully resolved
+  console.log('🔍 [PreflightModal] Render state:', { step, isPrivateRepo, error, loading });
 
   if (step === 'github-connect' && isPrivateRepo) {
     console.log('🎯 [PreflightModal] Showing GitHubConnectModal');
@@ -158,6 +148,18 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
         onCancel={onCancel}
         isConnecting={isConnecting}
       />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-xl">
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-primary rounded-full animate-spin mb-6"></div>
+          <p className="text-slate-900 font-bold text-lg">Scanning Structure...</p>
+          <p className="text-slate-500 text-sm">Fetching manifest files</p>
+        </div>
+      </div>
     );
   }
 
