@@ -114,8 +114,7 @@ export class AuditService {
   }
 
   // Process historical audit data
-  static processHistoricalAudit(audit: Tables<'audits'> & { extra_data?: any }): { report: RepoReport; relatedAudits: AuditRecord[] } {
-    return new Promise(async (resolve) => {
+  static async processHistoricalAudit(audit: Tables<'audits'> & { extra_data?: any }): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {
       const issues = (audit.issues as unknown as Issue[]) || [];
       const repoName = audit.repo_url.split('/').slice(-2).join('/');
       const extraData = audit.extra_data || {};
@@ -154,8 +153,7 @@ export class AuditService {
         auditId: audit.id,
       };
 
-      resolve({ report, relatedAudits: allAudits || [] });
-    });
+    return { report, relatedAudits: allAudits || [] };
   }
 
   // Process selected audit from history

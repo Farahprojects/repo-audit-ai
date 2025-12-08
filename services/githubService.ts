@@ -91,58 +91,28 @@ export const fetchRepoStats = async (
   }
 
   if (data?.error) {
-    console.log('⚠️ [fetchRepoStats] Data contains error:', data.error);
-    console.log('🔍 [fetchRepoStats] Analyzing error type...');
+    console.log('⚠️ [fetchRepoStats] Structured error response:', data);
 
-    if (data.error.includes('rate limit')) {
-      console.log('⏱️ [fetchRepoStats] Rate limit detected');
+    // Handle rate limit
+    if (data.errorCode === 'RATE_LIMIT') {
       throw new Error('GitHub API rate limit exceeded. Please try again later.');
     }
 
-    // Check for specific HTTP status codes in the error message
-    const statusMatch = data.error.match(/Repository not found: (\d+)/);
-    const statusCode = statusMatch ? parseInt(statusMatch[1]) : null;
-
-    console.log('🔍 [fetchRepoStats] Error analysis:', {
-      originalError: data.error,
-      extractedStatusCode: statusCode,
-      hasAuthToken: !!accessToken
-    });
-
-    if (statusCode) {
-      switch (statusCode) {
-        case 401:
-          console.log('🔐 [fetchRepoStats] 401 Unauthorized - could be private repo or invalid auth');
-          // 401 can mean: repo is private, bad credentials, or repo doesn't exist
-          throw new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
-
-        case 403:
-          console.log('🚫 [fetchRepoStats] 403 Forbidden - access denied');
-          throw new Error('PRIVATE_REPO:Access denied to repository. You may need to connect your GitHub account.');
-
-        case 404:
-          console.log('❌ [fetchRepoStats] 404 Not Found - repository doesn\'t exist');
-          throw new Error('Repository not found. Please check the URL and try again.');
-
-        default:
-          console.log(`❓ [fetchRepoStats] Other status ${statusCode}`);
-          throw new Error(`GitHub API error (${statusCode}). Please try again.`);
+    // Handle structured error responses from edge function
+    if (data.requiresAuth) {
+      // User already authenticated but still got error = definitely doesn't exist
+      if (accessToken) {
+        console.log('🔐 [fetchRepoStats] User authenticated but repo not found - check spelling');
+        throw new Error('Repository not found. Please check the URL spelling and try again.');
       }
-    }
-
-    // Fallback for errors without status codes
-    const isPrivateError = data.error.includes('404') || data.error.includes('401') || data.error.includes('403') || data.error.includes('Not Found') || data.error.includes('Forbidden');
-    console.log('🔐 [fetchRepoStats] Fallback private repo check:', {
-      error: data.error,
-      isPrivateError
-    });
-
-    if (isPrivateError) {
-      console.log('🔐 [fetchRepoStats] Treating as private/access error');
+      
+      // User NOT authenticated - could be private repo, prompt for auth
+      console.log('🔐 [fetchRepoStats] Unauthenticated - could be private repo');
       throw new Error('PRIVATE_REPO:Repository not found or private. Connect GitHub to access private repos.');
     }
 
-    console.log('❌ [fetchRepoStats] Throwing generic error:', data.error);
+    // Generic error fallback
+    console.log('❌ [fetchRepoStats] Generic error:', data.error);
     throw new Error(data.error);
   }
 

@@ -1,6 +1,6 @@
-
 export type ViewState = 'landing' | 'pricing' | 'about' | 'contact' | 'dashboard' | 'preflight' | 'scanning' | 'report';
 
+export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security' | 'supabase_deep_dive';
 export type Severity = 'Critical' | 'Warning' | 'Info' | 'Clean';
 
 export type Category = 'Security' | 'Performance' | 'Architecture';
