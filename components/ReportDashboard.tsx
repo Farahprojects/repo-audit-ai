@@ -74,8 +74,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
   }, [data.tier, data.auditId]);
 
   const handleTierClick = (tierId: string, buttonElement: HTMLButtonElement) => {
-    // If clicking on the active tier, toggle history dropdown
-    if (tierId === activeTier && auditsByTier[tierId]?.length > 1) {
+    // If clicking on the active tier, toggle history dropdown (always show for completed tiers)
+    if (tierId === activeTier && auditsByTier[tierId]?.length > 0) {
       const rect = buttonElement.getBoundingClientRect();
       setDropdownPosition({
         top: rect.bottom + window.scrollY + 4,
@@ -222,15 +222,13 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
                         {auditCount}
                       </span>
                     )}
-                    {auditCount > 1 && (
-                      <ChevronDown className={`w-3 h-3 transition-transform ${historyDropdownOpen === tier.id ? 'rotate-180' : ''}`} />
-                    )}
+                    <ChevronDown className={`w-3 h-3 transition-transform ${historyDropdownOpen === tier.id ? 'rotate-180' : ''}`} />
                   </button>
                 );
               })}
 
-              {/* Run New Tier Button */}
-              {onRunTier && uncompletedTiers.length > 0 && (
+              {/* Add Audit Type Button - Shows all tiers */}
+              {onRunTier && (
                 <div className="relative inline-block ml-1">
                   <button
                     ref={upgradesButtonRef}
@@ -242,7 +240,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
                     }`}
                   >
                     <Plus className="w-4 h-4" />
-                    Run New Tier
+                    Add Audit Type
                     <ChevronDown className={`w-3 h-3 transition-transform ${upgradesDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
@@ -451,11 +449,11 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
         </div>
       </main>
 
-      {/* History Dropdown Portal */}
+      {/* History Dropdown Portal - with Re-run option */}
       {historyDropdownOpen && dropdownPosition && auditsByTier[historyDropdownOpen] && ReactDOM.createPortal(
         <div
           ref={dropdownRef}
-          className="fixed w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-[9999] p-2 max-h-80 overflow-y-auto"
+          className="fixed w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-[9999] p-2 max-h-96 overflow-y-auto"
           style={{
             top: dropdownPosition.top,
             left: dropdownPosition.left,
@@ -464,7 +462,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
           <div className="text-xs font-medium text-slate-500 px-3 py-2 border-b border-slate-100 mb-1">
             Audit History
           </div>
-          {auditsByTier[historyDropdownOpen].map((audit, index) => {
+          {auditsByTier[historyDropdownOpen].map((audit) => {
             const isCurrentAudit = audit.id === data.auditId;
             return (
               <button
@@ -496,28 +494,84 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
               </button>
             );
           })}
+          {/* Re-run audit button */}
+          {onRunTier && (
+            <>
+              <div className="border-t border-slate-100 my-2" />
+              {(() => {
+                const tier = TIERS.find(t => t.id === historyDropdownOpen);
+                if (!tier) return null;
+                const Icon = tier.icon;
+                return (
+                  <button
+                    onClick={() => {
+                      onRunTier(tier.id as AuditTier, `https://github.com/${data.repoName}`);
+                      setHistoryDropdownOpen(null);
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-emerald-50 transition-colors text-left group"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                      <Icon className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-slate-700 block">Run New Audit</span>
+                      <span className="text-xs text-slate-500">{tier.price}</span>
+                    </div>
+                  </button>
+                );
+              })()}
+            </>
+          )}
         </div>,
         document.body
       )}
 
-      {/* Upgrades Dropdown Portal */}
+      {/* Add Audit Type Dropdown Portal - Shows ALL tiers with checkmarks for completed */}
       {upgradesDropdownOpen && dropdownPosition && onRunTier && ReactDOM.createPortal(
         <div
           ref={dropdownRef}
-          className="fixed w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-[9999] p-4 max-h-96 overflow-y-auto"
+          className="fixed w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-[9999] p-3 max-h-96 overflow-y-auto"
           style={{
             top: dropdownPosition.top,
             left: dropdownPosition.left,
           }}
         >
-          <TierUpsellPanel
-            completedTiers={completedTiers}
-            repoUrl={`https://github.com/${data.repoName}`}
-            onRunTier={(tier) => {
-              onRunTier(tier, `https://github.com/${data.repoName}`);
-              setUpgradesDropdownOpen(false);
-            }}
-          />
+          <div className="text-xs font-medium text-slate-500 px-2 py-2 mb-1">
+            Select Audit Type
+          </div>
+          <div className="space-y-1">
+            {TIERS.map((tier) => {
+              const Icon = tier.icon;
+              const isCompleted = completedTiers.includes(tier.id);
+              return (
+                <button
+                  key={tier.id}
+                  onClick={() => {
+                    onRunTier(tier.id as AuditTier, `https://github.com/${data.repoName}`);
+                    setUpgradesDropdownOpen(false);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors text-left group"
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                    isCompleted ? 'bg-emerald-100 group-hover:bg-emerald-200' : 'bg-slate-100 group-hover:bg-slate-200'
+                  }`}>
+                    <Icon className={`w-5 h-5 ${isCompleted ? 'text-emerald-600' : 'text-slate-600'}`} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">{tier.name}</span>
+                      {isCompleted && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                          ✓ Run before
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-slate-500">{tier.price}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>,
         document.body
       )}
