@@ -211,21 +211,51 @@ serve(async (req) => {
       }
     }
 
+    // SURGICAL VALIDATION: Extract owner/repo from declared repoUrl
+    const repoMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s?#]+)/i);
+    if (!repoMatch) {
+      return createErrorResponse('Could not extract owner/repo from repoUrl', 400);
+    }
+    const [, declaredOwner, declaredRepo] = repoMatch;
+    const cleanRepo = declaredRepo.replace(/\.git$/, '');
+    
+    // Build case-insensitive pattern to match owner/repo in file URLs
+    const ownerRepoPattern = new RegExp(`/${declaredOwner}/${cleanRepo}/`, 'i');
+    
+    console.log(`🔒 URL Validation: Declared repo = ${declaredOwner}/${cleanRepo}`);
+    console.log(`🔒 First 3 file URLs:`, files.slice(0, 3).map((f: any) => f.url || f.path));
+
     // Validate all file URLs are from trusted GitHub domains
     const allowedUrlPatterns = [
       /^https:\/\/raw\.githubusercontent\.com\//,
       /^https:\/\/api\.github\.com\//,
     ];
 
-    const invalidFiles = files.filter((f: any) => {
-      if (!f.url) return false; // Files without URLs will be fetched later
-      if (typeof f.url !== 'string') return true;
-      return !allowedUrlPatterns.some(pattern => pattern.test(f.url));
-    });
-
-    if (invalidFiles.length > 0) {
-      console.warn(`Blocked request with invalid file URLs: ${invalidFiles.map((f: any) => f.url).join(', ')}`);
-      return createErrorResponse('Invalid file URLs detected. Only GitHub URLs are allowed.', 400);
+    // FAIL FAST: Check EVERY file URL matches the declared repository
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (!f.url) continue; // Files without URLs will be fetched later via path
+      if (typeof f.url !== 'string') {
+        return createErrorResponse(`File at index ${i} has invalid URL type`, 400);
+      }
+      
+      // Check domain is GitHub
+      if (!allowedUrlPatterns.some(pattern => pattern.test(f.url))) {
+        console.error(`🚨 SECURITY: Invalid domain in file URL at index ${i}: ${f.url}`);
+        return createErrorResponse('Invalid file URL domain. Only GitHub URLs are allowed.', 400);
+      }
+      
+      // CRITICAL: Check URL contains the declared owner/repo
+      if (!ownerRepoPattern.test(f.url)) {
+        console.error(`🚨 SECURITY: File URL does not match declared repo!`);
+        console.error(`   Declared: ${declaredOwner}/${cleanRepo}`);
+        console.error(`   File URL: ${f.url}`);
+        return createErrorResponse(
+          `Security Error: File URL at index ${i} does not match declared repository. ` +
+          `Expected: ${declaredOwner}/${cleanRepo}, Got URL: ${f.url.substring(0, 100)}`,
+          400
+        );
+      }
     }
 
     // Validate estimatedTokens if provided
