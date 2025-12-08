@@ -1,0 +1,123 @@
+
+export class GitHubAuthenticator {
+    private static instance: GitHubAuthenticator;
+
+    private constructor() { }
+
+    static getInstance(): GitHubAuthenticator {
+        if (!GitHubAuthenticator.instance) {
+            GitHubAuthenticator.instance = new GitHubAuthenticator();
+        }
+        return GitHubAuthenticator.instance;
+    }
+
+    async getAuthenticatedToken(req: Request, owner?: string): Promise<string | null> {
+        const { userToken } = await req.clone().json().catch(() => ({}));
+
+        // 1. Check direct user token first
+        if (userToken) {
+            return userToken;
+        }
+
+        // 2. If no direct token, try to get it from the user's GitHub account via Supabase
+        if (owner) {
+            return this.retrieveStoredToken(req);
+        }
+
+        return null;
+    }
+
+    private async retrieveStoredToken(req: Request): Promise<string | null> {
+        try {
+            const authHeader = req.headers.get('authorization');
+            if (!authHeader) return null;
+
+            const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+
+            // Decode JWT to get user_id
+            let userId: string | null = null;
+            try {
+                const parts = token.split('.');
+                if (parts.length === 3) {
+                    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                    const paddedBase64 = base64 + '='.repeat((4 - base64.length % 4) % 4);
+                    const decoded = atob(paddedBase64);
+                    const payload = JSON.parse(decoded);
+                    userId = payload.sub;
+                }
+            } catch (e) {
+                console.error('Failed to decode JWT for user lookup');
+                return null;
+            }
+
+            if (userId) {
+                // Import Supabase client
+                const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+                const supabase = createClient(
+                    Deno.env.get('SUPABASE_URL')!,
+                    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+                );
+
+                // Get user's GitHub account
+                const { data: githubAccount, error } = await supabase
+                    .from('github_accounts')
+                    .select('access_token_encrypted')
+                    .eq('user_id', userId)
+                    .single();
+
+                if (!error && githubAccount) {
+                    return this.decryptToken(githubAccount.access_token_encrypted);
+                }
+            }
+        } catch (error) {
+            console.error('Error retrieving user GitHub token:', error);
+        }
+        return null;
+    }
+
+    private async decryptToken(encryptedToken: string): Promise<string | null> {
+        // Decrypt token server-side using dedicated encryption key
+        const secret = Deno.env.get('TOKEN_ENCRYPTION_KEY')!;
+
+        try {
+            const encoder = new TextEncoder();
+            const decoder = new TextDecoder();
+            const combined = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
+            const salt = combined.slice(0, 16);
+            const iv = combined.slice(16, 28);
+            const encrypted = combined.slice(28);
+
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(secret),
+                'PBKDF2',
+                false,
+                ['deriveBits', 'deriveKey']
+            );
+
+            const key = await crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['decrypt']
+            );
+
+            const decrypted = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                encrypted
+            );
+
+            return decoder.decode(decrypted);
+        } catch (decryptError) {
+            console.error('Failed to decrypt GitHub token:', decryptError);
+            return null;
+        }
+    }
+}
