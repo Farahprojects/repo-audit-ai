@@ -15,9 +15,7 @@ const ENV = {
   TOKEN_ENCRYPTION_KEY: Deno.env.get('TOKEN_ENCRYPTION_KEY')!,
   GITHUB_CLIENT_ID: Deno.env.get('GITHUB_CLIENT_ID')!,
   GITHUB_CLIENT_SECRET: Deno.env.get('GITHUB_CLIENT_SECRET')!,
-  GITHUB_OAUTH_CALLBACK_URL:
-    Deno.env.get('GITHUB_OAUTH_CALLBACK_URL') ||
-    `${Deno.env.get('SUPABASE_URL')}/functions/v1/github-oauth-callback`,
+  GITHUB_OAUTH_CALLBACK_URL: Deno.env.get('GITHUB_OAUTH_CALLBACK_URL')!,
   FRONTEND_URL: Deno.env.get('FRONTEND_URL')!,
 };
 
@@ -29,7 +27,10 @@ if (!ENV.FRONTEND_URL) {
   throw new Error('Missing FRONTEND_URL environment variable - required for OAuth redirects');
 }
 if (!ENV.GITHUB_CLIENT_ID || !ENV.GITHUB_CLIENT_SECRET) {
-  console.warn('⚠️ Missing GitHub OAuth credentials. OAuth flow will not work.');
+  throw new Error('Missing GitHub OAuth credentials (GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET)');
+}
+if (!ENV.GITHUB_OAUTH_CALLBACK_URL) {
+  throw new Error('Missing GITHUB_OAUTH_CALLBACK_URL environment variable');
 }
 
 const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
