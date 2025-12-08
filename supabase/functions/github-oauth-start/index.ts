@@ -13,10 +13,15 @@ const ENV = {
   SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   GITHUB_CLIENT_ID: Deno.env.get('GITHUB_CLIENT_ID')!,
-  GITHUB_OAUTH_CALLBACK_URL:
-    Deno.env.get('GITHUB_OAUTH_CALLBACK_URL') ||
-    `${Deno.env.get('SUPABASE_URL')}/functions/v1/github-oauth-callback`,
+  GITHUB_OAUTH_CALLBACK_URL: Deno.env.get('GITHUB_OAUTH_CALLBACK_URL')!,
 };
+
+// Log all env vars on startup for debugging
+console.log('[github-oauth-start] ENV check:', {
+  SUPABASE_URL: ENV.SUPABASE_URL ? 'SET' : 'MISSING',
+  GITHUB_CLIENT_ID: ENV.GITHUB_CLIENT_ID ? 'SET' : 'MISSING',
+  GITHUB_OAUTH_CALLBACK_URL: ENV.GITHUB_OAUTH_CALLBACK_URL || 'MISSING',
+});
 
 // Validate required env vars
 if (!ENV.SUPABASE_URL || !ENV.SUPABASE_SERVICE_ROLE_KEY) {
@@ -24,6 +29,9 @@ if (!ENV.SUPABASE_URL || !ENV.SUPABASE_SERVICE_ROLE_KEY) {
 }
 if (!ENV.GITHUB_CLIENT_ID) {
   throw new Error('Missing GITHUB_CLIENT_ID environment variable');
+}
+if (!ENV.GITHUB_OAUTH_CALLBACK_URL) {
+  throw new Error('Missing GITHUB_OAUTH_CALLBACK_URL environment variable - this must be set to your callback URL (e.g., http://localhost:8080)');
 }
 
 const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
