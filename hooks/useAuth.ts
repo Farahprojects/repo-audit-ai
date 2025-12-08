@@ -27,8 +27,28 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signOut = async (onCleanup?: () => void) => {
+    try {
+      // Clear all localStorage and sessionStorage
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+
+      // Call cleanup callback if provided (navigation, state reset, etc.)
+      if (onCleanup) {
+        onCleanup();
+      }
+    } catch (error) {
+      console.error('Error during sign out:', error);
+      // Still attempt to clear storage even if Supabase sign out fails
+      localStorage.clear();
+      sessionStorage.clear();
+      if (onCleanup) {
+        onCleanup();
+      }
+    }
   };
 
   // Return individual values to prevent unnecessary re-renders

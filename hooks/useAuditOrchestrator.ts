@@ -33,6 +33,20 @@ export const useAuditOrchestrator = ({
 
   const addLog = useCallback((msg: string) => setScannerLogs(prev => [...prev, msg]), []);
 
+  // Clear all audit state (used on logout)
+  const clearAuditState = useCallback(() => {
+    setRepoUrl('');
+    setAuditStats(null);
+    setFileMap([]);
+    setReportData(null);
+    setHistoricalReportData(null);
+    setRelatedAudits([]);
+    setPendingRepoUrl(null);
+    setAuditConfig(null);
+    setScannerLogs([]);
+    setScannerProgress(0);
+  }, []);
+
   // Restore pending repo URL from localStorage on app load
   useEffect(() => {
     const stored = localStorage.getItem('pendingRepoUrl');
@@ -161,5 +175,6 @@ export const useAuditOrchestrator = ({
     handleRestart,
     handleViewHistoricalReport,
     handleSelectAudit,
+    clearAuditState,
   };
 };

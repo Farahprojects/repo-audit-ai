@@ -61,6 +61,7 @@ interface AuditContextType {
   handleRestart: () => void;
   handleViewHistoricalReport: (audit: any) => Promise<void>;
   handleSelectAudit: (audit: AuditRecord) => void;
+  clearAuditState: () => void;
 }
 
 const AuditContext = createContext<AuditContextType | undefined>(undefined);
@@ -155,6 +156,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     handleRestart: auditOrchestrator.handleRestart,
     handleViewHistoricalReport: auditOrchestrator.handleViewHistoricalReport,
     handleSelectAudit: auditOrchestrator.handleSelectAudit,
+    clearAuditState: auditOrchestrator.clearAuditState,
   }), [
     auditOrchestrator.repoUrl,
     auditOrchestrator.setRepoUrl,
@@ -171,6 +173,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     auditOrchestrator.handleRestart,
     auditOrchestrator.handleViewHistoricalReport,
     auditOrchestrator.handleSelectAudit,
+    auditOrchestrator.clearAuditState,
   ]);
 
   const authFlowValue = useMemo(() => ({

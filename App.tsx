@@ -13,7 +13,7 @@ import { DashboardPage } from './components/DashboardPage';
 
 const AppContent: React.FC = () => {
   const { user, signOut } = useAuthContext();
-  const { view, previousView, navigate, isPublicPage, getSEO } = useRouterContext();
+  const { view, previousView, navigate, resetToLanding, isPublicPage, getSEO } = useRouterContext();
   const {
     repoUrl,
     setRepoUrl,
@@ -28,6 +28,7 @@ const AppContent: React.FC = () => {
     handleRestart,
     handleViewHistoricalReport,
     handleSelectAudit,
+    clearAuditState,
   } = useAuditContext();
   const { isAuthOpen, handleSoftStart, openAuthModal, closeAuthModal } = useAuthFlowContext();
 
@@ -40,6 +41,16 @@ const AppContent: React.FC = () => {
       // If not authenticated, use auth flow
       handleSoftStart(url);
     }
+  };
+
+  // Comprehensive logout handler
+  const handleSignOut = async () => {
+    await signOut(() => {
+      // Clear all audit state
+      clearAuditState();
+      // Reset router to landing page
+      resetToLanding();
+    });
   };
 
   const seoData = getSEO(reportData);
@@ -117,7 +128,7 @@ const AppContent: React.FC = () => {
           onNavigate={navigate}
           onSignInClick={openAuthModal}
           user={user}
-          onSignOut={signOut}
+          onSignOut={handleSignOut}
         />
       )}
 
