@@ -134,8 +134,8 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     loadStats();
   }, [repoUrl]);
 
-  // Handle GitHub OAuth connection - awaits completion before continuing
-  const handleGitHubConnect = useCallback(async () => {
+  // Handle starting the GitHub OAuth flow (button click)
+  const handleStartGitHubOAuth = useCallback(async () => {
     console.log('🔐 [PreflightModal] Starting GitHub OAuth flow...');
     const result = await signInWithGitHub();
 
@@ -148,6 +148,12 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       setError(result.error || 'GitHub connection failed');
     }
   }, [signInWithGitHub]);
+
+  // Handle when polling detects GitHub account was connected (modal auto-close)
+  const handleGitHubConnected = useCallback(() => {
+    console.log('✅ [PreflightModal] GitHub account detected via polling, retrying loadStats...');
+    loadStats();
+  }, []);
 
   const handleTierSelect = useCallback((tier: 'lite' | 'deep' | 'ultra') => {
     // Pass preflightId to allow the audit to use stored preflight data
@@ -174,7 +180,8 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     return (
       <GitHubConnectModal
         repoUrl={repoUrl}
-        onConnect={handleGitHubConnect}
+        onConnect={handleStartGitHubOAuth}
+        onConnected={handleGitHubConnected}
         onCancel={onCancel}
         isConnecting={isConnecting}
       />

@@ -4,7 +4,8 @@ import { supabase } from '../src/integrations/supabase/client';
 
 interface GitHubConnectModalProps {
     repoUrl: string;
-    onConnect: () => void;
+    onConnect: () => void;        // Called when user clicks button to start OAuth
+    onConnected: () => void;      // Called when polling detects account was created
     onCancel: () => void;
     isConnecting?: boolean;
 }
@@ -12,6 +13,7 @@ interface GitHubConnectModalProps {
 const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
     repoUrl,
     onConnect,
+    onConnected,
     onCancel,
     isConnecting = false,
 }) => {
@@ -51,8 +53,8 @@ const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
                         pollIntervalRef.current = null;
                     }
                     
-                    // Trigger the onConnect callback to continue the flow
-                    onConnect();
+                    // Trigger the onConnected callback (NOT onConnect which starts OAuth)
+                    onConnected();
                 }
             } catch (err) {
                 console.error('[GitHubConnectModal] Polling error:', err);
@@ -71,7 +73,7 @@ const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
                 pollIntervalRef.current = null;
             }
         };
-    }, [isConnecting, onConnect]);
+    }, [isConnecting, onConnected]);
 
     // Extract repo name for display
     const repoName = repoUrl.split('/').slice(-2).join('/');
