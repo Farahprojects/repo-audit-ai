@@ -10,6 +10,7 @@ import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useAut
 import { LandingPage } from './components/LandingPage';
 import { AuditFlow } from './components/AuditFlow';
 import { DashboardPage } from './components/DashboardPage';
+import { DebugService } from './services/debugService';
 
 const AppContent: React.FC = () => {
   const { user, signOut, clearGitHubState } = useAuthContext();
@@ -45,6 +46,12 @@ const AppContent: React.FC = () => {
 
   // Comprehensive logout handler
   const handleSignOut = async () => {
+    // Capture pre-logout storage state for debugging
+    if (import.meta.env.DEV) {
+      console.log('📸 Pre-logout storage state:');
+      DebugService.logStorageSnapshot('Before Logout');
+    }
+
     try {
       // Sign out (this also clears localStorage/sessionStorage)
       await signOut();
@@ -57,6 +64,14 @@ const AppContent: React.FC = () => {
 
       // Reset router to landing page
       resetToLanding();
+
+      // Verify clean logout in dev mode
+      if (import.meta.env.DEV) {
+        setTimeout(() => {
+          DebugService.verifyCleanLogout();
+          DebugService.auditStorageForSensitiveData();
+        }, 100);
+      }
     } catch (error) {
       console.error('Error during logout:', error);
       // Still attempt cleanup even if sign out fails
