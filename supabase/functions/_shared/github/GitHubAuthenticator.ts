@@ -27,6 +27,55 @@ export class GitHubAuthenticator {
         return null;
     }
 
+    /**
+     * NEW: Get token from preflight's github_account_id
+     * This is the preferred method for the new preflight system.
+     * The token is decrypted server-side and never leaves the backend.
+     */
+    async getTokenByAccountId(githubAccountId: string): Promise<string | null> {
+        if (!githubAccountId) {
+            console.log('📛 [GitHubAuthenticator] No github_account_id provided');
+            return null;
+        }
+
+        try {
+            // @ts-ignore
+            const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+            const supabase = createClient(
+                Deno.env.get('SUPABASE_URL')!,
+                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+            );
+
+            // Get GitHub account by ID
+            const { data: githubAccount, error } = await supabase
+                .from('github_accounts')
+                .select('access_token_encrypted')
+                .eq('id', githubAccountId)
+                .single();
+
+            if (error || !githubAccount) {
+                console.error(`❌ [GitHubAuthenticator] Failed to fetch GitHub account: ${githubAccountId}`, error);
+                return null;
+            }
+
+            if (!githubAccount.access_token_encrypted) {
+                console.warn(`⚠️ [GitHubAuthenticator] GitHub account ${githubAccountId} has no encrypted token`);
+                return null;
+            }
+
+            // Decrypt server-side
+            const decryptedToken = await this.decryptToken(githubAccount.access_token_encrypted);
+            if (decryptedToken) {
+                console.log(`✅ [GitHubAuthenticator] Token decrypted server-side for account: ${githubAccountId}`);
+            }
+            return decryptedToken;
+
+        } catch (error) {
+            console.error('❌ [GitHubAuthenticator] Error getting token by account ID:', error);
+            return null;
+        }
+    }
+
     private async retrieveStoredToken(authHeader: string): Promise<string | null> {
         try {
             if (!authHeader) return null;

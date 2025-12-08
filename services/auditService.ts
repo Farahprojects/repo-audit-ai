@@ -72,12 +72,22 @@ export class AuditService {
       onProgressUpdate(60);
 
       // Step 3: Get GitHub token for file access
-      onProgress(`[Auth] Getting GitHub access token...`);
-      const githubToken = await ErrorHandler.withErrorHandling(
-        getGitHubToken,
-        'getGitHubToken',
-        { ...auditContext, operation: 'getTokenForAudit' }
-      );
+      // NEW: If we have a preflightId, we DON'T need to fetch the token here.
+      // The backend will handle token decryption securely server-side.
+      let githubToken: string | undefined;
+
+      if (preflightId) {
+        onProgress(`[Auth] Using secure server-side authentication...`);
+        ErrorLogger.info('Skipping frontend token fetch - using preflightId for server-side auth');
+      } else {
+        // Legacy fallback: fetch token on frontend (should be phased out)
+        onProgress(`[Auth] Getting GitHub access token...`);
+        githubToken = await ErrorHandler.withErrorHandling(
+          getGitHubToken,
+          'getGitHubToken',
+          { ...auditContext, operation: 'getTokenForAudit' }
+        );
+      }
 
       // Step 4: AI Audit (Real API)
       onProgress(`[Agent: Security] Sending metadata to Brain...`);

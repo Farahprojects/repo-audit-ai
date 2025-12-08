@@ -35,9 +35,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   // NEW: Store the preflight ID for downstream use
   const [preflightId, setPreflightId] = useState<string | null>(null);
 
-  const { isGitHubConnected, getGitHubToken, signInWithGitHub, isConnecting } = useGitHubAuth();
+  const { isGitHubConnected, signInWithGitHub, isConnecting } = useGitHubAuth();
 
-  const loadStats = async (token?: string) => {
+  const loadStats = async () => {
     if (isLoading) {
       console.log('🚫 [PreflightModal] loadStats already running, skipping');
       return;
@@ -59,7 +59,10 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       // Use the new PreflightService which stores data in the database
       // This is the single source of truth for repository metadata
       console.log('🚀 [PreflightModal] Calling PreflightService.getOrCreate...');
-      const response = await fetchPreflight(repoUrl, { userToken: token });
+
+      // Note: We don't pass a token here anymore. 
+      // The backend uses the session auth header to look up the token server-side.
+      const response = await fetchPreflight(repoUrl);
 
       if (!response.success) {
         // Check if this is a private repo error
@@ -127,11 +130,8 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   };
 
   useEffect(() => {
-    const initLoad = async () => {
-      const token = await getGitHubToken();
-      loadStats(token || undefined);
-    };
-    initLoad();
+    // Only fetch on mount
+    loadStats();
   }, [repoUrl]);
 
   // Handle GitHub OAuth connection - awaits completion before continuing
@@ -140,20 +140,14 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     const result = await signInWithGitHub();
 
     if (result.success) {
-      console.log('✅ [PreflightModal] GitHub OAuth succeeded, fetching token...');
-      const token = await getGitHubToken();
-      if (token) {
-        console.log('🚀 [PreflightModal] Token retrieved, continuing to loadStats...');
-        loadStats(token);
-      } else {
-        console.error('❌ [PreflightModal] Failed to get token after successful OAuth');
-        setError('Failed to retrieve GitHub access token');
-      }
+      console.log('✅ [PreflightModal] GitHub OAuth succeeded, retrying loadStats...');
+      // Just retry loading - backend will pick up the new token via session
+      loadStats();
     } else {
       console.error('❌ [PreflightModal] GitHub OAuth failed:', result.error);
       setError(result.error || 'GitHub connection failed');
     }
-  }, [signInWithGitHub, getGitHubToken]);
+  }, [signInWithGitHub]);
 
   const handleTierSelect = useCallback((tier: 'lite' | 'deep' | 'ultra') => {
     // Pass preflightId to allow the audit to use stored preflight data

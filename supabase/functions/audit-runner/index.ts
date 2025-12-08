@@ -3,12 +3,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // Import Agents
-// Import Agents
 import { runPlanner } from '../_shared/agents/planner.ts';
 import { runWorker } from '../_shared/agents/worker.ts';
 import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
 import { detectCapabilities } from './capabilities.ts';
+import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
 import {
   validateRequestBody,
   validateGitHubUrl,
@@ -199,6 +199,26 @@ serve(async (req) => {
       console.log(`📂 [audit-runner] Using file map from preflight: ${fileMap?.length || 0} files`);
     }
 
+    // SERVER-SIDE TOKEN DECRYPTION
+    // If we have a preflight with a github_account_id, decrypt the token server-side
+    // This eliminates the need for the frontend to handle decrypted tokens
+    let serverDecryptedToken: string | null = null;
+
+    if (preflightRecord?.github_account_id && preflightRecord?.is_private) {
+      console.log(`🔐 [audit-runner] Decrypting token server-side for private repo...`);
+      const authenticator = GitHubAuthenticator.getInstance();
+      serverDecryptedToken = await authenticator.getTokenByAccountId(preflightRecord.github_account_id);
+
+      if (serverDecryptedToken) {
+        console.log(`✅ [audit-runner] Token decrypted server-side (never leaves backend)`);
+      } else {
+        console.warn(`⚠️ [audit-runner] Failed to decrypt token - private repo files may not be accessible`);
+      }
+    }
+
+    // Use server-decrypted token, fall back to frontend-provided token (legacy), then null
+    const effectiveGitHubToken = serverDecryptedToken || githubToken || null;
+
     if (!repoUrl || (!fileMap || fileMap.length === 0)) {
       return createErrorResponse('Missing required parameters: repoUrl and files (or preflight)', 400);
     }
@@ -355,7 +375,7 @@ serve(async (req) => {
         file_count: preflightRecord.file_count
       } : undefined,
       detectedStack, // Pass to agents if needed, but mainly for response
-      githubToken // Pass token for file access
+      githubToken: effectiveGitHubToken // Server-decrypted token (never leaves backend)
     };
 
 
