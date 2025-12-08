@@ -34,6 +34,12 @@ const COST_FORMULAS: TierCostFormula[] = [
     baseTokens: 50000,
     maxOverrun: 1.2,
     estimateTokens: (fp) => 50000 + fp.sql_files * 3000 + (fp.has_supabase ? 10000 : 0) + fp.api_endpoints_estimated * 1000
+  },
+  {
+    tier: 'supabase_deep_dive',
+    baseTokens: 60000,
+    maxOverrun: 1.2,
+    estimateTokens: (fp) => 60000 + fp.sql_files * 4000 + fp.backend_files * 1000 + fp.api_endpoints_estimated * 1500
   }
 ];
 
