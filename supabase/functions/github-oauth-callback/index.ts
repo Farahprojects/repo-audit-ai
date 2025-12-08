@@ -18,12 +18,15 @@ const ENV = {
   GITHUB_OAUTH_CALLBACK_URL:
     Deno.env.get('GITHUB_OAUTH_CALLBACK_URL') ||
     `${Deno.env.get('SUPABASE_URL')}/functions/v1/github-oauth-callback`,
-  FRONTEND_URL: Deno.env.get('FRONTEND_URL') || 'http://localhost:5173',
+  FRONTEND_URL: Deno.env.get('FRONTEND_URL')!,
 };
 
 // Validate required env vars
 if (!ENV.SUPABASE_URL || !ENV.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Missing required Supabase environment variables');
+}
+if (!ENV.FRONTEND_URL) {
+  throw new Error('Missing FRONTEND_URL environment variable - required for OAuth redirects');
 }
 if (!ENV.GITHUB_CLIENT_ID || !ENV.GITHUB_CLIENT_SECRET) {
   console.warn('⚠️ Missing GitHub OAuth credentials. OAuth flow will not work.');
