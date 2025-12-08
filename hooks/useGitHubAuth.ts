@@ -39,7 +39,7 @@ export function useGitHubAuth() {
         const errorMessage = urlParams.get('message');
 
         if (githubStatus === 'connected') {
-            console.log('🎉 OAuth success detected from URL parameters');
+            console.log('🎉 OAuth success detected from URL parameters - updating GitHub connection state');
             // Clear URL parameters
             const newUrl = new URL(window.location.href);
             newUrl.searchParams.delete('github');
@@ -47,6 +47,7 @@ export function useGitHubAuth() {
 
             // Refetch GitHub account to update state
             fetchGitHubAccount().then(() => {
+                console.log('🔄 [useGitHubAuth] GitHub account refetched after OAuth success');
                 setState(prev => ({ ...prev, isConnecting: false, error: null }));
             });
         } else if (githubStatus === 'error') {
@@ -85,12 +86,14 @@ export function useGitHubAuth() {
             }
 
             if (data) {
+                console.log('✅ [useGitHubAuth] GitHub account found, setting isConnected=true');
                 setState(prev => ({
                     ...prev,
                     isConnected: true,
                     account: data as GitHubAccount,
                 }));
             } else {
+                console.log('❌ [useGitHubAuth] No GitHub account found, setting isConnected=false');
                 setState(prev => ({
                     ...prev,
                     isConnected: false,

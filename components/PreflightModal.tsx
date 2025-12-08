@@ -113,15 +113,20 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
   useEffect(() => {
     const retryWithToken = async () => {
-      if (isGitHubConnected && step === 'github-connect') {
+      console.log('🔄 [PreflightModal] Checking for auth retry:', { isGitHubConnected, step, loading });
+      if (isGitHubConnected && step === 'github-connect' && !loading) {
+        console.log('🎯 [PreflightModal] GitHub connected, retrying with token...');
         const token = await getGitHubToken();
         if (token) {
+          console.log('🔑 [PreflightModal] Got token, calling loadStats...');
           loadStats(token);
+        } else {
+          console.log('❌ [PreflightModal] No token available despite being connected');
         }
       }
     };
     retryWithToken();
-  }, [isGitHubConnected, step]);
+  }, [isGitHubConnected, step, loading]);
 
   const handleGitHubConnect = async () => {
     await signInWithGitHub(window.location.href);
