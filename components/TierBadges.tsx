@@ -148,31 +148,31 @@ export const TierUpsellPanel: React.FC<TierUpsellPanelProps> = ({
 
     return (
         <div className="space-y-1">
-            {TIERS.map((tier) => {
-                const isCompleted = completedTiers.includes(tier.id);
-                const Icon = tier.icon;
+                {TIERS.map((tier) => {
+                    const isCompleted = completedTiers.includes(tier.id);
+                    const Icon = tier.icon;
 
-                return (
-                    <button
-                        key={tier.id}
+                    return (
+                        <button
+                            key={tier.id}
                         onClick={() => !isCompleted && onRunTier(tier.id)}
                         disabled={isCompleted}
                         className={`w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors text-left ${
                             isCompleted ? 'opacity-50 cursor-default' : ''
                         }`}
-                    >
+                        >
                         <div className="flex items-center gap-3">
                             <Icon className={`w-4 h-4 ${isCompleted ? 'text-slate-400' : 'text-slate-600'}`} />
                             <span className={`text-sm font-medium ${isCompleted ? 'text-slate-400' : 'text-slate-700'}`}>
-                                {tier.shortName}
+                                        {tier.shortName}
                             </span>
-                        </div>
+                                    </div>
                         <span className={`text-sm font-medium ${isCompleted ? 'text-slate-400' : 'text-slate-600'}`}>
                             {tier.price}
                         </span>
-                    </button>
-                );
-            })}
+                        </button>
+                    );
+                })}
         </div>
     );
 };
