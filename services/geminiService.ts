@@ -10,6 +10,7 @@ const TIER_MAPPING: Record<string, string> = {
   'security': 'security',       // Can be called directly
   'shape': 'shape',             // Can be called directly
   'conventions': 'conventions', // Can be called directly
+  'supabase_deep_dive': 'supabase_deep_dive', // DB deep audit
 };
 
 export const generateAuditReport = async (
@@ -60,6 +61,8 @@ export const generateAuditReport = async (
     overallVerdict: data.overallVerdict,
     productionReady: data.productionReady,
     riskLevel: data.riskLevel,
+    // Detected stack for deep audit suggestions
+    detectedStack: data.meta?.detectedStack,
     // Include tier-specific metadata
     tierData: {
       tier: data.tier,

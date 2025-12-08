@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check, Lock, Zap, Shield, TrendingUp, Layers } from 'lucide-react';
 
-export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security';
+export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security' | 'supabase_deep_dive';
 
 interface TierInfo {
     id: AuditTier;
@@ -13,6 +13,7 @@ interface TierInfo {
     borderColor: string;
     price: string;
     priceValue: number;
+    isDeepAudit?: boolean;
 }
 
 export const TIERS: TierInfo[] = [
@@ -59,6 +60,18 @@ export const TIERS: TierInfo[] = [
         borderColor: 'border-red-200',
         price: '$49',
         priceValue: 49,
+    },
+    {
+        id: 'supabase_deep_dive',
+        name: 'Supabase Deep Dive',
+        shortName: 'Supabase',
+        icon: Shield,
+        color: 'text-indigo-600',
+        bgColor: 'bg-indigo-50',
+        borderColor: 'border-indigo-200',
+        price: '$50',
+        priceValue: 50,
+        isDeepAudit: true,
     },
 ];
 
