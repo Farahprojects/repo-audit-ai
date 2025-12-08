@@ -169,6 +169,16 @@ serve(async (req) => {
       summary: finalReport?.summary || "No summary generated.",
       issues: dbIssues,
       total_tokens: totalTokens,
+      extra_data: {
+        topStrengths: finalReport?.topStrengths || [],
+        topWeaknesses: finalReport?.topWeaknesses || [],
+        riskLevel: finalReport?.riskLevel || null,
+        productionReady: finalReport?.productionReady ?? null,
+        categoryAssessments: finalReport?.categoryAssessments || null,
+        seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
+        suspiciousFiles: finalReport?.suspiciousFiles || null,
+        overallVerdict: finalReport?.overallVerdict || null,
+      }
     });
 
     if (insertError) {
