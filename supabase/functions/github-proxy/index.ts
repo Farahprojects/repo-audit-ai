@@ -241,7 +241,22 @@ serve(async (req) => {
           size: sizeDisplay,
           language: primaryLang,
           languagePercent,
-          defaultBranch: repoData.default_branch
+          defaultBranch: repoData.default_branch,
+          // Additional valuable metadata
+          stars: repoData.stargazers_count || 0,
+          forks: repoData.forks_count || 0,
+          issues: repoData.open_issues_count || 0,
+          watchers: repoData.watchers_count || 0,
+          isPrivate: repoData.private || false,
+          hasWiki: repoData.has_wiki || false,
+          hasPages: repoData.has_pages || false,
+          archived: repoData.archived || false,
+          disabled: repoData.disabled || false,
+          createdAt: repoData.created_at,
+          updatedAt: repoData.updated_at,
+          pushedAt: repoData.pushed_at,
+          // Technology stack detection
+          techStack
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -349,6 +364,26 @@ serve(async (req) => {
       const ext = '.' + item.path.split('.').pop()?.toLowerCase();
       return codeExtensions.includes(ext) || item.path.includes('Dockerfile') || item.path.includes('Makefile');
     });
+
+    // Detect technology stack from file paths
+    const techStack = {
+      react: treeData.tree.some((item: any) => item.path.includes('package.json') || item.path.includes('.jsx') || item.path.includes('.tsx')),
+      vue: treeData.tree.some((item: any) => item.path.includes('.vue') || item.path.includes('vue.config.js')),
+      angular: treeData.tree.some((item: any) => item.path.includes('angular.json') || item.path.includes('.component.ts')),
+      svelte: treeData.tree.some((item: any) => item.path.includes('.svelte')),
+      nextjs: treeData.tree.some((item: any) => item.path.includes('next.config.') || item.path.includes('.next/')),
+      nuxt: treeData.tree.some((item: any) => item.path.includes('nuxt.config.') || item.path.includes('.nuxt/')),
+      python: treeData.tree.some((item: any) => item.path.includes('requirements.txt') || item.path.includes('Pipfile') || item.path.includes('pyproject.toml')),
+      node: treeData.tree.some((item: any) => item.path.includes('package.json')),
+      docker: treeData.tree.some((item: any) => item.path.includes('Dockerfile') || item.path.includes('docker-compose')),
+      typescript: treeData.tree.some((item: any) => item.path.includes('tsconfig.json')),
+      rust: treeData.tree.some((item: any) => item.path.includes('Cargo.toml')),
+      go: treeData.tree.some((item: any) => item.path.includes('go.mod')),
+      hasTests: treeData.tree.some((item: any) => item.path.includes('test') || item.path.includes('spec') || item.path.includes('__tests__')),
+      hasReadme: treeData.tree.some((item: any) => item.path.toLowerCase().includes('readme')),
+      hasLicense: treeData.tree.some((item: any) => item.path.toLowerCase().includes('license') || item.path.toLowerCase().includes('licence')),
+      hasContributing: treeData.tree.some((item: any) => item.path.toLowerCase().includes('contributing')),
+    };
 
     console.log(`Found ${filteredTree.length} code files out of ${treeData.tree.length} total`);
 

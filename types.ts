@@ -29,6 +29,37 @@ export interface AuditStats {
   size: string;
   language: string;
   languagePercent: number;
+  defaultBranch?: string;
+  stars?: number;
+  forks?: number;
+  issues?: number;
+  watchers?: number;
+  isPrivate?: boolean;
+  hasWiki?: boolean;
+  hasPages?: boolean;
+  archived?: boolean;
+  disabled?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  pushedAt?: string;
+  techStack?: {
+    react?: boolean;
+    vue?: boolean;
+    angular?: boolean;
+    svelte?: boolean;
+    nextjs?: boolean;
+    nuxt?: boolean;
+    python?: boolean;
+    node?: boolean;
+    docker?: boolean;
+    typescript?: boolean;
+    rust?: boolean;
+    go?: boolean;
+    hasTests?: boolean;
+    hasReadme?: boolean;
+    hasLicense?: boolean;
+    hasContributing?: boolean;
+  };
 }
 
 export interface StrengthOrIssue {
