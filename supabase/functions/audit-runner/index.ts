@@ -16,6 +16,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Canonical tier mapping - validates and maps frontend tiers
+const TIER_MAPPING: Record<string, string> = {
+  'lite': 'shape',
+  'deep': 'conventions',
+  'ultra': 'security',
+  'performance': 'performance',
+  'security': 'security',
+  'shape': 'shape',
+  'conventions': 'conventions',
+  'supabase_deep_dive': 'supabase_deep_dive',
+};
+
+const VALID_TIERS = ['shape', 'conventions', 'performance', 'security', 'supabase_deep_dive'];
+
 const ENV = {
   SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
@@ -43,7 +57,18 @@ serve(async (req) => {
       userId = user?.id || null;
     }
 
-    const { repoUrl, files, tier = 'security', estimatedTokens } = await req.json();
+    const { repoUrl, files, tier: rawTier = 'security', estimatedTokens } = await req.json();
+
+    // Validate and map tier - reject invalid tiers
+    const mappedTier = TIER_MAPPING[rawTier];
+    if (!mappedTier || !VALID_TIERS.includes(mappedTier)) {
+      console.warn(`[audit-runner] Rejected invalid tier: ${rawTier}`);
+      return new Response(
+        JSON.stringify({ error: `Invalid audit tier: ${rawTier}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const tier = mappedTier;
 
     if (!repoUrl || !files || !Array.isArray(files)) {
       return new Response(

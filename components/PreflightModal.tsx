@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, Zap, AlertTriangle } from 'lucide-react';
+import { CheckCircle, Zap, AlertTriangle, Loader2 } from 'lucide-react';
 import { AuditStats, ComplexityFingerprint } from '../types';
 import { parseGitHubUrl, fetchRepoStats, fetchRepoFingerprint } from '../services/githubService';
-import { CostEstimator } from '../services/costEstimator';
+import { CostEstimator, AuditTier } from '../services/costEstimator';
 import GitHubConnectModal from './GitHubConnectModal';
 import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
@@ -14,6 +14,13 @@ interface PreflightModalProps {
 
 type ModalStep = 'analysis' | 'selection' | 'github-connect';
 
+interface TierEstimates {
+  shape: { estimatedTokens: number; formatted: string };
+  conventions: { estimatedTokens: number; formatted: string };
+  performance: { estimatedTokens: number; formatted: string };
+  security: { estimatedTokens: number; formatted: string };
+}
+
 const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onCancel }) => {
   const [step, setStep] = useState<ModalStep>('analysis');
   const [loading, setLoading] = useState(true);
@@ -22,74 +29,68 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [fingerprint, setFingerprint] = useState<ComplexityFingerprint | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [tierEstimates, setTierEstimates] = useState<TierEstimates | null>(null);
+  const [estimatesLoading, setEstimatesLoading] = useState(false);
 
   const { isGitHubConnected, getGitHubToken, signInWithGitHub, isConnecting } = useGitHubAuth();
 
   const loadStats = async (token?: string) => {
-    // Prevent double execution
     if (isLoading) {
       console.log('🚫 [PreflightModal] loadStats already running, skipping');
       return;
     }
 
     console.log('🚀 [PreflightModal] Starting loadStats for repo:', repoUrl);
-    console.log('🚀 [PreflightModal] GitHub token available:', !!token);
-
     setIsLoading(true);
     setLoading(true);
     setError(null);
     setIsPrivateRepo(false);
 
-    console.log('🔍 [PreflightModal] Parsing GitHub URL...');
     const repoInfo = parseGitHubUrl(repoUrl);
-    console.log('🔍 [PreflightModal] Parsed repo info:', repoInfo);
-
     if (!repoInfo) {
-      console.log('❌ [PreflightModal] Invalid GitHub URL format');
       setError("Please enter a complete GitHub repository URL (e.g., https://github.com/owner/repository-name)");
       setLoading(false);
       return;
     }
 
-    console.log('📡 [PreflightModal] Calling fetchRepoStats and fetchRepoFingerprint...');
     try {
-      // Fetch both stats and fingerprint in parallel
       const [statsData, fingerprintData] = await Promise.all([
         fetchRepoStats(repoInfo.owner, repoInfo.repo, token),
         fetchRepoFingerprint(repoInfo.owner, repoInfo.repo, token)
       ]);
 
-      console.log('✅ [PreflightModal] fetchRepoStats success:', statsData);
-      console.log('✅ [PreflightModal] fetchRepoFingerprint success:', fingerprintData);
-
       setStats({ ...statsData, fingerprint: fingerprintData });
       setFingerprint(fingerprintData);
       setStep('selection');
-      console.log('🎯 [PreflightModal] Moving to selection step');
+
+      // Fetch tier estimates from edge function
+      setEstimatesLoading(true);
+      try {
+        const estimates = await CostEstimator.getAllTierEstimatesAsync(fingerprintData);
+        setTierEstimates(estimates as unknown as TierEstimates);
+      } catch (estimateError) {
+        console.error('[PreflightModal] Failed to fetch estimates:', estimateError);
+        // Continue without estimates - will show fallback text
+      } finally {
+        setEstimatesLoading(false);
+      }
+
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      console.log('❌ [PreflightModal] fetchRepoStats failed:', message);
-
-      // Check if this is a private repo error
       if (message.startsWith('PRIVATE_REPO:')) {
-        console.log('🔐 [PreflightModal] Detected private repo error');
         setIsPrivateRepo(true);
         setError(message.replace('PRIVATE_REPO:', ''));
         setStep('github-connect');
-        console.log('🎯 [PreflightModal] Moving to github-connect step');
       } else {
-        console.log('⚠️ [PreflightModal] Setting generic error:', message);
         setError(message);
       }
     } finally {
       setLoading(false);
       setIsLoading(false);
-      console.log('🏁 [PreflightModal] loadStats completed');
     }
   };
 
   useEffect(() => {
-    // On mount, try with existing GitHub token if connected
     const initLoad = async () => {
       const token = await getGitHubToken();
       loadStats(token || undefined);
@@ -97,7 +98,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     initLoad();
   }, [repoUrl]);
 
-  // After GitHub OAuth completes, retry with the new token
   useEffect(() => {
     const retryWithToken = async () => {
       if (isGitHubConnected && step === 'github-connect') {
@@ -111,7 +111,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
   }, [isGitHubConnected, step]);
 
   const handleGitHubConnect = async () => {
-    // Store current URL to return after OAuth
     await signInWithGitHub(window.location.href);
   };
 
@@ -119,19 +118,16 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     onConfirm(tier, stats!);
   };
 
-  // Calculate estimated costs for all tiers
-  const getTierEstimates = () => {
-    if (!fingerprint) return null;
-
-    return {
-      shape: CostEstimator.estimateTokens('shape', fingerprint),
-      conventions: CostEstimator.estimateTokens('conventions', fingerprint),
-      performance: CostEstimator.estimateTokens('performance', fingerprint),
-      security: CostEstimator.estimateTokens('security', fingerprint),
-    };
+  // Helper to get formatted estimate or fallback
+  const getEstimateDisplay = (tier: keyof TierEstimates, fallback: string) => {
+    if (estimatesLoading) {
+      return <Loader2 className="w-3 h-3 animate-spin inline" />;
+    }
+    if (tierEstimates?.[tier]) {
+      return `~${tierEstimates[tier].formatted} tokens`;
+    }
+    return fallback;
   };
-
-  const tierEstimates = getTierEstimates();
 
   if (loading) {
     return (
@@ -145,7 +141,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     );
   }
 
-  // GitHub Connect Modal for private repos
   if (step === 'github-connect' && isPrivateRepo) {
     return (
       <GitHubConnectModal
@@ -156,7 +151,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       />
     );
   }
-
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/10 backdrop-blur-lg p-4 animate-in fade-in zoom-in duration-300">
@@ -204,7 +198,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                 {/* Tier 1: Shape Check (Free) */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-slate-300 transition-all flex flex-col items-center text-center">
                   <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mb-4">
-                    {tierEstimates ? `~${CostEstimator.formatTokens(tierEstimates.shape)} tokens` : 'FREE'}
+                    {getEstimateDisplay('shape', 'FREE')}
                   </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Shape Check</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">Repo structure, folder hygiene, missing files.</p>
@@ -222,7 +216,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                     POPULAR
                   </div>
                   <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full mb-4">
-                    {tierEstimates ? `~${CostEstimator.formatTokens(tierEstimates.conventions)} tokens` : 'POPULAR'}
+                    {getEstimateDisplay('conventions', 'POPULAR')}
                   </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2 mt-2">Senior Check</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">Craftsmanship, types, tests, docs.</p>
@@ -237,7 +231,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                 {/* Tier 3: Performance Check */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-orange-200 transition-all flex flex-col items-center text-center group">
                   <span className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full mb-4 group-hover:bg-orange-100 transition-colors">
-                    {tierEstimates ? `~${CostEstimator.formatTokens(tierEstimates.performance)} tokens` : 'PRO'}
+                    {getEstimateDisplay('performance', 'PRO')}
                   </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Perf Audit</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">N+1, leaks, re-renders, AI sins.</p>
@@ -252,7 +246,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                 {/* Tier 4: Security Audit */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-red-200 transition-all flex flex-col items-center text-center group">
                   <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full mb-4 group-hover:bg-red-100 transition-colors">
-                    {tierEstimates ? `~${CostEstimator.formatTokens(tierEstimates.security)} tokens` : 'PREMIUM'}
+                    {getEstimateDisplay('security', 'PREMIUM')}
                   </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Security</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">RLS, secrets, auth, vulnerabilities.</p>
@@ -267,7 +261,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
               </div>
             </div>
           )}
-
 
         </div>
 
