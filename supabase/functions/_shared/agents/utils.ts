@@ -172,11 +172,18 @@ export function isValidGitHubUrl(url: string): boolean {
     return ALLOWED_URL_PATTERNS.some(pattern => pattern.test(url));
 }
 
-export async function fetchFileContent(url: string, token?: string): Promise<string> {
+export interface FetchResult {
+    success: boolean;
+    content: string;
+    error?: string;
+    errorCode?: 'AUTH_FAILED' | 'RATE_LIMITED' | 'NOT_FOUND' | 'NETWORK_ERROR' | 'INVALID_URL' | 'TIMEOUT' | 'TOO_LARGE';
+}
+
+export async function fetchFileContentWithDetails(url: string, token?: string): Promise<FetchResult> {
     // Validate URL to prevent SSRF attacks
     if (!isValidGitHubUrl(url)) {
         console.warn(`Blocked fetch to untrusted URL: ${url}`);
-        return "";
+        return { success: false, content: "", error: "Invalid URL domain", errorCode: 'INVALID_URL' };
     }
 
     try {
@@ -198,19 +205,50 @@ export async function fetchFileContent(url: string, token?: string): Promise<str
         });
         clearTimeout(timeoutId);
 
-        if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+        // Detailed error handling
+        if (!res.ok) {
+            if (res.status === 401 || res.status === 403) {
+                console.warn(`🔐 Auth failed for ${url}: ${res.status}`);
+                return { success: false, content: "", error: `Authentication failed (${res.status})`, errorCode: 'AUTH_FAILED' };
+            }
+            if (res.status === 404) {
+                console.warn(`📁 File not found: ${url}`);
+                return { success: false, content: "", error: "File not found", errorCode: 'NOT_FOUND' };
+            }
+            if (res.status === 429) {
+                console.warn(`⏳ Rate limited: ${url}`);
+                return { success: false, content: "", error: "GitHub rate limit exceeded", errorCode: 'RATE_LIMITED' };
+            }
+            console.warn(`❌ Fetch failed for ${url}: ${res.status}`);
+            return { success: false, content: "", error: `HTTP ${res.status}`, errorCode: 'NETWORK_ERROR' };
+        }
 
         // Limit response size to 1MB to prevent memory exhaustion
         const text = await res.text();
         if (text.length > 1024 * 1024) {
             console.warn(`File too large, truncating: ${url}`);
-            return text.slice(0, 1024 * 1024);
+            return { success: true, content: text.slice(0, 1024 * 1024), error: "Truncated due to size" };
         }
 
-        return text;
+        // Validate content isn't an error page or HTML when we expect code
+        if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+            console.warn(`⚠️ Received HTML instead of code for ${url} - possible redirect or error page`);
+            return { success: false, content: "", error: "Received HTML instead of code content", errorCode: 'AUTH_FAILED' };
+        }
+
+        return { success: true, content: text };
     } catch (e) {
-        // Silencing noisy network errors as requested by user
-        // console.debug(`Fetch failed: ${url}`); 
-        return "";
+        if (e instanceof Error && e.name === 'AbortError') {
+            console.warn(`⏱️ Timeout fetching ${url}`);
+            return { success: false, content: "", error: "Request timed out", errorCode: 'TIMEOUT' };
+        }
+        console.warn(`Network error fetching ${url}: ${e instanceof Error ? e.message : String(e)}`);
+        return { success: false, content: "", error: String(e), errorCode: 'NETWORK_ERROR' };
     }
+}
+
+// Legacy function for backward compatibility - returns empty string on failure
+export async function fetchFileContent(url: string, token?: string): Promise<string> {
+    const result = await fetchFileContentWithDetails(url, token);
+    return result.content;
 }
