@@ -5,6 +5,7 @@ import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';
 import {
   handleStatsAction,
   handleFingerprintAction,
+  handlePreflightAction,
   handleContentAction,
   handleTreeAction
 } from './actionHandlers.ts';
@@ -47,6 +48,8 @@ serve(async (req) => {
 
     // 3. Route Action
     switch (action) {
+      case 'preflight':
+        return await handlePreflightAction(client, owner, repo, branch);
       case 'stats':
         return await handleStatsAction(client, owner, repo);
       case 'fingerprint':

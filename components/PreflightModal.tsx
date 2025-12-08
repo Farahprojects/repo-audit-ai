@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, Zap, AlertTriangle, Loader2 } from 'lucide-react';
 import { AuditStats, ComplexityFingerprint } from '../types';
-import { parseGitHubUrl, fetchRepoStats, fetchRepoFingerprint } from '../services/githubService';
+import { parseGitHubUrl, fetchRepoPreflight } from '../services/githubService';
 import { CostEstimator, AuditTier } from '../services/costEstimator';
 import GitHubConnectModal from './GitHubConnectModal';
 import { useGitHubAuth } from '../hooks/useGitHubAuth';
@@ -52,20 +52,18 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     }
 
     try {
-      // SEQUENTIAL FETCH STRATEGY
-      // Try stats first - acts as access check for private repos
-      // If this throws PRIVATE_REPO error, we catch it below and show modal
-      // If successful, then fetch fingerprint for cost estimation
-      console.log('📊 [PreflightModal] Fetching repo stats (access check)...');
-      const statsData = await fetchRepoStats(repoInfo.owner, repoInfo.repo, token);
-      console.log('✅ [PreflightModal] Stats fetched successfully, repo is accessible');
+      // UNIFIED PREFLIGHT - Single source of truth
+      // One API call returns both stats and fingerprint
+      // Backend handles all access control logic
+      console.log('🚀 [PreflightModal] Calling unified preflight...');
+      const { stats: statsData, fingerprint: fingerprintData } = await fetchRepoPreflight(
+        repoInfo.owner,
+        repoInfo.repo,
+        token
+      );
+      console.log('✅ [PreflightModal] Preflight successful, repo is accessible');
 
-      // If we got here, repo is accessible - now get fingerprint for cost estimation
-      console.log('🔍 [PreflightModal] Fetching fingerprint for cost calculation...');
-      const fingerprintData = await fetchRepoFingerprint(repoInfo.owner, repoInfo.repo, token);
-      console.log('✅ [PreflightModal] Fingerprint fetched successfully');
-
-      // Both succeeded - proceed with tier selection
+      // Set combined data and proceed with tier selection
       setStats({ ...statsData, fingerprint: fingerprintData });
       setFingerprint(fingerprintData);
       setStep('selection');

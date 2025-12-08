@@ -130,6 +130,121 @@ export async function handleFingerprintAction(client: GitHubAPIClient, owner: st
     }
 }
 
+/**
+ * UNIFIED PREFLIGHT ACTION
+ * Combines stats + fingerprint into a single response.
+ * This is the single source of truth for repo access control.
+ * 
+ * Public repo → { stats: {...}, fingerprint: {...} }
+ * Private repo → { errorCode: 'PRIVATE_REPO', requiresAuth: true }
+ * Owner not found → { errorCode: 'OWNER_NOT_FOUND', requiresAuth: false }
+ */
+export async function handlePreflightAction(client: GitHubAPIClient, owner: string, repo: string, branch?: string) {
+    console.log(`🚀 [github-proxy] PREFLIGHT for: ${owner}/${repo}`);
+
+    try {
+        // 1. Check if the owner exists (deterministic check)
+        const ownerExists = await checkOwnerExists(client, owner);
+        if (!ownerExists) {
+            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
+            return new Response(
+                JSON.stringify({
+                    error: 'Repository owner does not exist. Please check the URL spelling.',
+                    errorCode: 'OWNER_NOT_FOUND',
+                    requiresAuth: false,
+                    isDefinitelyMissing: true
+                }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // 2. Fetch repo data (access check happens here)
+        // If private without auth, this will throw → handleError catches it
+        console.log(`📊 [github-proxy] Fetching repo data (access check)...`);
+        const repoRes = await client.fetchRepo(owner, repo);
+        const repoData = await repoRes.json();
+        console.log(`✅ [github-proxy] Repo is accessible`);
+
+        // 3. Fetch languages
+        console.log(`🔍 [github-proxy] Fetching languages...`);
+        const langRes = await client.fetchLanguages(owner, repo);
+        const langData = await langRes.json();
+
+        // 4. Build stats object
+        const languages = Object.keys(langData);
+        const primaryLang = languages.length > 0 ? languages[0] : 'Unknown';
+        const totalBytes = Object.values(langData).reduce((a: number, b: number) => a + b, 0) as number;
+        const primaryBytes = (langData[primaryLang] as number) || 0;
+        const languagePercent = totalBytes > 0 ? Math.round((primaryBytes / totalBytes) * 100) : 0;
+
+        const estTokens = Math.round((repoData.size * 1024) / 4);
+        const tokenDisplay = estTokens > 1000000
+            ? `${(estTokens / 1000000).toFixed(1)}M`
+            : `${(estTokens / 1000).toFixed(1)}k`;
+
+        const sizeInBytes = repoData.size * 1024;
+        const sizeDisplay = sizeInBytes > (1024 * 1024 * 1024)
+            ? `${(sizeInBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+            : `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+        const fileCount = Math.round(repoData.size / 5);
+
+        const stats = {
+            files: fileCount,
+            tokens: tokenDisplay,
+            size: sizeDisplay,
+            language: primaryLang,
+            languagePercent,
+            defaultBranch: repoData.default_branch,
+            stars: repoData.stargazers_count || 0,
+            forks: repoData.forks_count || 0,
+            issues: repoData.open_issues_count || 0,
+            watchers: repoData.watchers_count || 0,
+            isPrivate: repoData.private || false,
+            hasWiki: repoData.has_wiki || false,
+            hasPages: repoData.has_pages || false,
+            archived: repoData.archived || false,
+            disabled: repoData.disabled || false,
+            createdAt: repoData.created_at,
+            updatedAt: repoData.updated_at,
+            pushedAt: repoData.pushed_at
+        };
+
+        // 5. Fetch tree for fingerprint
+        const defaultBranch = branch || repoData.default_branch || 'main';
+        console.log(`🌳 [github-proxy] Fetching tree for fingerprint...`);
+        const treeRes = await client.fetchTree(owner, repo, defaultBranch);
+        const treeData = await treeRes.json();
+
+        // 6. Generate fingerprint
+        console.log(`🔐 [github-proxy] Generating complexity fingerprint...`);
+        const fingerprint = await ComplexityAnalyzer.generateFingerprint(
+            treeData.tree,
+            langData,
+            repoData,
+            owner,
+            repo,
+            defaultBranch,
+            client.getHeaders()
+        );
+
+        console.log(`✅ [github-proxy] PREFLIGHT SUCCESS - returning stats + fingerprint`);
+
+        // 7. Return combined response
+        return new Response(
+            JSON.stringify({
+                stats,
+                fingerprint
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    } catch (error) {
+        console.log(`❌ [github-proxy] PREFLIGHT ERROR - handling...`);
+        return handleError(error, owner, repo);
+    }
+}
+
+
 export async function handleContentAction(client: GitHubAPIClient, owner: string, repo: string, filePath: string, branch?: string) {
     console.log(`Fetching file: ${owner}/${repo}/${filePath}`);
 

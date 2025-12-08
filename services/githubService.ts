@@ -165,6 +165,64 @@ export const fetchRepoFingerprint = async (
 
   console.log('✅ [fetchRepoFingerprint] Success! Returning fingerprint:', data);
   return data as ComplexityFingerprint;
+}
+
+/**
+ * UNIFIED PREFLIGHT - Single source of truth
+ * Fetch both repository stats and fingerprint in ONE API call.
+ * This eliminates race conditions and ensures clean error handling.
+ * 
+ * @param accessToken - Optional GitHub OAuth token for private repos
+ */
+export const fetchRepoPreflight = async (
+  owner: string,
+  repo: string,
+  accessToken?: string
+): Promise<{ stats: AuditStats; fingerprint: ComplexityFingerprint }> => {
+  console.log('🚀 [fetchRepoPreflight] Starting unified preflight for:', `${owner}/${repo}`);
+  console.log('🚀 [fetchRepoPreflight] Access token provided:', !!accessToken);
+
+  // Call github-proxy edge function with preflight action
+  const { data, error } = await supabase.functions.invoke('github-proxy', {
+    body: { owner, repo, action: 'preflight', userToken: accessToken }
+  });
+
+  console.log('🚀 [fetchRepoPreflight] Edge function response:', { data, error });
+
+  if (error) {
+    console.error('❌ [fetchRepoPreflight] GitHub proxy error:', error);
+    throw new Error(error.message || 'Failed to fetch repository');
+  }
+
+  if (data?.error) {
+    console.log('⚠️ [fetchRepoPreflight] Structured error response:', data);
+
+    // Handle specific error codes
+    if (data.errorCode === 'RATE_LIMIT') {
+      throw new Error('GitHub API rate limit exceeded. Please try again later.');
+    }
+
+    if (data.errorCode === 'OWNER_NOT_FOUND') {
+      console.log('❌ [fetchRepoPreflight] Owner does not exist - URL is wrong');
+      throw new Error('Repository owner does not exist. Please check the URL spelling.');
+    }
+
+    if (data.errorCode === 'PRIVATE_REPO') {
+      console.log('🔐 [fetchRepoPreflight] Repo exists but is private');
+      throw new Error('PRIVATE_REPO:Repository exists but is private. Connect your GitHub account to access private repositories.');
+    }
+
+    // Generic error fallback
+    console.log('❌ [fetchRepoPreflight] Generic error:', data.error);
+    throw new Error(data.error);
+  }
+
+  // Success - return combined stats + fingerprint
+  console.log('✅ [fetchRepoPreflight] Success! Returning combined data');
+  return {
+    stats: data.stats as AuditStats,
+    fingerprint: data.fingerprint as ComplexityFingerprint
+  };
 };
 
 
