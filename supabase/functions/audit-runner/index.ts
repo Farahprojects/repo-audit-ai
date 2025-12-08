@@ -51,6 +51,34 @@ serve(async (req) => {
       );
     }
 
+    // Validate repoUrl format (must be a valid GitHub URL)
+    const githubUrlPattern = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/;
+    if (!githubUrlPattern.test(repoUrl)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid repository URL format' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate all file URLs are from trusted GitHub domains
+    const allowedUrlPatterns = [
+      /^https:\/\/raw\.githubusercontent\.com\//,
+      /^https:\/\/api\.github\.com\//,
+    ];
+    
+    const invalidFiles = files.filter((f: any) => {
+      if (!f.url) return false; // Files without URLs will be fetched later
+      return !allowedUrlPatterns.some(pattern => pattern.test(f.url));
+    });
+
+    if (invalidFiles.length > 0) {
+      console.warn(`Blocked request with invalid file URLs: ${invalidFiles.map((f: any) => f.url).join(', ')}`);
+      return new Response(
+        JSON.stringify({ error: 'Invalid file URLs detected' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Fetch the tierPrompt from the database
     const { data: promptData, error: promptError } = await supabase
       .from('system_prompts')

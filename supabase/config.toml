@@ -1,16 +1,16 @@
 project_id = "zlrivxntdtewfagrbtry"
 
 [functions.github-proxy]
-verify_jwt = false
+verify_jwt = true
 
 [functions.audit-runner]
-verify_jwt = false
+verify_jwt = true
 
 [functions.audit-worker]
-verify_jwt = false
+verify_jwt = true
 
 [functions.audit-coordinator]
-verify_jwt = false
+verify_jwt = true
 
 [functions.github-oauth-start]
 verify_jwt = true
@@ -22,7 +22,7 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.send-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.verify-email]
 verify_jwt = false

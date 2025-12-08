@@ -74,11 +74,41 @@ export async function callGemini(
     }
 }
 
+// Allowed domains for fetching file content (SSRF protection)
+const ALLOWED_URL_PATTERNS = [
+    /^https:\/\/raw\.githubusercontent\.com\//,
+    /^https:\/\/api\.github\.com\//,
+    /^https:\/\/github\.com\/.*\/raw\//,
+];
+
+export function isValidGitHubUrl(url: string): boolean {
+    return ALLOWED_URL_PATTERNS.some(pattern => pattern.test(url));
+}
+
 export async function fetchFileContent(url: string): Promise<string> {
+    // Validate URL to prevent SSRF attacks
+    if (!isValidGitHubUrl(url)) {
+        console.warn(`Blocked fetch to untrusted URL: ${url}`);
+        return "";
+    }
+
     try {
-        const res = await fetch(url);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (!res.ok) throw new Error(`Failed to fetch ${url}`);
-        return await res.text();
+        
+        // Limit response size to 1MB to prevent memory exhaustion
+        const text = await res.text();
+        if (text.length > 1024 * 1024) {
+            console.warn(`File too large, truncating: ${url}`);
+            return text.slice(0, 1024 * 1024);
+        }
+        
+        return text;
     } catch (e) {
         // Silencing noisy network errors as requested by user
         // console.debug(`Fetch failed: ${url}`); 
