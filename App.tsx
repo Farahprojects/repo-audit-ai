@@ -153,10 +153,11 @@ const App: React.FC = () => {
     setScannerProgress(0);
   };
 
-  const handleViewHistoricalReport = (audit: Tables<'audits'>) => {
+  const handleViewHistoricalReport = (audit: Tables<'audits'> & { extra_data?: any }) => {
     // Explicitly cast the JSON data to the Issue[] type
     const issues = (audit.issues as unknown as Issue[]) || [];
     const repoName = audit.repo_url.split('/').slice(-2).join('/'); // Extract owner/repo format
+    const extraData = audit.extra_data || {};
 
     // Create basic stats if not available
     const stats: AuditStats = {
@@ -172,7 +173,16 @@ const App: React.FC = () => {
       healthScore: audit.health_score || 0,
       issues,
       summary: audit.summary || 'No summary available',
-      stats
+      stats,
+      // Map extra_data fields to RepoReport structure
+      topStrengths: extraData.topStrengths,
+      topIssues: extraData.topWeaknesses,
+      riskLevel: extraData.riskLevel,
+      productionReady: extraData.productionReady,
+      categoryAssessments: extraData.categoryAssessments,
+      seniorDeveloperAssessment: extraData.seniorDeveloperAssessment,
+      suspiciousFiles: extraData.suspiciousFiles,
+      overallVerdict: extraData.overallVerdict,
     };
 
     setHistoricalReportData(report);
