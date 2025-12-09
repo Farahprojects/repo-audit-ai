@@ -89,19 +89,10 @@ const AppContent: React.FC = () => {
   }, [setRepoUrl, navigate]);
 
   const handleStartAuditFromDashboard = useCallback(async (url: string, tier: string) => {
-    // Try to find existing preflight data to skip preflight step
-    const { findExistingPreflight } = await import('./services/preflightService');
-    const existingPreflight = await findExistingPreflight(url);
-
-    if (existingPreflight) {
-      // Skip preflight and go directly to audit with existing data
-      await handleStartAuditWithPreflight(url, tier, existingPreflight);
-    } else {
-      // No existing preflight, go through normal preflight flow
-      setRepoUrl(url);
-      navigate('preflight');
-    }
-  }, [handleStartAuditWithPreflight, setRepoUrl, navigate]);
+    // Always go through preflight flow - simpler and more reliable
+    setRepoUrl(url);
+    navigate('preflight');
+  }, [setRepoUrl, navigate]);
 
   const seoData = getSEO(reportData);
 
