@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Coordinator Agent - Phase 3 of Client-Side Orchestration
 // Synthesizes results and SAVES the audit to the database.
 
@@ -74,9 +73,7 @@ serve(async (req) => {
             repoUrl: preflightRecord.repo_url,
             files: fileMap.map(f => ({ ...f, type: 'file', content: undefined, url: f.url })),
             tier,
-            preflight: { // Minimal preflight for context
-                repo_url: preflightRecord.repo_url
-            },
+            preflight: preflightRecord as any, // Use full preflight record
             detectedStack,
             githubToken: null
         };

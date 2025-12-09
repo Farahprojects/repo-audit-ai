@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Audit Runner - Orchestration layer for 5-Pass "Magic Analysis" Pipeline
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 

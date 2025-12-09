@@ -1,4 +1,3 @@
-// @ts-nocheck - Deno runtime
 // GitHub OAuth Start - Secure Server-Side OAuth Initiation
 // Returns OAuth URL with CSRF-protected state token
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Cost Estimator Edge Function - Server-side token estimation
 // Keeps pricing logic secure and tamper-proof
 

@@ -35,7 +35,7 @@ export class AuditExecutionService {
 
     // Phase 1: MAP PHASE - The Planner (CEO)
     const { result: plan, usage: plannerUsage } = await runPlanner(context, geminiApiKey, tierPrompt);
-    plan.tasks.forEach((t, i) => console.log(`📋 Task ${i + 1}: ${t.description}`));
+    plan.tasks.forEach((t, i) => console.log(`📋 Task ${i + 1}: ${t.instruction}`));
 
     // Phase 2: WORKER PHASE - The Swarm (Parallel Execution)
     const timeStart = Date.now();

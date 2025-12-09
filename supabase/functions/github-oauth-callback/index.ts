@@ -1,4 +1,3 @@
-// @ts-nocheck - Deno runtime
 // GitHub OAuth Callback Handler
 // Handles OAuth flow with proper encryption and CSRF validation
 
@@ -141,7 +140,7 @@ async function decryptToken(encryptedData: string, secret: string): Promise<stri
 // Clean up expired CSRF states from database (called periodically)
 async function cleanupExpiredStates() {
   try {
-    const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createSupabaseClient(ENV);
     await supabase
       .from('oauth_csrf_states')
       .delete()

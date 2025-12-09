@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Audit Planner - Phase 1 of Client-Side Orchestration
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { runPlanner } from '../_shared/agents/planner.ts';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Preflight Manager - Single source of truth for repository metadata
 // This edge function manages the lifecycle of preflight records
 

@@ -1,4 +1,3 @@
-// @ts-nocheck - Deno runtime
 // Decrypt GitHub Token - Server-side decryption for secure token access
 
 import { validateRequestBody, ValidationError, validateSupabaseEnv, createSupabaseClient, handleCorsPreflight, createErrorResponse, createSuccessResponse, getAuthenticatedUserId } from '../_shared/utils.ts';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
 import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';

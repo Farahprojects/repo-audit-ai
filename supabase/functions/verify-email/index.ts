@@ -1,4 +1,3 @@
-// @ts-nocheck - Deno runtime
 
 // Email Verification Edge Function
 

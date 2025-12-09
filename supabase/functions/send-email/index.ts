@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Edge function for YOUR vbase app
 
 import { validateRequestBody, validateEmail, ValidationError, handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
