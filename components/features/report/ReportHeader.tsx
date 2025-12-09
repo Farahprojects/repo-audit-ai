@@ -107,7 +107,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
                   }`}
               >
                 <Plus className="w-4 h-4" />
-                Add Audit Type
+                Run Audit
                 <ChevronDown className={`w-3 h-3 transition-transform ${upgradesDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
             </div>
