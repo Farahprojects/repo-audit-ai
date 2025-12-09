@@ -179,10 +179,29 @@ export async function runWorker(
     const fileContext = successfulContent.join('\n\n');
 
     // 2. Analyze
-    const systemPrompt = `You are a ${task.role}. 
+    const systemPrompt = `You are a ${task.role}.
 Your goal is to execute the following instruction based on the provided code.
-Return a concise but detailed markdown analysis of your findings.
 Focus ONLY on your instruction.
+
+Return your findings in JSON format:
+{
+  "issues": [
+    {
+      "id": "unique_id",
+      "severity": "critical|warning|info",
+      "category": "Security",
+      "title": "Brief title",
+      "description": "Detailed description",
+      "file": "filename.js",
+      "line": 42,
+      "badCode": "problematic code snippet",
+      "fixedCode": "corrected code"
+    }
+  ],
+  "topStrengths": ["strength 1", "strength 2"],
+  "topWeaknesses": ["weakness 1", "weakness 2"],
+  "healthScore": 75
+}
 
 IMPORTANT: You must ONLY analyze the code provided below. Do NOT make assumptions or guess about code that is not shown.`;
 
@@ -192,8 +211,16 @@ ${task.instruction}
 CODE CONTEXT (${successfulContent.length} files):
 ${fileContext}`;
 
-    const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, { role: 'WORKER' });
+    const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, {
+      role: 'WORKER',
+      thinkingBudget: -1 // Use dynamic thinking for JSON output
+    });
 
+    console.log(`🤖 Worker [${task.role}] completed analysis:`, {
+      issuesCount: data?.issues?.length || 0,
+      hasHealthScore: typeof data?.healthScore === 'number',
+      dataType: typeof data
+    });
 
     return {
         result: {

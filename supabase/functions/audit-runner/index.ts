@@ -184,6 +184,12 @@ function aggregateWorkerResults(workerResults: WorkerResult[]): {
   for (const result of workerResults) {
     const findings = result.findings || {};
 
+    console.log(`🔍 Processing worker result:`, {
+      taskId: result.taskId,
+      issuesCount: findings.issues?.length || 0,
+      findingsType: typeof findings
+    });
+
     // Aggregate issues
     if (findings.issues && Array.isArray(findings.issues)) {
       allIssues.push(...findings.issues);
