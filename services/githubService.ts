@@ -75,8 +75,8 @@ export const parseGitHubUrl = (url: string): GitHubRepo | null => {
       normalized: `${owner}/${repo}`,
     };
   } catch {
-    return null;
-  }
+      return null;
+    }
 };
 
 /**

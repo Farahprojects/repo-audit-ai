@@ -139,8 +139,8 @@ const AppContent: React.FC = () => {
               } else {
                 // No existing preflight, go through normal preflight flow
                 console.log('📋 [App] No existing preflight found, starting preflight flow');
-                setRepoUrl(url);
-                navigate('preflight');
+              setRepoUrl(url);
+              navigate('preflight');
               }
             }}
           />
