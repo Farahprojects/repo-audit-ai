@@ -183,9 +183,7 @@ BEGIN
 END;
 $$;
 
--- Modify audits table to use chunking for large results
--- Add a flag to indicate if results are chunked
-ALTER TABLE audits ADD COLUMN results_chunked BOOLEAN DEFAULT false;
+-- Note: results_chunked column is now added in the dependency migration
 
 -- Function to automatically handle chunking on audit insert/update
 CREATE OR REPLACE FUNCTION handle_audit_chunking()

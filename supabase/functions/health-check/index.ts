@@ -239,37 +239,54 @@ async function checkRecentAudits(supabase: any): Promise<HealthCheck> {
 
 async function checkSystemResources(): Promise<HealthCheck> {
   try {
-    // Check Deno-specific metrics
-    const memInfo = Deno.memoryUsage?.() || {}
-    const systemMemory = {
-      rss: memInfo.rss,
-      heapTotal: memInfo.heapTotal,
-      heapUsed: memInfo.heapUsed,
-      external: memInfo.external
+    // Check Deno-specific metrics (use try-catch since memoryUsage may not be available)
+    let systemMemory: any = { note: 'Not available in this environment' };
+
+    try {
+      const memInfo = (Deno as any).memoryUsage?.() || {};
+      if (Object.keys(memInfo).length > 0) {
+        systemMemory = {
+          rss: memInfo.rss,
+          heapTotal: memInfo.heapTotal,
+          heapUsed: memInfo.heapUsed,
+          external: memInfo.external
+        };
+      }
+    } catch {
+      // memoryUsage not available, use fallback
+      systemMemory = { note: 'Memory usage check not available in this environment' };
     }
 
-    // Warn if heap usage is high (over 500MB)
-    const heapUsageMB = (systemMemory.heapUsed || 0) / (1024 * 1024)
-    if (heapUsageMB > 500) {
-      return {
-        status: 'warn',
-        message: `High memory usage: ${heapUsageMB.toFixed(1)}MB heap`,
-        details: systemMemory
+    // If we have memory info, check for high usage
+    if (typeof systemMemory.heapUsed === 'number') {
+      const heapUsageMB = systemMemory.heapUsed / (1024 * 1024);
+      if (heapUsageMB > 500) {
+        return {
+          status: 'warn',
+          message: `High memory usage: ${heapUsageMB.toFixed(1)}MB heap`,
+          details: systemMemory
+        };
       }
+
+      return {
+        status: 'pass',
+        message: `Memory usage normal: ${heapUsageMB.toFixed(1)}MB heap`,
+        details: systemMemory
+      };
     }
 
     return {
       status: 'pass',
-      message: `Memory usage normal: ${heapUsageMB.toFixed(1)}MB heap`,
+      message: 'System resource check completed',
       details: systemMemory
-    }
+    };
 
   } catch (error) {
-    // Memory check might not be available in all environments
+    // System resource check failed entirely
     return {
       status: 'pass',
-      message: 'System resource check skipped (not available)',
-      details: { note: 'Memory usage check not available in this environment' }
-    }
+      message: 'System resource check skipped (error)',
+      details: { note: 'System resource check failed', error: String(error) }
+    };
   }
 }

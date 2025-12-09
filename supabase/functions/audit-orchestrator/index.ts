@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { AuditService } from '../_shared/services/AuditExecutionService.ts'
 import { RequestValidationService } from '../_shared/services/RequestValidationService.ts'
 import { CircuitBreakerService, GitHubCircuitBreaker, AICircuitBreaker } from '../_shared/services/CircuitBreakerService.ts'
 import { RetryService, GitHubRetry, AIRetry } from '../_shared/services/RetryService.ts'
@@ -131,12 +130,18 @@ async function orchestrateAudit(
 
     // Phase 1: Planning (with resilience)
     const planStart = Date.now()
-    const { plan, tier: canonicalTier, usage: plannerUsage, preflight } = await RetryService.executeWithRetry(
+    const { data: planResult, error: planError } = await RetryService.executeWithRetry(
       () => AICircuitBreaker.execute(
-        () => AuditService.planAudit(preflightId, tier)
+        () => supabase.functions.invoke('audit-planner', {
+          body: { preflightId, tier }
+        })
       ),
       { maxAttempts: 2 }
     )
+
+    if (planError) throw planError
+
+    const { plan, tier: canonicalTier, usage: plannerUsage, preflight } = planResult
     const planDuration = Date.now() - planStart
 
     MonitoringService.recordAPIUsage('ai', 'audit-planner', planDuration, true)
@@ -160,14 +165,26 @@ async function orchestrateAudit(
         )
 
         // Execute with GitHub circuit breaker for repo access, AI circuit breaker for analysis
-        const { result } = await RetryService.executeWithRetry(
+        const { data: workerResult, error: workerError } = await RetryService.executeWithRetry(
           () => Promise.all([
             GitHubCircuitBreaker.execute(() => Promise.resolve()), // Placeholder for GitHub calls
-            AICircuitBreaker.execute(() => AuditService.runAuditTask(preflightId, task, preflight))
+            AICircuitBreaker.execute(() => supabase.functions.invoke('audit-worker', {
+              body: {
+                preflightId,
+                taskId: task.id,
+                instruction: task.instruction,
+                role: task.role,
+                targetFiles: task.targetFiles,
+                preflight // Pass inline preflight data to avoid N+1 queries
+              }
+            }))
           ]).then(([, auditResult]) => auditResult),
           { maxAttempts: 2 }
         )
 
+        if (workerError) throw workerError
+
+        const result = workerResult.result
         const taskDuration = Date.now() - taskStart
         MonitoringService.recordAPIUsage('ai', `audit-worker-${task.role}`, taskDuration, true)
 
@@ -212,13 +229,23 @@ async function orchestrateAudit(
     const synthesisStart = Date.now()
     await updateProgress(95, '[Coordinator] Synthesizing results...')
 
-    const finalReport = await RetryService.executeWithRetry(
+    const { data: synthesisResult, error: synthesisError } = await RetryService.executeWithRetry(
       () => AICircuitBreaker.execute(
-        () => AuditService.synthesizeAuditResults(preflightId, workerResults, canonicalTier, plannerUsage)
+        () => supabase.functions.invoke('audit-coordinator', {
+          body: {
+            preflightId,
+            workerResults,
+            tier: canonicalTier,
+            plannerUsage
+          }
+        })
       ),
       { maxAttempts: 2 }
     )
 
+    if (synthesisError) throw synthesisError
+
+    const finalReport = synthesisResult
     const synthesisDuration = Date.now() - synthesisStart
     MonitoringService.recordAPIUsage('ai', 'audit-coordinator', synthesisDuration, true)
 

@@ -32,6 +32,31 @@ export interface ValidatedRequest {
 
 export class RequestValidationService {
   /**
+   * Validates audit orchestration request
+   */
+  static validateAuditOrchestrationRequest(body: any): { isValid: boolean; error?: string } {
+    if (!body.preflightId || typeof body.preflightId !== 'string') {
+      return { isValid: false, error: 'preflightId is required and must be a string' };
+    }
+
+    if (!body.tier || typeof body.tier !== 'string') {
+      return { isValid: false, error: 'tier is required and must be a string' };
+    }
+
+    if (!body.userId || typeof body.userId !== 'string') {
+      return { isValid: false, error: 'userId is required and must be a string' };
+    }
+
+    // Validate tier is one of the allowed values
+    const validTiers = ['shape', 'conventions', 'performance', 'security'];
+    if (!validTiers.includes(body.tier)) {
+      return { isValid: false, error: `tier must be one of: ${validTiers.join(', ')}` };
+    }
+
+    return { isValid: true };
+  }
+
+  /**
    * Validates the complete audit request
    */
   static async validateRequest(body: any): Promise<ValidatedRequest> {
