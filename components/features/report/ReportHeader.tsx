@@ -117,13 +117,6 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         {/* Action Buttons - Far Right */}
         <div className="flex items-center gap-1 print:hidden">
           <button
-            onClick={onShare}
-            className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
-            title="Share Report"
-          >
-            {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Share2 className="w-4 h-4" />}
-          </button>
-          <button
             onClick={onExportCSV}
             className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
             title="Export CSV"
