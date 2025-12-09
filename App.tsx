@@ -6,7 +6,7 @@ import About from './components/About';
 import Contact from './components/Contact';
 import AuthModal from './components/AuthModal';
 import SEO from './components/SEO';
-import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useAuthFlowContext } from './components/AppProviders';
+import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useScannerContext, useAuthFlowContext } from './components/AppProviders';
 import { LandingPage } from './components/LandingPage';
 import { AuditFlow } from './components/AuditFlow';
 import { DashboardPage } from './components/DashboardPage';
@@ -22,8 +22,6 @@ const AppContent: React.FC = () => {
     reportData,
     historicalReportData,
     relatedAudits,
-    scannerLogs,
-    scannerProgress,
     handleAnalyze,
     handleConfirmAudit,
     handleStartAuditWithPreflight,
@@ -32,6 +30,7 @@ const AppContent: React.FC = () => {
     handleSelectAudit,
     clearAuditState,
   } = useAuditContext();
+  const { scannerLogs, scannerProgress } = useScannerContext();
   const { isAuthOpen, handleSoftStart, openAuthModal, closeAuthModal } = useAuthFlowContext();
 
   // Handle soft start (auth flow version)

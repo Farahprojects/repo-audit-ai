@@ -179,7 +179,7 @@ export async function runWorker(
     const fileContext = successfulContent.join('\n\n');
 
     // 2. Analyze
-    const systemPrompt = `You are a ${task.role}.
+    const systemPrompt = `You are a ${task.role}. 
 Your goal is to execute the following instruction based on the provided code.
 Focus ONLY on your instruction.
 

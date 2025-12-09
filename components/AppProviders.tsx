@@ -46,7 +46,23 @@ export const useRouterContext = () => {
   return context;
 };
 
-// Audit Context
+// Scanner Context (Volatile - frequently changing)
+interface ScannerContextType {
+  scannerLogs: string[];
+  scannerProgress: number;
+}
+
+const ScannerContext = createContext<ScannerContextType | undefined>(undefined);
+
+export const useScannerContext = () => {
+  const context = useContext(ScannerContext);
+  if (!context) {
+    throw new Error('useScannerContext must be used within a ScannerProvider');
+  }
+  return context;
+};
+
+// Audit Context (Stable - infrequently changing)
 interface AuditContextType {
   repoUrl: string;
   setRepoUrl: (url: string) => void;
@@ -56,8 +72,6 @@ interface AuditContextType {
   relatedAudits: AuditRecord[];
   pendingRepoUrl: string | null;
   setPendingRepoUrl: (url: string | null) => void;
-  scannerLogs: string[];
-  scannerProgress: number;
   handleAnalyze: (url: string) => void;
   handleConfirmAudit: (tier: string, stats: AuditStats) => Promise<void>;
   handleRestart: () => void;
@@ -143,6 +157,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     getSEO: router.getSEO,
   }), [router.view, router.previousView, router.navigate, router.resetToLanding, router.isPublicPage, router.getSEO]);
 
+  // Stable audit context - infrequently changing values
   const auditValue = useMemo(() => ({
     repoUrl: auditOrchestrator.repoUrl,
     setRepoUrl: auditOrchestrator.setRepoUrl,
@@ -152,8 +167,6 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     relatedAudits: auditOrchestrator.relatedAudits,
     pendingRepoUrl: auditOrchestrator.pendingRepoUrl,
     setPendingRepoUrl: auditOrchestrator.setPendingRepoUrl,
-    scannerLogs: auditOrchestrator.scannerLogs,
-    scannerProgress: auditOrchestrator.scannerProgress,
     handleAnalyze: auditOrchestrator.handleAnalyze,
     handleConfirmAudit: auditOrchestrator.handleConfirmAudit,
     handleRestart: auditOrchestrator.handleRestart,
@@ -169,14 +182,21 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     auditOrchestrator.relatedAudits,
     auditOrchestrator.pendingRepoUrl,
     auditOrchestrator.setPendingRepoUrl,
-    auditOrchestrator.scannerLogs,
-    auditOrchestrator.scannerProgress,
     auditOrchestrator.handleAnalyze,
     auditOrchestrator.handleConfirmAudit,
     auditOrchestrator.handleRestart,
     auditOrchestrator.handleViewHistoricalReport,
     auditOrchestrator.handleSelectAudit,
     auditOrchestrator.clearAuditState,
+  ]);
+
+  // Volatile scanner context - frequently changing values
+  const scannerValue = useMemo(() => ({
+    scannerLogs: auditOrchestrator.scannerLogs,
+    scannerProgress: auditOrchestrator.scannerProgress,
+  }), [
+    auditOrchestrator.scannerLogs,
+    auditOrchestrator.scannerProgress,
   ]);
 
   const authFlowValue = useMemo(() => ({
@@ -190,9 +210,11 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     <AuthContext.Provider value={authValue}>
       <RouterContext.Provider value={routerValue}>
         <AuditContext.Provider value={auditValue}>
-          <AuthFlowContext.Provider value={authFlowValue}>
-            {children}
-          </AuthFlowContext.Provider>
+          <ScannerContext.Provider value={scannerValue}>
+            <AuthFlowContext.Provider value={authFlowValue}>
+              {children}
+            </AuthFlowContext.Provider>
+          </ScannerContext.Provider>
         </AuditContext.Provider>
       </RouterContext.Provider>
     </AuthContext.Provider>
