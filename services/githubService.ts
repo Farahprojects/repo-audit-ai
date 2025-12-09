@@ -9,61 +9,74 @@ export interface FileMapItem {
   url?: string; // GitHub raw URL for fetching later
 }
 
-export const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
-  console.log('🔗 [parseGitHubUrl] Parsing URL:', url);
+// Canonical GitHub repository URL parser - matches backend implementation
+export interface GitHubRepo {
+  owner: string;
+  repo: string;
+  normalized: string;
+}
 
-  if (!url || !url.trim()) {
-    console.log('❌ [parseGitHubUrl] Empty URL provided');
+export const parseGitHubUrl = (url: string): GitHubRepo | null => {
+  if (!url) return null;
+
+  // Normalize whitespace and trim
+  let parsedUrl = url.trim();
+
+  // Handle simple owner/repo format first
+  if (!parsedUrl.includes('.') && parsedUrl.includes('/')) {
+    const parts = parsedUrl.split('/').filter(Boolean);
+    if (parts.length === 2) {
+      const [owner, repoWithGit] = parts;
+      const repo = repoWithGit.replace(/\.git$/, "");
+      if (owner && repo) {
+        return {
+          owner,
+          repo,
+          normalized: `${owner}/${repo}`,
+        };
+      }
+    }
     return null;
   }
 
-  // Remove any trailing slashes
-  const cleanUrl = url.trim().replace(/\/+$/, '');
-  console.log('🔗 [parseGitHubUrl] Cleaned URL:', cleanUrl);
-
-  try {
-    const urlObj = new URL(cleanUrl);
-    console.log('🔗 [parseGitHubUrl] Full URL detected, hostname:', urlObj.hostname);
-
-    // Check if it's a GitHub URL
-    if (!urlObj.hostname.includes('github.com')) {
-      console.log('❌ [parseGitHubUrl] Not a GitHub URL:', urlObj.hostname);
-      return null;
-    }
-
-    const parts = urlObj.pathname.split('/').filter(Boolean);
-    console.log('🔗 [parseGitHubUrl] Path parts:', parts);
-
-    if (parts.length === 1) {
-      console.log('❌ [parseGitHubUrl] Missing repository name - only owner provided:', parts[0]);
-      return null;
-    }
-
-    if (parts.length >= 2) {
-      const result = { owner: parts[0], repo: parts[1] };
-      console.log('✅ [parseGitHubUrl] Successfully parsed:', result);
-      return result;
-    }
-  } catch (e) {
-    console.log('🔄 [parseGitHubUrl] URL parsing failed, trying simple format');
-    // Try parsing as owner/repo format (without https://github.com/)
-    const parts = cleanUrl.split('/').filter(Boolean);
-    console.log('🔗 [parseGitHubUrl] Simple format parts:', parts);
-
-    if (parts.length === 1) {
-      console.log('❌ [parseGitHubUrl] Simple format missing repository name - only owner provided:', parts[0]);
-      return null;
-    }
-
-    if (parts.length === 2) {
-      const result = { owner: parts[0], repo: parts[1] };
-      console.log('✅ [parseGitHubUrl] Successfully parsed simple format:', result);
-      return result;
-    }
+  // Convert SSH to https-like format
+  // git@github.com:owner/repo.git
+  const sshMatch = parsedUrl.match(/^git@github\.com:(.+)$/);
+  if (sshMatch) {
+    parsedUrl = "https://github.com/" + sshMatch[1];
   }
 
-  console.log('❌ [parseGitHubUrl] Failed to parse URL - invalid format');
-  return null;
+  // Add scheme if missing
+  if (!parsedUrl.startsWith("http")) {
+    parsedUrl = "https://" + parsedUrl;
+  }
+
+  try {
+    const u = new URL(parsedUrl);
+
+    if (!u.hostname.includes("github.com")) return null;
+
+    // Remove leading/trailing slashes
+    const parts = u.pathname.replace(/^\/+|\/+$/g, "").split("/");
+
+    if (parts.length < 2) return null;
+
+    const owner = decodeURIComponent(parts[0]);
+    let repo = decodeURIComponent(parts[1]);
+
+    // Strip .git
+    repo = repo.replace(/\.git$/, "");
+
+    if (!owner || !repo) return null;
+
+    return {
+      owner,
+      repo,
+      normalized: `${owner}/${repo}`,
+    };
+  } catch {
+    return null;
+  }
 };
 
 /**

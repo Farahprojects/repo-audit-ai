@@ -20,7 +20,8 @@ import {
   getOptionalUserId,
   handleCorsPreflight,
   createErrorResponse,
-  createSuccessResponse
+  createSuccessResponse,
+  parseGitHubRepo
 } from '../_shared/utils.ts';
 
 // Canonical tier mapping - validates and maps frontend tiers
@@ -268,13 +269,12 @@ serve(async (req) => {
       }
     }
 
-    // SURGICAL VALIDATION: Extract owner/repo from declared repoUrl
-    const repoMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s?#]+)/i);
-    if (!repoMatch) {
+    // SURGICAL VALIDATION: Extract owner/repo from declared repoUrl using canonical parser
+    const repoInfo = parseGitHubRepo(repoUrl);
+    if (!repoInfo) {
       return createErrorResponse('Could not extract owner/repo from repoUrl', 400);
     }
-    const [, declaredOwner, declaredRepo] = repoMatch;
-    const cleanRepo = declaredRepo.replace(/\.git$/, '');
+    const { owner: declaredOwner, repo: declaredRepo } = repoInfo;
 
     // Build case-insensitive pattern to match owner/repo in file URLs
     const ownerRepoPattern = new RegExp(`/${declaredOwner}/${cleanRepo}/`, 'i');

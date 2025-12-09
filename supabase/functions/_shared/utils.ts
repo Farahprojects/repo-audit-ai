@@ -230,6 +230,80 @@ export async function getOptionalUserId(req: Request, supabase: SupabaseClient):
 }
 
 // ============================================================================
+// SHARED GITHUB UTILITIES
+// ============================================================================
+
+// Canonical GitHub repository URL parser - single source of truth
+export interface GitHubRepo {
+  owner: string;
+  repo: string;
+  normalized: string;
+}
+
+export function parseGitHubRepo(input: string): GitHubRepo | null {
+  if (!input) return null;
+
+  // Normalize whitespace and trim
+  let url = input.trim();
+
+  // Handle simple owner/repo format first
+  if (!url.includes('.') && url.includes('/')) {
+    const parts = url.split('/').filter(Boolean);
+    if (parts.length === 2) {
+      const [owner, repoWithGit] = parts;
+      const repo = repoWithGit.replace(/\.git$/, "");
+      if (owner && repo) {
+        return {
+          owner,
+          repo,
+          normalized: `${owner}/${repo}`,
+        };
+      }
+    }
+    return null;
+  }
+
+  // Convert SSH to https-like format
+  // git@github.com:owner/repo.git
+  const sshMatch = url.match(/^git@github\.com:(.+)$/);
+  if (sshMatch) {
+    url = "https://github.com/" + sshMatch[1];
+  }
+
+  // Add scheme if missing
+  if (!url.startsWith("http")) {
+    url = "https://" + url;
+  }
+
+  try {
+    const u = new URL(url);
+
+    if (!u.hostname.includes("github.com")) return null;
+
+    // Remove leading/trailing slashes
+    const parts = u.pathname.replace(/^\/+|\/+$/g, "").split("/");
+
+    if (parts.length < 2) return null;
+
+    const owner = decodeURIComponent(parts[0]);
+    let repo = decodeURIComponent(parts[1]);
+
+    // Strip .git
+    repo = repo.replace(/\.git$/, "");
+
+    if (!owner || !repo) return null;
+
+    return {
+      owner,
+      repo,
+      normalized: `${owner}/${repo}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================================
 // SHARED RESPONSE UTILITIES
 // ============================================================================
 

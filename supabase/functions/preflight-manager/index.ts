@@ -62,13 +62,12 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 /**
  * Extract owner/repo from GitHub URL
  */
-function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
-    const match = url.match(/github\.com\/([^\/]+)\/([^\/\s?#]+)/i);
-    if (!match) return null;
-    return {
-        owner: match[1],
-        repo: match[2].replace(/\.git$/, '')
-    };
+// Import canonical parser from shared utils
+import { parseGitHubRepo } from '../_shared/utils.ts';
+
+// Alias for backward compatibility
+function parseGitHubUrl(url: string) {
+    return parseGitHubRepo(url);
 }
 
 /**
