@@ -277,9 +277,9 @@ serve(async (req) => {
     const { owner: declaredOwner, repo: declaredRepo } = repoInfo;
 
     // Build case-insensitive pattern to match owner/repo in file URLs
-    const ownerRepoPattern = new RegExp(`/${declaredOwner}/${cleanRepo}/`, 'i');
+    const ownerRepoPattern = new RegExp(`/${declaredOwner}/${declaredRepo}/`, 'i');
 
-    console.log(`🔒 URL Validation: Declared repo = ${declaredOwner}/${cleanRepo}`);
+    console.log(`🔒 URL Validation: Declared repo = ${declaredOwner}/${declaredRepo}`);
     console.log(`🔒 First 3 file URLs:`, fileMap.slice(0, 3).map((f: any) => f.url || f.path));
 
     // Validate all file URLs are from trusted GitHub domains
@@ -305,11 +305,11 @@ serve(async (req) => {
       // CRITICAL: Check URL contains the declared owner/repo
       if (!ownerRepoPattern.test(f.url)) {
         console.error(`🚨 SECURITY: File URL does not match declared repo!`);
-        console.error(`   Declared: ${declaredOwner}/${cleanRepo}`);
+        console.error(`   Declared: ${declaredOwner}/${declaredRepo}`);
         console.error(`   File URL: ${f.url}`);
         return createErrorResponse(
           `Security Error: File URL at index ${i} does not match declared repository. ` +
-          `Expected: ${declaredOwner}/${cleanRepo}, Got URL: ${f.url.substring(0, 100)}`,
+          `Expected: ${declaredOwner}/${declaredRepo}, Got URL: ${f.url.substring(0, 100)}`,
           400
         );
       }
