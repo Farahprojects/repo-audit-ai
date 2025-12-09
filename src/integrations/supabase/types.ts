@@ -64,6 +64,84 @@ export type Database = {
           },
         ]
       }
+      audit_status: {
+        Row: {
+          id: string
+          preflight_id: string
+          user_id: string
+          status: string
+          progress: number
+          logs: Json
+          current_step: string | null
+          report_data: Json | null
+          error_message: string | null
+          error_details: Json | null
+          created_at: string
+          updated_at: string
+          started_at: string | null
+          completed_at: string | null
+          failed_at: string | null
+          tier: string
+          estimated_duration_seconds: number | null
+          actual_duration_seconds: number | null
+        }
+        Insert: {
+          id?: string
+          preflight_id: string
+          user_id: string
+          status?: string
+          progress?: number
+          logs?: Json
+          current_step?: string | null
+          report_data?: Json | null
+          error_message?: string | null
+          error_details?: Json | null
+          created_at?: string
+          updated_at?: string
+          started_at?: string | null
+          completed_at?: string | null
+          failed_at?: string | null
+          tier: string
+          estimated_duration_seconds?: number | null
+          actual_duration_seconds?: number | null
+        }
+        Update: {
+          id?: string
+          preflight_id?: string
+          user_id?: string
+          status?: string
+          progress?: number
+          logs?: Json
+          current_step?: string | null
+          report_data?: Json | null
+          error_message?: string | null
+          error_details?: Json | null
+          created_at?: string
+          updated_at?: string
+          started_at?: string | null
+          completed_at?: string | null
+          failed_at?: string | null
+          tier?: string
+          estimated_duration_seconds?: number | null
+          actual_duration_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_status_preflight_id_fkey"
+            columns: ["preflight_id"]
+            isOneToOne: false
+            referencedRelation: "preflights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_status_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       domain_slugs: {
         Row: {
           admin: boolean | null
