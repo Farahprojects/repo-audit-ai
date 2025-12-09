@@ -51,11 +51,6 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         <h1 className="text-xl font-semibold text-foreground">
           {data.repoName}
         </h1>
-        {data.riskLevel && (
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${riskBadgeColor[data.riskLevel]}`}>
-            {data.riskLevel.toUpperCase()} RISK
-          </span>
-        )}
       </div>
 
       {/* Second Row: Branch Info */}
