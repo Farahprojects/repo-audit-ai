@@ -5,6 +5,9 @@ import { RequestValidationService } from '../_shared/services/RequestValidationS
 import { CircuitBreakerService, GitHubCircuitBreaker, AICircuitBreaker } from '../_shared/services/CircuitBreakerService.ts'
 import { RetryService, GitHubRetry, AIRetry } from '../_shared/services/RetryService.ts'
 import { MonitoringService } from '../_shared/services/MonitoringService.ts'
+import { LoggerService, RequestTracer } from '../_shared/services/LoggerService.ts'
+import { ErrorTrackingService } from '../_shared/services/ErrorTrackingService.ts'
+import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/services/RuntimeMonitoringService.ts'
 
 interface AuditOrchestrationRequest {
   preflightId: string
@@ -12,13 +15,25 @@ interface AuditOrchestrationRequest {
   userId: string
 }
 
-serve(async (req) => {
+serve(withPerformanceMonitoring(async (req) => {
+  const tracer = LoggerService.startRequest('audit-orchestration', {
+    component: 'AuditOrchestrator',
+    function: 'serve'
+  })
+
   // Handle CORS
   if (req.method === 'OPTIONS') {
+    tracer.end(true)
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
+    LoggerService.info('Audit orchestration request received', {
+      component: 'AuditOrchestrator',
+      method: req.method,
+      url: req.url
+    })
+
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -26,9 +41,18 @@ serve(async (req) => {
 
     // Parse and validate request
     const body: AuditOrchestrationRequest = await req.json()
+    tracer.checkpoint('request-parsed', { preflightId: body.preflightId })
+
     const validation = RequestValidationService.validateAuditOrchestrationRequest(body)
 
     if (!validation.isValid) {
+      LoggerService.warn('Request validation failed', {
+        component: 'AuditOrchestrator',
+        error: new Error(validation.error),
+        preflightId: body.preflightId
+      })
+
+      tracer.end(false, { error: validation.error })
       return new Response(
         JSON.stringify({ error: validation.error }),
         {
@@ -39,6 +63,15 @@ serve(async (req) => {
     }
 
     const { preflightId, tier, userId } = body
+    const correlationId = tracer.getCorrelationId()
+
+    LoggerService.info('Starting audit orchestration', {
+      component: 'AuditOrchestrator',
+      preflightId,
+      tier,
+      userId,
+      correlationId
+    })
 
     // Update audit status to processing
     const { error: statusError } = await supabase
@@ -52,9 +85,23 @@ serve(async (req) => {
       })
 
     if (statusError) {
-      console.error('Failed to create audit status:', statusError)
+      const errorMsg = 'Failed to initialize audit status'
+      LoggerService.error(errorMsg, undefined, {
+        component: 'AuditOrchestrator',
+        preflightId,
+        error: statusError
+      })
+
+      ErrorTrackingService.captureError(statusError, {
+        component: 'AuditOrchestrator',
+        function: 'initializeAuditStatus',
+        preflightId,
+        userId
+      })
+
+      tracer.end(false, { error: errorMsg })
       return new Response(
-        JSON.stringify({ error: 'Failed to initialize audit status' }),
+        JSON.stringify({ error: errorMsg }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -62,14 +109,44 @@ serve(async (req) => {
       )
     }
 
+    tracer.checkpoint('audit-status-initialized')
+
     // Start orchestration asynchronously (don't wait for completion)
-    orchestrateAudit(supabase, preflightId, tier, userId)
+    orchestrateAudit(supabase, preflightId, tier, userId, correlationId)
+      .catch(error => {
+        LoggerService.critical('Audit orchestration failed', error, {
+          component: 'AuditOrchestrator',
+          preflightId,
+          tier,
+          userId,
+          correlationId
+        })
+
+        ErrorTrackingService.captureError(error, {
+          component: 'AuditOrchestrator',
+          function: 'orchestrateAudit',
+          preflightId,
+          tier,
+          userId,
+          correlationId
+        }, 'high')
+      })
+
+    LoggerService.info('Audit orchestration initiated successfully', {
+      component: 'AuditOrchestrator',
+      preflightId,
+      tier,
+      correlationId
+    })
+
+    tracer.end(true, { status: 'initiated' })
 
     // Return immediate response with status tracking info
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Audit orchestration started',
+        correlationId,
         status: {
           preflightId,
           status: 'processing',
@@ -82,28 +159,50 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Audit orchestration error:', error)
+    const errorMsg = error instanceof Error ? error.message : 'Internal server error'
+
+    LoggerService.error('Audit orchestrator request failed', error as Error, {
+      component: 'AuditOrchestrator',
+      function: 'serve'
+    })
+
+    ErrorTrackingService.captureError(error as Error, {
+      component: 'AuditOrchestrator',
+      function: 'serve'
+    }, 'high')
+
+    tracer.end(false, { error: errorMsg })
+
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: errorMsg }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
   }
-})
+}, 'audit-orchestration'))
 
 async function orchestrateAudit(
   supabase: any,
   preflightId: string,
   tier: string,
-  userId: string
+  userId: string,
+  correlationId: string
 ) {
   const startTime = Date.now()
   let totalTokensUsed = 0
   let totalIssuesFound = 0
 
-  const updateProgress = async (progress: number, log: string) => {
+  const updateProgress = async (progress: number, log: string, metadata?: any) => {
+    LoggerService.debug(log, {
+      component: 'AuditOrchestrator',
+      preflightId,
+      progress,
+      correlationId,
+      ...metadata
+    })
+
     const { data: currentLogs } = await supabase
       .from('audit_status')
       .select('logs')
@@ -112,7 +211,7 @@ async function orchestrateAudit(
 
     const updatedLogs = [...(currentLogs?.logs || []), log]
 
-    await supabase
+    const { error } = await supabase
       .from('audit_status')
       .update({
         progress,
@@ -121,25 +220,57 @@ async function orchestrateAudit(
         updated_at: new Date().toISOString()
       })
       .eq('preflight_id', preflightId)
+
+    if (error) {
+      LoggerService.error('Failed to update audit progress', undefined, {
+        component: 'AuditOrchestrator',
+        preflightId,
+        error: error.message,
+        correlationId
+      })
+    }
   }
 
   try {
+    ErrorTrackingService.addBreadcrumb('Starting audit orchestration', 'audit', 'info', {
+      preflightId,
+      tier,
+      correlationId
+    })
+
     await updateProgress(2, '[Planner] Analyzing codebase structure...')
     await updateProgress(4, '[Planner] Loading audit requirements...')
     await updateProgress(5, '[Planner] Generating specialized task breakdown...')
 
     // Phase 1: Planning (with resilience)
     const planStart = Date.now()
-    const { data: planResult, error: planError } = await RetryService.executeWithRetry(
+    LoggerService.info('Starting audit planning phase', {
+      component: 'AuditOrchestrator',
+      preflightId,
+      tier,
+      correlationId
+    })
+
+    const planResponse = await RetryService.executeWithRetry(
       () => AICircuitBreaker.execute(
         () => supabase.functions.invoke('audit-planner', {
           body: { preflightId, tier }
         })
       ),
       { maxAttempts: 2 }
-    )
+    ) as { data: any; error: any }
 
-    if (planError) throw planError
+    const { data: planResult, error: planError } = planResponse
+
+    if (planError) {
+      LoggerService.error('Audit planning failed', planError, {
+        component: 'AuditOrchestrator',
+        preflightId,
+        tier,
+        correlationId
+      })
+      throw planError
+    }
 
     const { plan, tier: canonicalTier, usage: plannerUsage, preflight } = planResult
     const planDuration = Date.now() - planStart
@@ -147,7 +278,18 @@ async function orchestrateAudit(
     MonitoringService.recordAPIUsage('ai', 'audit-planner', planDuration, true)
     totalTokensUsed += plannerUsage?.totalTokens || 0
 
-    await updateProgress(15, `[Planner] Plan generated: ${plan.tasks.length} tasks in ${planDuration}ms.`)
+    LoggerService.info('Audit planning completed', {
+      component: 'AuditOrchestrator',
+      preflightId,
+      taskCount: plan.tasks.length,
+      duration: planDuration,
+      correlationId
+    })
+
+    await updateProgress(15, `[Planner] Plan generated: ${plan.tasks.length} tasks in ${planDuration}ms.`, {
+      taskCount: plan.tasks.length,
+      duration: planDuration
+    })
 
     // Phase 2: Execution (Workers) with resilience
     const workerResults = []
@@ -165,7 +307,7 @@ async function orchestrateAudit(
         )
 
         // Execute with GitHub circuit breaker for repo access, AI circuit breaker for analysis
-        const { data: workerResult, error: workerError } = await RetryService.executeWithRetry(
+        const workerResponse = await RetryService.executeWithRetry(
           () => Promise.all([
             GitHubCircuitBreaker.execute(() => Promise.resolve()), // Placeholder for GitHub calls
             AICircuitBreaker.execute(() => supabase.functions.invoke('audit-worker', {
@@ -180,7 +322,9 @@ async function orchestrateAudit(
             }))
           ]).then(([, auditResult]) => auditResult),
           { maxAttempts: 2 }
-        )
+        ) as { data: any; error: any }
+
+        const { data: workerResult, error: workerError } = workerResponse
 
         if (workerError) throw workerError
 
@@ -229,7 +373,7 @@ async function orchestrateAudit(
     const synthesisStart = Date.now()
     await updateProgress(95, '[Coordinator] Synthesizing results...')
 
-    const { data: synthesisResult, error: synthesisError } = await RetryService.executeWithRetry(
+    const synthesisResponse = await RetryService.executeWithRetry(
       () => AICircuitBreaker.execute(
         () => supabase.functions.invoke('audit-coordinator', {
           body: {
@@ -241,7 +385,9 @@ async function orchestrateAudit(
         })
       ),
       { maxAttempts: 2 }
-    )
+    ) as { data: any; error: any }
+
+    const { data: synthesisResult, error: synthesisError } = synthesisResponse
 
     if (synthesisError) throw synthesisError
 

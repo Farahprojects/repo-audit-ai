@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 // Real-time Runtime Monitoring and Performance Tracking
 // Provides live visibility into system performance and health
 

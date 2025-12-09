@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 // Advanced Error Tracking and Reporting Service
 // Captures detailed error information for debugging and monitoring
 
@@ -16,6 +18,8 @@ export interface ErrorDetails {
   component?: string;
   function?: string;
   duration?: number;
+  preflightId?: string;
+  tier?: string;
   metadata?: Record<string, any>;
 }
 

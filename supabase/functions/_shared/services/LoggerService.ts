@@ -16,6 +16,10 @@ export interface LogContext {
   correlationId?: string;
   errorType?: string;
   checkpoint?: string;
+  method?: string;
+  taskCount?: number;
+  url?: string;
+  endpoint?: string;
   metadata?: Record<string, any>;
 }
 

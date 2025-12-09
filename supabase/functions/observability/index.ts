@@ -116,7 +116,7 @@ serve(async (req) => {
           alerts,
           monitoring,
           timestamp: new Date().toISOString(),
-          uptime: performance.now()
+          uptime: (globalThis as any).performance?.now() || Date.now()
         }
         status = health.status
         break
