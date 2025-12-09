@@ -13,6 +13,6 @@ This contains everything you need to run your SCAI app locally.
 
 1. Install dependencies:
    `npm install`
-2. Set the `VITE_GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set up Supabase environment variables (see env-template.txt)
 3. Run the app:
    `npm run dev`
