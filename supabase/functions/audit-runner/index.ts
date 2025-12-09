@@ -291,7 +291,7 @@ serve(async (req) => {
     // FAIL FAST: Check EVERY file URL matches the declared repository
     for (let i = 0; i < fileMap.length; i++) {
       const f = fileMap[i];
-      if (!f.url) continue; // Files without URLs will be fetched later via path
+      if (!f.url) continue; // Files without URLs will use path-based fallback in worker
       if (typeof f.url !== 'string') {
         return createErrorResponse(`File at index ${i} has invalid URL type`, 400);
       }
