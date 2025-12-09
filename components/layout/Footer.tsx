@@ -17,7 +17,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <img
                 src="/favicon-192x192.png"
                 alt="SCAI Logo"
-                className="w-8 h-8"
+                className="w-6 h-6"
               />
               <span className="text-slate-900 font-bold text-lg">SCAI</span>
             </div>
