@@ -266,6 +266,39 @@ export class PreflightService {
  * }
  * ```
  */
+/**
+ * Find existing preflight for a repo URL without creating new ones
+ * Used by the dashboard to skip preflight step for repos that already have data
+ */
+export async function findExistingPreflight(repoUrl: string): Promise<PreflightRecord | null> {
+    try {
+        ErrorLogger.info('Finding existing preflight', { repoUrl });
+
+        const { data, error } = await supabase
+            .from('preflights')
+            .select('*')
+            .eq('repo_url', repoUrl)
+            .gt('expires_at', new Date().toISOString()) // Only valid (non-expired) preflights
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (error) {
+            if (error.code === 'PGRST116') { // No rows returned
+                ErrorLogger.info('No existing preflight found', { repoUrl });
+                return null;
+            }
+            throw error;
+        }
+
+        ErrorLogger.info('Found existing preflight', { repoUrl, preflightId: data.id });
+        return data as PreflightRecord;
+    } catch (error) {
+        ErrorLogger.error('Failed to find existing preflight', error, { repoUrl });
+        return null;
+    }
+}
+
 export async function fetchPreflight(
     repoUrl: string,
     options?: { forceRefresh?: boolean; userToken?: string }

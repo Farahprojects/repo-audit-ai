@@ -3,6 +3,7 @@ import { ViewState, AuditStats, RepoReport, AuditRecord } from '../types';
 import { Tables } from '../src/integrations/supabase/types';
 import { AuditService } from '../services/auditService';
 import { ErrorHandler, ErrorLogger } from '../services/errorService';
+import { PreflightRecord } from '../services/preflightService';
 
 interface UseAuditOrchestratorProps {
   user: any;
@@ -129,6 +130,62 @@ export const useAuditOrchestrator = ({
     }
   }, [repoUrl, addLog, navigate]);
 
+  // Start audit directly with existing preflight data (skip preflight step)
+  const handleStartAuditWithPreflight = useCallback(async (
+    url: string,
+    tier: string,
+    preflight: PreflightRecord
+  ) => {
+    ErrorLogger.info('Starting audit with existing preflight data', {
+      repoUrl: url,
+      tier,
+      preflightId: preflight.id
+    });
+
+    setRepoUrl(url);
+    setAuditStats(preflight.stats);
+    navigate('scanning');
+    setScannerLogs([]);
+    setScannerProgress(0);
+
+    try {
+      const result = await ErrorHandler.withErrorHandling(
+        () => AuditService.executeAudit(
+          url,
+          tier,
+          preflight.stats,
+          preflight.id, // Use existing preflight ID
+          addLog,
+          (progress) => setScannerProgress(progress)
+        ),
+        'executeAudit'
+      );
+
+      ErrorLogger.info('Audit completed successfully', {
+        repoUrl: url,
+        tier,
+        issuesFound: result.report.issues.length,
+        healthScore: result.report.healthScore
+      });
+
+      setReportData(result.report);
+      setRelatedAudits(result.relatedAudits);
+
+      // Short delay to let user see 100%
+      setTimeout(() => navigate('report'), 1000);
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown audit error';
+      ErrorLogger.error('Audit execution failed', error, { repoUrl: url, tier, preflightId: preflight.id });
+
+      addLog(`[Error] Audit Failed: ${errorMessage}`);
+      addLog(`[System] Terminating process.`);
+
+      // Navigate back to dashboard on error
+      setTimeout(() => navigate('dashboard'), 2000);
+    }
+  }, [addLog, navigate]);
+
   const handleRestart = useCallback(() => {
     navigate('landing');
     setRepoUrl('');
@@ -168,6 +225,7 @@ export const useAuditOrchestrator = ({
     handleAnalyze,
     handleSoftStart,
     handleConfirmAudit,
+    handleStartAuditWithPreflight,
     handleRestart,
     handleViewHistoricalReport,
     handleSelectAudit,

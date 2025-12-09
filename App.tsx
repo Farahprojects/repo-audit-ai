@@ -26,6 +26,7 @@ const AppContent: React.FC = () => {
     scannerProgress,
     handleAnalyze,
     handleConfirmAudit,
+    handleStartAuditWithPreflight,
     handleRestart,
     handleViewHistoricalReport,
     handleSelectAudit,
@@ -126,9 +127,21 @@ const AppContent: React.FC = () => {
           <DashboardPage
             onNavigate={navigate}
             onViewReport={handleViewHistoricalReport}
-            onStartAudit={(url, tier) => {
-              setRepoUrl(url);
-              navigate('preflight');
+            onStartAudit={async (url, tier) => {
+              // Try to find existing preflight data to skip preflight step
+              const { findExistingPreflight } = await import('./services/preflightService');
+              const existingPreflight = await findExistingPreflight(url);
+
+              if (existingPreflight) {
+                // Skip preflight and go directly to audit with existing data
+                console.log('🎯 [App] Found existing preflight, skipping preflight step', { preflightId: existingPreflight.id, tier });
+                await handleStartAuditWithPreflight(url, tier, existingPreflight);
+              } else {
+                // No existing preflight, go through normal preflight flow
+                console.log('📋 [App] No existing preflight found, starting preflight flow');
+                setRepoUrl(url);
+                navigate('preflight');
+              }
             }}
           />
         );

@@ -30,6 +30,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newRepoUrl, setNewRepoUrl] = useState('');
+  const [selectedTier, setSelectedTier] = useState<AuditTier>('shape');
   const [repoError, setRepoError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const { getGitHubToken } = useGitHubAuth();
@@ -76,16 +77,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
         throw new Error("Please enter a complete GitHub repository URL (e.g., https://github.com/owner/repository-name)");
       }
 
-      // Skip validation - let PreflightModal handle access control
+      // Skip validation - let the new flow handle preflight lookup
       // If validation succeeds, proceed with audit
       if (onStartAudit) {
-        onStartAudit(trimmedUrl, 'shape');
+        onStartAudit(trimmedUrl, selectedTier);
       }
     } catch (error: any) {
       setRepoError(error.message || "Repository not found. Please check the URL and try again.");
       setValidating(false); // Don't navigate if there's an error
     }
-  }, [newRepoUrl, onStartAudit]);
+  }, [newRepoUrl, selectedTier, onStartAudit]);
 
   const handleUpgradeTier = useCallback((repoUrl: string, tier: AuditTier) => {
     if (onStartAudit) {
@@ -212,12 +213,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
                 onKeyDown={(e) => e.key === 'Enter' && handleStartNewAudit()}
               />
             </div>
+            <select
+              value={selectedTier}
+              onChange={(e) => setSelectedTier(e.target.value as AuditTier)}
+              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-full text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-w-[140px]"
+            >
+              {Object.entries(TIERS).map(([key, tier]) => (
+                <option key={key} value={key}>
+                  {tier.name}
+                </option>
+              ))}
+            </select>
             <button
               onClick={handleStartNewAudit}
               disabled={!newRepoUrl.trim() || validating}
               className="px-6 py-3 bg-slate-900 text-white font-semibold rounded-full hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-slate-900/10"
             >
-              {validating ? 'Validating...' : 'Analyze'}
+              {validating ? 'Validating...' : 'Start Audit'}
             </button>
           </div>
 
