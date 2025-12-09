@@ -34,11 +34,12 @@ export class AuditService {
 
   /**
    * Phase 1: Create Audit Plan
+   * Returns the plan along with preflight data for workers (avoids N+1 queries)
    */
   static async planAudit(
     preflightId: string,
     tier: string
-  ): Promise<{ plan: any; detectedStack: any; usage: any }> {
+  ): Promise<{ plan: any; detectedStack: any; usage: any; preflight: any }> {
     const { data: result, error } = await supabase.functions.invoke('audit-planner', {
       body: { preflightId, tier }
     });
@@ -49,10 +50,14 @@ export class AuditService {
 
   /**
    * Phase 2: Run Single Worker Task
+   * @param preflightId - The preflight record ID
+   * @param task - The task to run
+   * @param preflight - Optional inline preflight data to avoid N+1 DB queries
    */
   static async runAuditTask(
     preflightId: string,
-    task: any
+    task: any,
+    preflight?: any
   ): Promise<{ result: any; usage: any }> {
     const { data, error } = await supabase.functions.invoke('audit-worker', {
       body: {
@@ -60,7 +65,8 @@ export class AuditService {
         taskId: task.id,
         instruction: task.instruction,
         role: task.role,
-        targetFiles: task.targetFiles
+        targetFiles: task.targetFiles,
+        preflight // Pass inline preflight data to avoid N+1 queries
       }
     });
 

@@ -117,11 +117,26 @@ serve(async (req) => {
         // Run Planner
         const { result: plan, usage } = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
 
-        // Return the plan
+        // Return the plan along with preflight data for workers (avoids N+1 queries)
         return createSuccessResponse({
             plan,
             detectedStack,
-            usage
+            usage,
+            preflight: {
+                id: preflightRecord.id,
+                repo_url: preflightRecord.repo_url,
+                owner: preflightRecord.owner,
+                repo: preflightRecord.repo,
+                default_branch: preflightRecord.default_branch,
+                repo_map: preflightRecord.repo_map,
+                stats: preflightRecord.stats,
+                fingerprint: preflightRecord.fingerprint,
+                is_private: preflightRecord.is_private,
+                fetch_strategy: preflightRecord.fetch_strategy,
+                token_valid: preflightRecord.token_valid,
+                file_count: preflightRecord.file_count,
+                github_account_id: preflightRecord.github_account_id
+            }
         });
 
     } catch (error) {
