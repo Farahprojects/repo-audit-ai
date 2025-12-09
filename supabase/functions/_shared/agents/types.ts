@@ -3,7 +3,6 @@ export interface FileNode {
     type: 'file' | 'directory';
     size?: number;
     content?: string;
-    url?: string;
     language?: string;
 }
 

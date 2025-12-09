@@ -22,7 +22,6 @@ export interface FileMapItem {
     path: string;
     size: number;
     type: string;
-    url?: string;
 }
 
 export interface PreflightRecord {
@@ -292,7 +291,7 @@ export async function findExistingPreflight(repoUrl: string): Promise<PreflightR
         }
 
         ErrorLogger.info('Found existing preflight', { repoUrl, preflightId: data.id });
-        return data as PreflightRecord;
+        return data as unknown as PreflightRecord;
     } catch (error) {
         ErrorLogger.error('Failed to find existing preflight', error, { repoUrl });
         return null;
