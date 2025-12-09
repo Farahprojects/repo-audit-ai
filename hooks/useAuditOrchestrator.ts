@@ -4,6 +4,7 @@ import { Tables } from '../src/integrations/supabase/types';
 import { AuditService } from '../services/auditService';
 import { ErrorHandler, ErrorLogger } from '../services/errorService';
 import { PreflightRecord } from '../services/preflightService';
+import { supabase } from '../src/integrations/supabase/client';
 
 interface UseAuditOrchestratorProps {
   user: any;
@@ -65,126 +66,117 @@ export const useAuditOrchestrator = ({
     }
   }, [user, handleAnalyze]);
 
-  /**
-   * Handle confirmed audit - preflightId is the ONLY source of truth
-   * 
-   * The backend fetches everything from the preflights table:
-   * - File map (repo_map)
-   * - GitHub token (via github_account_id if is_private=true)
-   * - Stats and fingerprint
-   */
-  const handleConfirmAudit = useCallback(async (
+  // Shared Orchestration Logic
+  const runOrchestratedAudit = useCallback(async (
+    url: string,
     tier: string,
-    stats: AuditStats,
-    _fileMap: any[], // Ignored - backend fetches from preflight
-    preflightId?: string
+    preflightId: string,
+    stats: AuditStats
   ) => {
-    if (!preflightId) {
-      ErrorLogger.error('Missing preflightId', new Error('preflightId is required'), { repoUrl, tier });
-      addLog('[Error] Missing preflight ID. Please retry.');
-      return;
-    }
-
-    ErrorLogger.info('Starting audit execution', { repoUrl, tier, preflightId });
-    setAuditStats(stats);
     navigate('scanning');
     setScannerLogs([]);
     setScannerProgress(0);
+    setAuditStats(stats);
 
     try {
-      const result = await ErrorHandler.withErrorHandling(
-        () => AuditService.executeAudit(
-          repoUrl,
-          tier,
-          stats,
-          preflightId, // Single source of truth
-          addLog,
-          setScannerProgress
-        ),
-        'executeAudit',
-        { repoUrl, tier, preflightId }
-      );
+      // Phase 1: Planning
+      addLog(`[System] Starting audit orchestration for ${tier}...`);
+      addLog(`[Planner] Generating audit plan...`);
+      setScannerProgress(5);
 
-      ErrorLogger.info('Audit completed successfully', {
-        repoUrl,
-        tier,
-        issuesFound: result.report.issues.length,
-        healthScore: result.report.healthScore
+      const { plan, usage: plannerUsage } = await AuditService.planAudit(preflightId, tier);
+
+      addLog(`[Planner] Plan generated: ${plan.tasks.length} tasks.`);
+      addLog(`[Planner] Focus: ${plan.focusArea || 'General Audit'}`);
+      setScannerProgress(15);
+
+      // Phase 2: Execution (Workers)
+      const workerResults = [];
+      const totalTasks = plan.tasks.length;
+      let completedTasks = 0;
+
+      // Run tasks in parallel (with concurrency limit if needed, but browser handles ~6 requests fine)
+      const taskPromises = plan.tasks.map(async (task: any, index: number) => {
+        try {
+          addLog(`[Worker ${index + 1}] Starting: ${task.role}`);
+          const { result } = await AuditService.runAuditTask(preflightId, task);
+
+          addLog(`[Worker ${index + 1}] Finished: Found ${result.issues?.length || 0} issues.`);
+          completedTasks++;
+          // Rough progress mapping: 15% -> 85%
+          const progress = 15 + Math.round((completedTasks / totalTasks) * 70);
+          setScannerProgress(progress);
+
+          return result;
+        } catch (err) {
+          console.error(`Worker ${index + 1} failed:`, err);
+          addLog(`[Worker ${index + 1}] Failed to complete task.`);
+          // Return valid structure so synthesis doesn't crash
+          return {
+            taskId: task.id,
+            findings: { error: "Worker Failed", message: String(err) },
+            tokenUsage: 0
+          };
+        }
       });
 
-      setReportData(result.report);
-      setRelatedAudits(result.relatedAudits);
+      const results = await Promise.all(taskPromises);
+      workerResults.push(...results);
 
-      // Short delay to let user see 100%
+      addLog(`[System] All workers completed.`);
+      setScannerProgress(90);
+
+      // Phase 3: Synthesis
+      addLog(`[Coordinator] Synthesizing results...`);
+      const finalReport = await AuditService.synthesizeAuditResults(preflightId, workerResults, tier, plannerUsage);
+
+      addLog(`[Coordinator] Synthesis complete. Health Score: ${finalReport.healthScore}`);
+      setScannerProgress(100);
+
+      // Fetch related audits for navigation
+      const { data: related } = await supabase
+        .from('audits')
+        .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
+        .eq('repo_url', url)
+        .order('created_at', { ascending: false });
+
+      setReportData(finalReport);
+      setRelatedAudits((related || []) as unknown as AuditRecord[]);
+
       setTimeout(() => navigate('report'), 1000);
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown audit error';
-      ErrorLogger.error('Audit execution failed', error, { repoUrl, tier, preflightId });
-
+      console.error('Orchestration Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addLog(`[Error] Audit Failed: ${errorMessage}`);
-      addLog(`[System] Terminating process.`);
+      ErrorLogger.error('Audit Orchestration Failed', error, { url, tier, preflightId });
 
-      // Navigate back to preflight on error
-      setTimeout(() => navigate('preflight'), 2000);
+      // Don't navigate away immediately so user can see error
+      setTimeout(() => navigate('preflight'), 4000);
     }
-  }, [repoUrl, addLog, navigate]);
+  }, [addLog, navigate]);
 
-  // Start audit directly with existing preflight data (skip preflight step)
+  const handleConfirmAudit = useCallback(async (
+    tier: string,
+    stats: AuditStats,
+    _fileMap: any[],
+    preflightId?: string
+  ) => {
+    if (!preflightId) {
+      addLog('[Error] Missing preflight ID.');
+      return;
+    }
+    await runOrchestratedAudit(repoUrl, tier, preflightId, stats);
+  }, [repoUrl, addLog, runOrchestratedAudit]);
+
   const handleStartAuditWithPreflight = useCallback(async (
     url: string,
     tier: string,
     preflight: PreflightRecord
   ) => {
-    ErrorLogger.info('Starting audit with existing preflight data', {
-      repoUrl: url,
-      tier,
-      preflightId: preflight.id
-    });
-
     setRepoUrl(url);
-    setAuditStats(preflight.stats);
-    navigate('scanning');
-    setScannerLogs([]);
-    setScannerProgress(0);
-
-    try {
-      const result = await ErrorHandler.withErrorHandling(
-        () => AuditService.executeAudit(
-          url,
-          tier,
-          preflight.stats,
-          preflight.id, // Use existing preflight ID
-          addLog,
-          (progress) => setScannerProgress(progress)
-        ),
-        'executeAudit'
-      );
-
-      ErrorLogger.info('Audit completed successfully', {
-        repoUrl: url,
-        tier,
-        issuesFound: result.report.issues.length,
-        healthScore: result.report.healthScore
-      });
-
-      setReportData(result.report);
-      setRelatedAudits(result.relatedAudits);
-
-      // Short delay to let user see 100%
-      setTimeout(() => navigate('report'), 1000);
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown audit error';
-      ErrorLogger.error('Audit execution failed', error, { repoUrl: url, tier, preflightId: preflight.id });
-
-      addLog(`[Error] Audit Failed: ${errorMessage}`);
-      addLog(`[System] Terminating process.`);
-
-      // Navigate back to dashboard on error
-      setTimeout(() => navigate('dashboard'), 2000);
-    }
-  }, [addLog, navigate]);
+    await runOrchestratedAudit(url, tier, preflight.id, preflight.stats);
+  }, [runOrchestratedAudit]);
 
   const handleRestart = useCallback(() => {
     navigate('landing');

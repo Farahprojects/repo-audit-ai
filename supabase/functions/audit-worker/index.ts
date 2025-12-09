@@ -1,110 +1,128 @@
 // @ts-nocheck
-// Worker Agent - Analyzes a single chunk of code
+// Worker Agent - Analyzes a single chunk of code (Client-Orchestrated)
 
-import { handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { runWorker } from '../_shared/agents/worker.ts';
+import { AuditContext, WorkerTask } from '../_shared/agents/types.ts';
+import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
+import {
+    validateRequestBody,
+    createSupabaseClient,
+    handleCorsPreflight,
+    createErrorResponse,
+    createSuccessResponse,
+    validateSupabaseEnv
+} from '../_shared/utils.ts';
 
-Deno.serve(async (req) => {
+const ENV = validateSupabaseEnv({
+    SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
+    SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+});
+
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+
+serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return handleCorsPreflight();
     }
 
     try {
-        const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-        const GEMINI_MODEL = 'gemini-2.0-flash-exp';
-
         if (!GEMINI_API_KEY) {
             throw new Error('GEMINI_API_KEY is not configured');
         }
 
-        const { chunkId, chunkName, files, prompt, repoUrl } = await req.json();
+        const supabase = createSupabaseClient(ENV);
+        const body = await validateRequestBody(req);
 
-        if (!files || !prompt) {
-            return createErrorResponse('Missing required parameters: files and prompt', 400);
+        // New Input Schema for Client Orchestration
+        const {
+            preflightId,
+            taskId,
+            instruction,
+            role,
+            targetFiles
+        } = body;
+
+        // Validate required parameters
+        if (!preflightId || !taskId || !instruction || !role || !targetFiles) {
+            return createErrorResponse('Missing required parameters: preflightId, taskId, instruction, role, targetFiles', 400);
         }
 
-        console.log(`🔧 Worker starting analysis of chunk: ${chunkName} (${files.length} files)`);
+        // 1. Fetch Preflight Record
+        // We need this to get the repo map and potentially the GitHub account ID for token decryption
+        const { data: preflightRecord, error: preflightError } = await supabase
+            .from('preflights')
+            .select('*')
+            .eq('id', preflightId)
+            .single();
 
-        // Build file context
-        const fileContext = files
-            .map((f: { path: string; content: string }) => `--- ${f.path} ---\n${f.content}`)
-            .join('\n\n');
-
-        const totalChars = fileContext.length;
-        const estimatedTokens = Math.ceil(totalChars / 4);
-        console.log(`📊 Chunk size: ~${estimatedTokens.toLocaleString()} tokens`);
-
-        const userPrompt = `Analyze this code chunk from ${repoUrl}:
-    
-Chunk: ${chunkName}
-Files: ${files.length}
-
-${fileContext}`;
-
-        // Call Gemini API
-        const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': GEMINI_API_KEY
-                },
-                body: JSON.stringify({
-                    contents: [
-                        { role: 'user', parts: [{ text: prompt + '\n\n' + userPrompt }] }
-                    ],
-                    generationConfig: {
-                        temperature: 0.2,
-                        maxOutputTokens: 8192,
-                    }
-                })
-            }
-        );
-
-        if (!geminiResponse.ok) {
-            const errorText = await geminiResponse.text();
-            console.error(`[Worker ${chunkId}] Gemini error:`, geminiResponse.status, errorText);
-            throw new Error(`Gemini API error: ${geminiResponse.status}`);
+        if (preflightError || !preflightRecord) {
+            console.error(`❌ [audit-worker] Failed to fetch preflight:`, preflightError);
+            return createErrorResponse('Invalid or expired preflight ID', 400);
         }
 
-        const geminiData = await geminiResponse.json();
-
-        // Log token usage
-        const usage = geminiData.usageMetadata;
-        if (usage) {
-            console.log(`📊 [${chunkId}] Tokens: prompt=${usage.promptTokenCount}, response=${usage.candidatesTokenCount}`);
+        // 2. Resolve GitHub Token (Server-Side)
+        let effectiveGitHubToken: string | null = null;
+        if (preflightRecord.is_private && preflightRecord.github_account_id) {
+            console.log(`🔐 [audit-worker] Decrypting token for private repo`);
+            const authenticator = GitHubAuthenticator.getInstance();
+            effectiveGitHubToken = await authenticator.getTokenByAccountId(preflightRecord.github_account_id);
         }
 
-        // Extract and parse response
-        let responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        // 3. Construct Minimal Context
+        // We only need enough context for the worker to fetch the *specific* files it needs
+        // We pass the FULL file map so the worker can validate paths, but content is undefined
+        const context: AuditContext = {
+            repoUrl: preflightRecord.repo_url,
+            files: preflightRecord.repo_map.map((f: any) => ({
+                path: f.path,
+                type: 'file',
+                size: f.size,
+                content: undefined,
+                url: f.url
+            })),
+            tier: 'worker', // Placeholder, not used by worker directly
+            preflight: {
+                id: preflightRecord.id,
+                repo_url: preflightRecord.repo_url,
+                owner: preflightRecord.owner,
+                repo: preflightRecord.repo,
+                default_branch: preflightRecord.default_branch,
+                repo_map: preflightRecord.repo_map,
+                stats: preflightRecord.stats,
+                fingerprint: preflightRecord.fingerprint,
+                is_private: preflightRecord.is_private,
+                fetch_strategy: preflightRecord.fetch_strategy,
+                token_valid: preflightRecord.token_valid,
+                file_count: preflightRecord.file_count
+            },
+            githubToken: effectiveGitHubToken
+        };
 
-        let workerResult;
-        try {
-            workerResult = JSON.parse(responseText);
-        } catch (parseError) {
-            console.error(`[Worker ${chunkId}] Failed to parse response:`, responseText.substring(0, 500));
-            // Return a default result on parse failure
-            workerResult = {
-                localScore: 50,
-                confidence: 0.3,
-                issues: [],
-                crossFileFlags: ['Worker failed to parse analysis'],
-                uncertainties: ['Parse error - manual review recommended'],
-            };
-        }
+        // 4. Construct the Task Object
+        const task: WorkerTask = {
+            id: taskId,
+            role: role,
+            instruction: instruction,
+            targetFiles: targetFiles
+        };
 
-        console.log(`✅ [${chunkId}] Analysis complete: score=${workerResult.localScore}, issues=${workerResult.issues?.length || 0}`);
+        // 5. Run the Worker
+        // This uses the shared logic to:
+        // a) Verify files exist in preflight
+        // b) Fetch content via GitHub API (using server-side token)
+        // c) Call Gemini to analyze
+        console.log(`👷 [audit-worker] Running task: ${taskId} (${role})`);
+        const { result, usage } = await runWorker(context, task, GEMINI_API_KEY);
 
+        // 6. Return Result
         return createSuccessResponse({
-            chunkId,
-            chunkName,
-            tokensAnalyzed: estimatedTokens,
-            ...workerResult, // localScore, confidence, issues, crossFileFlags, uncertainties
+            result,
+            usage
         });
 
     } catch (error) {
-        console.error('Worker error:', error);
+        console.error('[audit-worker] Error:', error);
         return createErrorResponse(error, 500);
     }
 });
