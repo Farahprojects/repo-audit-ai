@@ -53,10 +53,10 @@ export class ValidationError extends Error {
   }
 }
 
-// GitHub URL validation
+// GitHub URL validation (allows optional trailing slash)
 export function validateGitHubUrl(url: string): boolean {
-  // Must be a valid GitHub.com URL
-  const githubUrlPattern = /^https:\/\/github\.com\/[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}\/[a-zA-Z0-9._-]+$/;
+  // Must be a valid GitHub.com URL - allows optional trailing slash
+  const githubUrlPattern = /^https:\/\/github\.com\/[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}\/[a-zA-Z0-9._-]+\/?$/;
   return githubUrlPattern.test(url);
 }
 

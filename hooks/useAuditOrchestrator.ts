@@ -1,31 +1,26 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ViewState, AuditStats, RepoReport, Issue, AuditRecord } from '../types';
+import { useState, useEffect, useCallback } from 'react';
+import { ViewState, AuditStats, RepoReport, AuditRecord } from '../types';
 import { Tables } from '../src/integrations/supabase/types';
 import { AuditService } from '../services/auditService';
 import { ErrorHandler, ErrorLogger } from '../services/errorService';
-import { FileMapItem } from '../services/githubService';
 
 interface UseAuditOrchestratorProps {
   user: any;
-  getGitHubToken: () => Promise<string | undefined>;
   navigate: (view: ViewState) => void;
   setPreviousView: (view: ViewState) => void;
 }
 
 export const useAuditOrchestrator = ({
   user,
-  getGitHubToken,
   navigate,
   setPreviousView,
 }: UseAuditOrchestratorProps) => {
   const [repoUrl, setRepoUrl] = useState('');
   const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
-  const [fileMap, setFileMap] = useState<FileMapItem[]>([]);
   const [reportData, setReportData] = useState<RepoReport | null>(null);
   const [historicalReportData, setHistoricalReportData] = useState<RepoReport | null>(null);
   const [relatedAudits, setRelatedAudits] = useState<AuditRecord[]>([]);
   const [pendingRepoUrl, setPendingRepoUrl] = useState<string | null>(null);
-  const [auditConfig, setAuditConfig] = useState<any>(null);
 
   // Real-time Scanner State
   const [scannerLogs, setScannerLogs] = useState<string[]>([]);
@@ -37,12 +32,10 @@ export const useAuditOrchestrator = ({
   const clearAuditState = useCallback(() => {
     setRepoUrl('');
     setAuditStats(null);
-    setFileMap([]);
     setReportData(null);
     setHistoricalReportData(null);
     setRelatedAudits([]);
     setPendingRepoUrl(null);
-    setAuditConfig(null);
     setScannerLogs([]);
     setScannerProgress(0);
   }, []);
@@ -63,22 +56,36 @@ export const useAuditOrchestrator = ({
   }, [navigate, setPreviousView]);
 
   const handleSoftStart = useCallback((url: string) => {
-    // Check if user is authenticated
     if (user) {
-      // If authenticated, start audit immediately
       handleAnalyze(url);
     } else {
-      // If not authenticated, store URL and show sign-in
       localStorage.setItem('pendingRepoUrl', url);
       setPendingRepoUrl(url);
-      // Note: Auth modal handling should be in auth flow hook
     }
   }, [user, handleAnalyze]);
 
-  const handleConfirmAudit = useCallback(async (tier: string, stats: AuditStats, fileMapParam: FileMapItem[], preflightId?: string) => {
-    ErrorLogger.info('Starting audit execution', { repoUrl, tier, statsSize: stats.files, fileCount: fileMapParam.length, hasPreflightId: !!preflightId });
+  /**
+   * Handle confirmed audit - preflightId is the ONLY source of truth
+   * 
+   * The backend fetches everything from the preflights table:
+   * - File map (repo_map)
+   * - GitHub token (via github_account_id if is_private=true)
+   * - Stats and fingerprint
+   */
+  const handleConfirmAudit = useCallback(async (
+    tier: string,
+    stats: AuditStats,
+    _fileMap: any[], // Ignored - backend fetches from preflight
+    preflightId?: string
+  ) => {
+    if (!preflightId) {
+      ErrorLogger.error('Missing preflightId', new Error('preflightId is required'), { repoUrl, tier });
+      addLog('[Error] Missing preflight ID. Please retry.');
+      return;
+    }
+
+    ErrorLogger.info('Starting audit execution', { repoUrl, tier, preflightId });
     setAuditStats(stats);
-    setFileMap(fileMapParam);
     navigate('scanning');
     setScannerLogs([]);
     setScannerProgress(0);
@@ -89,19 +96,13 @@ export const useAuditOrchestrator = ({
           repoUrl,
           tier,
           stats,
-          fileMapParam, // Pass the fileMap instead of refetching
-          auditConfig,
-          getGitHubToken,
+          preflightId, // Single source of truth
           addLog,
-          setScannerProgress,
-          preflightId // Pass preflightId to use stored preflight data
+          setScannerProgress
         ),
         'executeAudit',
-        { repoUrl, tier, stats, fileCount: fileMapParam.length, preflightId }
+        { repoUrl, tier, preflightId }
       );
-
-      // Clear config
-      setAuditConfig(null);
 
       ErrorLogger.info('Audit completed successfully', {
         repoUrl,
@@ -118,7 +119,7 @@ export const useAuditOrchestrator = ({
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown audit error';
-      ErrorLogger.error('Audit execution failed', error, { repoUrl, tier, stats });
+      ErrorLogger.error('Audit execution failed', error, { repoUrl, tier, preflightId });
 
       addLog(`[Error] Audit Failed: ${errorMessage}`);
       addLog(`[System] Terminating process.`);
@@ -126,7 +127,7 @@ export const useAuditOrchestrator = ({
       // Navigate back to preflight on error
       setTimeout(() => navigate('preflight'), 2000);
     }
-  }, [repoUrl, auditConfig, getGitHubToken, addLog, navigate]);
+  }, [repoUrl, addLog, navigate]);
 
   const handleRestart = useCallback(() => {
     navigate('landing');
@@ -145,14 +146,11 @@ export const useAuditOrchestrator = ({
     navigate('report');
   }, [navigate]);
 
-  // Handle switching to a different audit from history dropdown
   const handleSelectAudit = useCallback((audit: AuditRecord) => {
     const report = AuditService.processSelectedAudit(audit);
     setHistoricalReportData(report);
   }, []);
 
-  // Return individual values to prevent unnecessary re-renders
-  // Components can now selectively subscribe to only the values they need
   return {
     // State
     repoUrl,
@@ -163,8 +161,6 @@ export const useAuditOrchestrator = ({
     relatedAudits,
     pendingRepoUrl,
     setPendingRepoUrl,
-    auditConfig,
-    setAuditConfig,
     scannerLogs,
     scannerProgress,
 

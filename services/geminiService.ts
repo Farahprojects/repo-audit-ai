@@ -2,50 +2,52 @@ import { RepoReport } from "../types";
 import { supabase } from "../src/integrations/supabase/client";
 import { ErrorHandler, ErrorLogger } from "./errorService";
 
-// Tier mapping moved to cost-estimator edge function for security
-// Frontend just passes tier name, backend validates and maps
-
+/**
+ * Generate audit report - server-side only approach
+ * 
+ * The frontend ONLY passes:
+ * - repoUrl: The repository URL
+ * - tier: The audit tier to run
+ * - preflightId: The ID of the preflight record (source of truth)
+ * 
+ * The backend handles EVERYTHING else:
+ * - Fetches file map from preflights table
+ * - Fetches GitHub token from github_accounts if is_private=true
+ * - Calculates token estimates
+ * - Runs the audit pipeline
+ */
 export const generateAuditReport = async (
   repoName: string,
   stats: any,
-  fileMap: any[],
   tier: string = 'shape',
   fullRepoUrl?: string,
-  estimatedTokens?: number,
-  config?: any,
-  githubToken?: string,
-  preflightId?: string  // Optional preflight ID for using cached preflight data
+  preflightId?: string
 ): Promise<RepoReport & { tierData?: any }> => {
   const context = {
     repoName,
     tier,
-    fileCount: fileMap.length,
-    estimatedTokens,
     fullRepoUrl,
-    hasPreflightId: !!preflightId
+    preflightId
   };
 
-  ErrorLogger.info('Starting audit report generation', context);
+  ErrorLogger.info('Starting audit report generation (server-side)', context);
+
+  if (!preflightId) {
+    const error = new Error('preflightId is required for audits. Please run preflight first.');
+    ErrorLogger.error('Missing preflightId', error, context);
+    throw error;
+  }
 
   try {
-    // Build request body - prefer preflightId if available
-    const requestBody: any = {
+    // MINIMAL request body - backend fetches everything from preflight
+    const requestBody = {
       repoUrl: fullRepoUrl || `https://github.com/${repoName}`,
-      tier, // Pass tier as-is, backend validates
-      estimatedTokens,
-      config,
-      githubToken
+      tier,
+      preflightId
+      // NO files, NO githubToken, NO estimatedTokens - all server-side now
     };
 
-    // If preflightId is provided, the backend will fetch the preflight and extract files
-    // Otherwise, pass the files directly
-    if (preflightId) {
-      requestBody.preflightId = preflightId;
-    } else {
-      requestBody.files = fileMap;
-    }
-
-    // Call Supabase edge function - tier validation happens server-side
+    // Call Supabase edge function
     const { data, error } = await supabase.functions.invoke('audit-runner', {
       body: requestBody
     });
