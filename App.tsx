@@ -93,6 +93,10 @@ const AppContent: React.FC = () => {
     navigate('preflight');
   }, [setRepoUrl, navigate]);
 
+  const handleCancelPreflight = useCallback(() => {
+    navigate(previousView);
+  }, [navigate, previousView]);
+
   const seoData = getSEO(reportData);
 
   const renderContent = () => {
@@ -118,7 +122,7 @@ const AppContent: React.FC = () => {
             historicalReportData={historicalReportData}
             relatedAudits={relatedAudits}
             onConfirmAudit={handleConfirmAudit}
-            onCancelPreflight={() => navigate(previousView)}
+            onCancelPreflight={handleCancelPreflight}
             onRestart={handleRestart}
             onSelectAudit={handleSelectAudit}
             onRunTier={handleRunTier}
