@@ -5,7 +5,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // Import Agents
 import { runPlanner } from '../_shared/agents/planner.ts';
 import { runWorker } from '../_shared/agents/worker.ts';
-import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
 import { detectCapabilities } from '../_shared/capabilities.ts';
 import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
@@ -133,6 +132,126 @@ function normalizeRiskLevel(level: any): 'critical' | 'high' | 'medium' | 'low' 
     return normalized as 'critical' | 'high' | 'medium' | 'low';
   }
   return null;
+}
+
+// Aggregate worker results directly without AI synthesis
+function aggregateWorkerResults(workerResults: WorkerResult[]): {
+  healthScore: number;
+  summary: string;
+  issues: any[];
+  topStrengths: any[];
+  topWeaknesses: any[];
+  riskLevel: string | null;
+  productionReady: boolean | null;
+  categoryAssessments: any | null;
+  seniorDeveloperAssessment: any | null;
+  suspiciousFiles: any[] | null;
+  overallVerdict: string | null;
+} {
+  if (!workerResults || workerResults.length === 0) {
+    return {
+      healthScore: 50,
+      summary: 'No analysis results available.',
+      issues: [],
+      topStrengths: [],
+      topWeaknesses: [],
+      riskLevel: null,
+      productionReady: null,
+      categoryAssessments: null,
+      seniorDeveloperAssessment: null,
+      suspiciousFiles: null,
+      overallVerdict: null,
+    };
+  }
+
+  // Aggregate all findings from workers
+  const allIssues: any[] = [];
+  const allStrengths: any[] = [];
+  const allWeaknesses: any[] = [];
+  const allSuspiciousFiles: any[] = [];
+  let healthScoreSum = 0;
+  let healthScoreCount = 0;
+  let mostSevereRiskLevel: string | null = null;
+  let productionReady: boolean | null = null;
+  let categoryAssessments: any = null;
+  let seniorDeveloperAssessment: any = null;
+  let overallVerdict: string | null = null;
+
+  const riskOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+
+  for (const result of workerResults) {
+    const findings = result.findings || {};
+
+    // Aggregate issues
+    if (findings.issues && Array.isArray(findings.issues)) {
+      allIssues.push(...findings.issues);
+    }
+
+    // Aggregate strengths
+    if (findings.topStrengths && Array.isArray(findings.topStrengths)) {
+      allStrengths.push(...findings.topStrengths);
+    }
+
+    // Aggregate weaknesses
+    if (findings.topWeaknesses && Array.isArray(findings.topWeaknesses)) {
+      allWeaknesses.push(...findings.topWeaknesses);
+    }
+
+    // Aggregate suspicious files
+    if (findings.suspiciousFiles && Array.isArray(findings.suspiciousFiles)) {
+      allSuspiciousFiles.push(...findings.suspiciousFiles);
+    }
+
+    // Track health scores for averaging
+    if (typeof findings.healthScore === 'number') {
+      healthScoreSum += findings.healthScore;
+      healthScoreCount++;
+    }
+
+    // Track most severe risk level
+    if (findings.riskLevel) {
+      const level = String(findings.riskLevel).toLowerCase();
+      if (!mostSevereRiskLevel || (riskOrder[level] ?? 99) < (riskOrder[mostSevereRiskLevel] ?? 99)) {
+        mostSevereRiskLevel = level;
+      }
+    }
+
+    // Take first non-null values for single-value fields
+    if (findings.productionReady !== undefined && productionReady === null) {
+      productionReady = findings.productionReady;
+    }
+    if (findings.categoryAssessments && !categoryAssessments) {
+      categoryAssessments = findings.categoryAssessments;
+    }
+    if (findings.seniorDeveloperAssessment && !seniorDeveloperAssessment) {
+      seniorDeveloperAssessment = findings.seniorDeveloperAssessment;
+    }
+    if (findings.overallVerdict && !overallVerdict) {
+      overallVerdict = findings.overallVerdict;
+    }
+  }
+
+  // Calculate average health score
+  const avgHealthScore = healthScoreCount > 0 ? Math.round(healthScoreSum / healthScoreCount) : 50;
+
+  // Generate summary based on aggregated data
+  const issueCount = allIssues.length;
+  const criticalCount = allIssues.filter(i => i.severity?.toLowerCase() === 'critical').length;
+  const summary = `Analysis from ${workerResults.length} workers found ${issueCount} issues${criticalCount > 0 ? ` (${criticalCount} critical)` : ''}. Health score: ${avgHealthScore}/100.`;
+
+  return {
+    healthScore: avgHealthScore,
+    summary,
+    issues: allIssues,
+    topStrengths: allStrengths.slice(0, 5), // Limit to top 5
+    topWeaknesses: allWeaknesses.slice(0, 5), // Limit to top 5
+    riskLevel: mostSevereRiskLevel,
+    productionReady,
+    categoryAssessments,
+    seniorDeveloperAssessment,
+    suspiciousFiles: allSuspiciousFiles.length > 0 ? allSuspiciousFiles : null,
+    overallVerdict,
+  };
 }
 
 // Environment configuration
@@ -407,15 +526,15 @@ serve(async (req) => {
       console.warn(`⚠️ ${failedWorkers}/${workerOutputs.length} workers failed. Continuing with ${swarmResults.length} results.`);
     }
 
-
-    // 3. REDUCE PHASE: The Synthesizer (Editor)
-    const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, swarmResults, GEMINI_API_KEY, tierPrompt);
-
+    // 3. AGGREGATE PHASE: Direct aggregation from worker results (no synthesizer)
     const timeEnd = Date.now();
     const durationMs = timeEnd - timeStart;
 
-    // Total Tokens
-    const totalTokens = (plannerUsage?.totalTokens || 0) + swarmTokenUsage + (synthesizerUsage?.totalTokens || 0);
+    // Aggregate findings from all workers
+    const aggregatedReport = aggregateWorkerResults(swarmResults);
+
+    // Total Tokens (planner + workers only, no synthesizer)
+    const totalTokens = (plannerUsage?.totalTokens || 0) + swarmTokenUsage;
 
     // SERVER-SIDE TOKEN VALIDATION (Phase 4)
     // Calculate estimate server-side, don't trust client-provided value
@@ -429,9 +548,7 @@ serve(async (req) => {
     // --- SAVE TO DB ---
 
     // Map internal "issues" specific format to general DB format
-    const rawIssues = (finalReport?.issues && finalReport.issues.length > 0) ? finalReport.issues : (swarmResults || []);
-
-    const dbIssues = rawIssues.map((issue: any, index: number) => ({
+    const dbIssues = aggregatedReport.issues.map((issue: any, index: number) => ({
       id: issue.id || `issue-${index}`,
       title: issue.title,
       description: issue.description,
@@ -446,9 +563,9 @@ serve(async (req) => {
 
     // NORMALIZE LLM OUTPUT (Phase 3)
     // Normalize data before saving to DB and returning to frontend
-    const normalizedTopStrengths = normalizeStrengthsOrIssues(finalReport?.topStrengths || []);
-    const normalizedTopWeaknesses = normalizeStrengthsOrIssues(finalReport?.topWeaknesses || []);
-    const normalizedRiskLevel = normalizeRiskLevel(finalReport?.riskLevel);
+    const normalizedTopStrengths = normalizeStrengthsOrIssues(aggregatedReport.topStrengths);
+    const normalizedTopWeaknesses = normalizeStrengthsOrIssues(aggregatedReport.topWeaknesses);
+    const normalizedRiskLevel = normalizeRiskLevel(aggregatedReport.riskLevel);
 
 
     const { error: insertError } = await supabase.from('audits').insert({
@@ -456,19 +573,19 @@ serve(async (req) => {
       repo_url: repoUrl,
       tier: tier,
       estimated_tokens: finalEstimatedTokens, // Use server-calculated estimate
-      health_score: finalReport?.healthScore || 0,
-      summary: finalReport?.summary || "No summary generated.",
+      health_score: aggregatedReport.healthScore,
+      summary: aggregatedReport.summary,
       issues: dbIssues,
       total_tokens: totalTokens,
       extra_data: {
         topStrengths: normalizedTopStrengths,
         topWeaknesses: normalizedTopWeaknesses,
         riskLevel: normalizedRiskLevel,
-        productionReady: finalReport?.productionReady ?? null,
-        categoryAssessments: finalReport?.categoryAssessments || null,
-        seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
-        suspiciousFiles: finalReport?.suspiciousFiles || null,
-        overallVerdict: finalReport?.overallVerdict || null,
+        productionReady: aggregatedReport.productionReady,
+        categoryAssessments: aggregatedReport.categoryAssessments,
+        seniorDeveloperAssessment: aggregatedReport.seniorDeveloperAssessment,
+        suspiciousFiles: aggregatedReport.suspiciousFiles,
+        overallVerdict: aggregatedReport.overallVerdict,
       }
     });
 
@@ -479,17 +596,17 @@ serve(async (req) => {
 
     // Return Result with NORMALIZED data - frontend doesn't need to transform
     return createSuccessResponse({
-      healthScore: finalReport.healthScore,
-      summary: finalReport.summary,
+      healthScore: aggregatedReport.healthScore,
+      summary: aggregatedReport.summary,
       issues: dbIssues,
       riskLevel: normalizedRiskLevel,
-      productionReady: finalReport.productionReady,
+      productionReady: aggregatedReport.productionReady,
       topStrengths: normalizedTopStrengths,
       topIssues: normalizedTopWeaknesses, // Already normalized
-      suspiciousFiles: finalReport?.suspiciousFiles || null,
-      categoryAssessments: finalReport?.categoryAssessments || null,
-      seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
-      overallVerdict: finalReport?.overallVerdict || null,
+      suspiciousFiles: aggregatedReport.suspiciousFiles,
+      categoryAssessments: aggregatedReport.categoryAssessments,
+      seniorDeveloperAssessment: aggregatedReport.seniorDeveloperAssessment,
+      overallVerdict: aggregatedReport.overallVerdict,
       meta: {
         planValues: plan,
         swarmCount: swarmResults.length,
