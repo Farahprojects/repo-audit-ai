@@ -42,6 +42,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
   const navItems: { id: ViewState; label: string }[] = [
     { id: 'dashboard', label: 'Dash' },
     { id: 'pricing', label: 'Pricing' },
+    { id: 'features', label: 'Features' },
     { id: 'about', label: 'Mission' },
     { id: 'contact', label: 'Contact' },
     { id: 'legal', label: 'Legal' },

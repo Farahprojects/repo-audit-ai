@@ -25,7 +25,7 @@ export const useAppRouter = () => {
     setPreviousView('landing');
   }, []);
 
-  const isPublicPage = useMemo(() => ['landing', 'pricing', 'about', 'contact', 'privacy', 'terms', 'legal', 'preflight', 'dashboard', 'report'].includes(view), [view]);
+  const isPublicPage = useMemo(() => ['landing', 'pricing', 'about', 'contact', 'features', 'privacy', 'terms', 'legal', 'preflight', 'dashboard', 'report'].includes(view), [view]);
 
   const getSEO = useCallback((reportData?: RepoReport | null): SEOData => {
     switch (view) {
@@ -52,6 +52,12 @@ export const useAppRouter = () => {
           title: "Contact Sales - SCAI",
           description: "Get in touch with our team for enterprise security audits, on-premise deployments, and partnership inquiries.",
           keywords: "enterprise code security, contact support"
+        };
+      case 'features':
+        return {
+          title: "Features - SCAI AI Code Auditor",
+          description: "Explore SCAI's comprehensive AI-powered code auditing features including security scanning, performance analysis, and architecture review.",
+          keywords: "code auditing features, ai code review, security scanning, performance analysis"
         };
       case 'privacy':
         return {

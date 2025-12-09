@@ -4,6 +4,7 @@ import Footer from './components/layout/Footer';
 import Pricing from './components/pages/Pricing';
 import About from './components/pages/About';
 import Contact from './components/pages/Contact';
+import Features from './components/pages/Features';
 import Legal from './components/pages/Legal';
 import Privacy from './components/pages/Privacy';
 import Terms from './components/pages/Terms';
@@ -156,6 +157,8 @@ const AppContent: React.FC = () => {
         return <About />;
       case 'contact':
         return <Contact />;
+      case 'features':
+        return <Features />;
       case 'legal':
         return <Legal onNavigate={navigate} />;
       case 'privacy':
