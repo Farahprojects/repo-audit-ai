@@ -5,7 +5,7 @@ export const GEMINI_MODEL = 'gemini-2.5-pro';
 // Thinking Budget Configuration
 // -1 = Dynamic (model decides), 128-32768 = Fixed budget for Gemini 2.5 Pro
 export const THINKING_BUDGET = {
-    CEO: -1,          // Dynamic - uncapped for strategic planning
+    CEO: 20000,       // 20k tokens - fixed budget for comprehensive audit planning
     SYNTHESIZER: -1,  // Dynamic - uncapped for consolidation & deduplication
     WORKER: 10000,    // 10k tokens - high budget for thorough scanning (8k-12k range)
 } as const;
