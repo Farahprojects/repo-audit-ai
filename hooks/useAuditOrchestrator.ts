@@ -81,7 +81,13 @@ export const useAuditOrchestrator = ({
     try {
       // Phase 1: Planning
       addLog(`[System] Starting audit orchestration for ${tier}...`);
-      addLog(`[Planner] Generating audit plan...`);
+      addLog(`[Planner] Analyzing codebase structure...`);
+      setScannerProgress(2);
+
+      addLog(`[Planner] Loading audit requirements...`);
+      setScannerProgress(4);
+
+      addLog(`[Planner] Generating specialized task breakdown...`);
       setScannerProgress(5);
 
       const { plan, usage: plannerUsage, preflight } = await AuditService.planAudit(preflightId, tier);
@@ -130,7 +136,7 @@ export const useAuditOrchestrator = ({
       addLog(`[Coordinator] Synthesizing results...`);
       const finalReport = await AuditService.synthesizeAuditResults(preflightId, workerResults, tier, plannerUsage);
 
-      addLog(`[Coordinator] Synthesis complete. Health Score: ${finalReport.healthScore}`);
+      addLog(`[Coordinator] Synthesis complete. Found ${finalReport.issues?.length || 0} issues. Health Score: ${finalReport.healthScore}`);
       setScannerProgress(100);
 
       // Fetch related audits for navigation
