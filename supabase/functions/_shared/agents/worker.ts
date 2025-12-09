@@ -178,14 +178,57 @@ export async function runWorker(
 
     const fileContext = successfulContent.join('\n\n');
 
-    // 2. Analyze
-    const systemPrompt = `Analyze this code for the specified issues. Return findings in JSON format.`;
+    // 2. Analyze - Ensure we have clear instructions before proceeding
+    if (!task.instruction || task.instruction.trim().length === 0) {
+        console.error(`🚨 Worker [${task.role}] has no instructions! Cannot proceed.`);
+        return {
+            result: {
+                taskId: task.id,
+                findings: {
+                    error: "MISSING_INSTRUCTIONS",
+                    message: "Worker received no analysis instructions from planner.",
+                    analysis: null,
+                    issues: []
+                },
+                tokenUsage: 0
+            },
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        };
+    }
 
-    const userPrompt = `INSTRUCTION:
-${task.instruction}
+    const systemPrompt = `You are a specialized code analysis agent.
 
-CODE CONTEXT (${successfulContent.length} files):
-${fileContext}`;
+YOUR MISSION: ${task.instruction}
+
+Analyze the provided code files according to your mission above. Be thorough and focused on the specific requirements.
+
+Return your findings in this exact JSON format:
+{
+  "issues": [
+    {
+      "id": "unique_id",
+      "severity": "critical|warning|info",
+      "category": "appropriate_category",
+      "title": "Brief, clear title",
+      "description": "Detailed explanation of the issue",
+      "file": "filename.ext",
+      "line": 42,
+      "badCode": "problematic code snippet",
+      "fixedCode": "suggested fix"
+    }
+  ],
+  "topStrengths": ["key strength 1", "key strength 2"],
+  "topWeaknesses": ["key weakness 1", "key weakness 2"],
+  "healthScore": 75
+}
+
+IMPORTANT: Only analyze the code provided. Do not make assumptions about unshown code.`;
+
+    const userPrompt = `CODE TO ANALYZE (${successfulContent.length} files):
+
+${fileContext}
+
+Analyze these files according to your mission instructions above.`;
 
     const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, {
       role: 'WORKER',
