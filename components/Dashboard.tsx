@@ -297,9 +297,6 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
                         <h3 className="font-semibold text-slate-900 truncate">
                           {group.repoName}
                         </h3>
-                        <div className={`inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-bold border ${getHealthScoreBg(group.bestScore)} ${getHealthScoreColor(group.bestScore)}`}>
-                          {group.bestScore}
-                        </div>
                       </div>
 
                       {/* Tier badges */}
