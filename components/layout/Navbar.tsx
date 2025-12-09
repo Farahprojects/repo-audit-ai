@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Menu, X, User, LogOut, ChevronDown } from 'lucide-react';
-import { ViewState } from '../types';
+import { ViewState } from '../../types';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface NavbarProps {

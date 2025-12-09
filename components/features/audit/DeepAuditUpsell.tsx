@@ -1,6 +1,6 @@
 import React from 'react';
 import { Database, Zap, Shield, Layers, Key, Check, Server, Globe } from 'lucide-react';
-import { RepoReport } from '../types';
+import { RepoReport } from '../../../types';
 
 interface DeepAuditUpsellProps {
     report: RepoReport;

@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { TIERS, AuditTier } from './TierBadges';
+import { TIERS, AuditTier } from '../../common/TierBadges';
 
 interface AuditUpgradesDropdownProps {
   upgradesDropdownOpen: boolean;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
-import { ViewState } from '../types';
-import { supabase } from '../src/integrations/supabase/client';
-import { Tables } from '../src/integrations/supabase/types';
+import { ViewState } from '../../../types';
+import { supabase } from '../../../src/integrations/supabase/client';
+import { Tables } from '../../../src/integrations/supabase/types';
 import { Calendar, ExternalLink, TrendingUp, FileText, RefreshCw, AlertCircle, Eye, Search, Zap, AlertTriangle } from 'lucide-react';
-import TierBadges, { AuditTier } from './TierBadges';
-import { parseGitHubUrl } from '../services/githubService';
-import { useGitHubAuth } from '../hooks/useGitHubAuth';
+import TierBadges, { AuditTier } from '../../common/TierBadges';
+import { parseGitHubUrl } from '../../../services/githubService';
+import { useGitHubAuth } from '../../../hooks/useGitHubAuth';
 
 type Audit = Tables<'audits'> & { tier?: string };
 

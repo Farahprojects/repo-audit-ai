@@ -1,5 +1,5 @@
 import React from 'react';
-import { RepoReport, AuditRecord } from '../types';
+import { RepoReport, AuditRecord } from '../../../types';
 
 interface ReportSummaryProps {
   data: RepoReport;

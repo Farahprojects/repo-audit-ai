@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Issue } from '../types';
+import { Issue } from '../../../types';
 import { AlertTriangle, AlertOctagon, Info, ChevronDown, Wand2, Check } from 'lucide-react';
 
 interface IssueCardProps {

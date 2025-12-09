@@ -1,6 +1,6 @@
 import React from 'react';
 import { Check } from 'lucide-react';
-import { RepoReport } from '../types';
+import { RepoReport } from '../../../types';
 import IssueCard from './IssueCard';
 
 interface ReportIssuesProps {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Github, Twitter, Linkedin } from 'lucide-react';
-import { ViewState } from '../types';
+import { ViewState } from '../../types';
 
 interface FooterProps {
   onNavigate: (view: ViewState) => void;

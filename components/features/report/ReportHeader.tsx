@@ -1,7 +1,7 @@
 import React from 'react';
 import { GitBranch, Download, Share2, Check, ChevronDown, Clock, Plus } from 'lucide-react';
-import { RepoReport, AuditRecord } from '../types';
-import { TIERS, AuditTier } from './TierBadges';
+import { RepoReport, AuditRecord } from '../../../types';
+import { TIERS, AuditTier } from '../../common/TierBadges';
 
 interface ReportHeaderProps {
   data: RepoReport;

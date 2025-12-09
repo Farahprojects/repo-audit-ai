@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, Zap, AlertTriangle, Loader2 } from 'lucide-react';
-import { AuditStats, ComplexityFingerprint } from '../types';
-import { FileMapItem, parseGitHubUrl } from '../services/githubService';
-import { PreflightService, PreflightRecord, fetchPreflight } from '../services/preflightService';
-import { CostEstimator, AuditTier } from '../services/costEstimator';
-import GitHubConnectModal from './GitHubConnectModal';
-import { useGitHubAuth } from '../hooks/useGitHubAuth';
+import { AuditStats, ComplexityFingerprint } from '../../../types';
+import { FileMapItem, parseGitHubUrl } from '../../../services/githubService';
+import { PreflightService, PreflightRecord, fetchPreflight } from '../../../services/preflightService';
+import { CostEstimator, AuditTier } from '../../../services/costEstimator';
+import GitHubConnectModal from '../auth/GitHubConnectModal';
+import { useGitHubAuth } from '../../../hooks/useGitHubAuth';
 
 interface PreflightModalProps {
   repoUrl: string;

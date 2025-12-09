@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { RepoReport, AuditRecord, AuditTier } from '../types';
-import { TIERS } from '../components/TierBadges';
-import { ConnectProvider } from '../components/UniversalConnectModal';
+import { TIERS } from '../components/common/TierBadges';
+import { ConnectProvider } from '../components/features/auth/UniversalConnectModal';
 
 interface UseReportStateProps {
   data: RepoReport;

@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { useAppRouter } from '../hooks/useAppRouter';
-import { useAuditOrchestrator } from '../hooks/useAuditOrchestrator';
-import { useGitHubAuth } from '../hooks/useGitHubAuth';
-import { useAuthFlow } from '../hooks/useAuthFlow';
+import { useAuth } from '../../hooks/useAuth';
+import { useAppRouter } from '../../hooks/useAppRouter';
+import { useAuditOrchestrator } from '../../hooks/useAuditOrchestrator';
+import { useGitHubAuth } from '../../hooks/useGitHubAuth';
+import { useAuthFlow } from '../../hooks/useAuthFlow';
 import { User, Session } from '@supabase/supabase-js';
-import { ViewState, RepoReport, AuditStats, AuditRecord } from '../types';
+import { ViewState, RepoReport, AuditStats, AuditRecord } from '../../types';
 
 // Auth Context
 interface AuthContextType {

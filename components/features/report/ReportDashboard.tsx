@@ -1,14 +1,14 @@
 import React from 'react';
-import { RepoReport, AuditRecord, AuditTier } from '../types';
-import { UniversalConnectModal } from './UniversalConnectModal';
+import { RepoReport, AuditRecord, AuditTier } from '../../../types';
+import { UniversalConnectModal } from '../auth/UniversalConnectModal';
 import { ReportHeader } from './ReportHeader';
 import { ReportSummary } from './ReportSummary';
 import { ReportSections } from './ReportSections';
 import { ReportIssues } from './ReportIssues';
-import { AuditHistoryDropdown } from './AuditHistoryDropdown';
-import { AuditUpgradesDropdown } from './AuditUpgradesDropdown';
-import { useReportState } from '../hooks/useReportState';
-import { useDropdownPositioning } from '../hooks/useDropdownPositioning';
+import { AuditHistoryDropdown } from '../dashboard/AuditHistoryDropdown';
+import { AuditUpgradesDropdown } from '../dashboard/AuditUpgradesDropdown';
+import { useReportState } from '../../../hooks/useReportState';
+import { useDropdownPositioning } from '../../../hooks/useDropdownPositioning';
 
 interface ReportDashboardProps {
   data: RepoReport;

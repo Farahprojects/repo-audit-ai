@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { Check } from 'lucide-react';
-import { AuditRecord } from '../types';
-import { TIERS } from './TierBadges';
+import { AuditRecord } from '../../../types';
+import { TIERS } from '../../common/TierBadges';
 
 interface AuditHistoryDropdownProps {
   auditsByTier: Record<string, AuditRecord[]>;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Github, Eye, Trash2, Lock } from 'lucide-react';
-import { supabase } from '../src/integrations/supabase/client';
+import { supabase } from '../../../src/integrations/supabase/client';
 
 interface GitHubConnectModalProps {
     repoUrl: string;

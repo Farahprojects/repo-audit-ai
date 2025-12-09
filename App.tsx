@@ -1,15 +1,15 @@
 import React, { useCallback } from 'react';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
-import Pricing from './components/Pricing';
-import About from './components/About';
-import Contact from './components/Contact';
-import AuthModal from './components/AuthModal';
-import SEO from './components/SEO';
-import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useScannerContext, useAuthFlowContext } from './components/AppProviders';
-import { LandingPage } from './components/LandingPage';
-import { AuditFlow } from './components/AuditFlow';
-import { DashboardPage } from './components/DashboardPage';
+import Navbar from './components/layout/Navbar';
+import Footer from './components/layout/Footer';
+import Pricing from './components/pages/Pricing';
+import About from './components/pages/About';
+import Contact from './components/pages/Contact';
+import AuthModal from './components/features/auth/AuthModal';
+import SEO from './components/common/SEO';
+import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useScannerContext, useAuthFlowContext } from './components/layout/AppProviders';
+import { LandingPage } from './components/pages/LandingPage';
+import { AuditFlow } from './components/features/audit/AuditFlow';
+import { DashboardPage } from './components/pages/DashboardPage';
 import { DebugService } from './services/debugService';
 import { PreflightRecord } from './services/preflightService';
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Star, AlertTriangle, FileQuestion, FolderTree, FileCode, Shield, Zap, Database, FileText, Rocket, Wrench } from 'lucide-react';
-import { RepoReport } from '../types';
+import { RepoReport } from '../../../types';
 
 interface ReportSectionsProps {
   data: RepoReport;

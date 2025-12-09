@@ -1,7 +1,7 @@
 import React from 'react';
-import { ViewState } from '../types';
-import { Tables } from '../src/integrations/supabase/types';
-import Dashboard from './Dashboard';
+import { ViewState } from '../../types';
+import { Tables } from '../../src/integrations/supabase/types';
+import Dashboard from '../features/dashboard/Dashboard';
 
 interface DashboardPageProps {
   onNavigate: (view: ViewState) => void;

@@ -1,5 +1,5 @@
 import React from 'react';
-import Hero from './Hero';
+import Hero from '../features/landing/Hero';
 
 interface LandingPageProps {
   onAnalyze: (url: string) => void;

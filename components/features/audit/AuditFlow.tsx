@@ -1,9 +1,9 @@
 import React, { memo } from 'react';
-import { ViewState, RepoReport, AuditRecord, AuditStats } from '../types';
-import { FileMapItem } from '../services/githubService';
+import { ViewState, RepoReport, AuditRecord, AuditStats } from '../../../types';
+import { FileMapItem } from '../../../services/githubService';
 import PreflightModal from './PreflightModal';
 import Scanner from './Scanner';
-import ReportDashboard from './ReportDashboard';
+import ReportDashboard from '../report/ReportDashboard';
 
 interface AuditFlowProps {
   view: ViewState;

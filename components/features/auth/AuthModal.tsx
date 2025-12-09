@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { X, Github, Mail, ArrowRight, Loader2, Apple, Linkedin } from 'lucide-react';
-import { supabase } from '../src/integrations/supabase/client';
+import { supabase } from '../../../src/integrations/supabase/client';
 
 interface AuthModalProps {
   isOpen: boolean;
