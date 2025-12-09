@@ -105,13 +105,12 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   // Router hook
   const router = useAppRouter();
 
-  // GitHub auth hook
-  const { getGitHubToken, clearGitHubState } = useGitHubAuth();
+  // GitHub auth hook (only for clearGitHubState now)
+  const { clearGitHubState } = useGitHubAuth();
 
-  // Audit orchestrator hook
+  // Audit orchestrator hook - no longer needs getGitHubToken (server-side now)
   const auditOrchestrator = useAuditOrchestrator({
     user: auth.user,
-    getGitHubToken,
     navigate: router.navigate,
     setPreviousView: router.setPreviousView,
   });

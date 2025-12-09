@@ -1,9 +1,8 @@
 import { AuditStats, RepoReport, Issue, AuditRecord } from '../types';
 import { Tables } from '../src/integrations/supabase/types';
 import { generateAuditReport } from './geminiService';
-import { FileMapItem, parseGitHubUrl } from './githubService';
+import { parseGitHubUrl } from './githubService';
 import { supabase } from '../src/integrations/supabase/client';
-import { CostEstimator } from './costEstimator';
 import { ErrorHandler, ErrorLogger } from './errorService';
 
 export class AuditService {
@@ -36,22 +35,28 @@ export class AuditService {
       : undefined;
   };
 
-  // Execute audit process
+  /**
+   * Execute audit process - server-side approach
+   * 
+   * preflightId is REQUIRED - it's the single source of truth.
+   * The backend fetches all data (files, tokens, stats) from the preflights table.
+   */
   static async executeAudit(
     repoUrl: string,
     tier: string,
     auditStats: AuditStats,
-    fileMap: FileMapItem[],
-    auditConfig: any,
-    getGitHubToken: () => Promise<string | undefined>,
+    preflightId: string,
     onProgress: (log: string) => void,
-    onProgressUpdate: (progress: number) => void,
-    preflightId?: string  // Optional preflight ID for using stored preflight data
+    onProgressUpdate: (progress: number) => void
   ): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {
-    const auditContext = { repoUrl, tier, stats: auditStats, fileCount: fileMap.length, hasPreflightId: !!preflightId };
+    const auditContext = { repoUrl, tier, preflightId };
+
+    if (!preflightId) {
+      throw new Error('preflightId is required for audits');
+    }
 
     try {
-      ErrorLogger.info('Starting audit execution', auditContext);
+      ErrorLogger.info('Starting audit execution (server-side)', auditContext);
 
       const repoInfo = parseGitHubUrl(repoUrl);
       if (!repoInfo) {
@@ -62,60 +67,30 @@ export class AuditService {
       onProgress(`[System] Initializing audit for ${repoInfo.owner}/${repoInfo.repo}...`);
       onProgressUpdate(10);
 
-      // Step 2: Use pre-fetched file map
-      onProgress(`[System] Using pre-fetched file map with ${fileMap.length} files...`);
+      // Step 2: Server handles file fetching via preflight
+      onProgress(`[System] Server fetching files from preflight...`);
       onProgressUpdate(40);
 
       // Step 3: Parse
       onProgress(`[Agent: Parser] Analyzing structure...`);
-      await new Promise(r => setTimeout(r, 800)); // Simulate AST parsing time
+      await new Promise(r => setTimeout(r, 800));
       onProgressUpdate(60);
 
-      // Step 3: Get GitHub token for file access
-      // NEW: If we have a preflightId, we DON'T need to fetch the token here.
-      // The backend will handle token decryption securely server-side.
-      let githubToken: string | undefined;
-
-      if (preflightId) {
-        onProgress(`[Auth] Using secure server-side authentication...`);
-        ErrorLogger.info('Skipping frontend token fetch - using preflightId for server-side auth');
-      } else {
-        // Legacy fallback: fetch token on frontend (should be phased out)
-        onProgress(`[Auth] Getting GitHub access token...`);
-        githubToken = await ErrorHandler.withErrorHandling(
-          getGitHubToken,
-          'getGitHubToken',
-          { ...auditContext, operation: 'getTokenForAudit' }
-        );
-      }
-
-      // Step 4: AI Audit (Real API)
-      onProgress(`[Agent: Security] Sending metadata to Brain...`);
+      // Step 4: Run audit - backend handles EVERYTHING
       onProgress(`[System] Running ${tier.toUpperCase()} audit tier...`);
+      onProgress(`[Auth] Using secure server-side authentication...`);
 
-      // Get estimated tokens from server-side cost estimator
-      let estimatedTokens: number | undefined;
-      if (auditStats.fingerprint) {
-        const tokenResult = await ErrorHandler.safeAsync(
-          () => CostEstimator.estimateTokensAsync(tier, auditStats.fingerprint),
-          undefined,
-          { ...auditContext, operation: 'estimateTokens' }
-        );
-
-        if (tokenResult.success) {
-          estimatedTokens = tokenResult.data.estimatedTokens;
-          ErrorLogger.debug('Token estimation successful', { estimatedTokens });
-        } else if (tokenResult.success === false) {
-          ErrorLogger.warn('Token estimation failed, continuing without estimate', tokenResult.error);
-          // Continue without estimate - server will calculate anyway
-        }
-      }
-
-      // Pass preflightId to generateAuditReport so backend can use stored preflight data
+      // Pass ONLY what's needed - backend fetches the rest from preflight
       const report = await ErrorHandler.withErrorHandling(
-        () => generateAuditReport(repoInfo.repo, auditStats, fileMap, tier, repoUrl, estimatedTokens, auditConfig, githubToken, preflightId),
+        () => generateAuditReport(
+          repoInfo.repo,
+          auditStats,
+          tier,
+          repoUrl,
+          preflightId
+        ),
         'generateAuditReport',
-        { ...auditContext, estimatedTokens, fileCount: fileMap.length, preflightId }
+        auditContext
       );
 
       onProgress(`[Success] Report generated successfully.`);
@@ -156,13 +131,11 @@ export class AuditService {
       return { report: enrichedReport, relatedAudits: relatedAudits as unknown as AuditRecord[] };
 
     } catch (error) {
-      // Re-throw with proper context if it's already an AppError
       if (error instanceof Error) {
         ErrorLogger.error('Audit execution failed', error, auditContext);
         throw error;
       }
 
-      // Wrap unknown errors
       const wrappedError = new Error(`Audit execution failed: ${String(error)}`);
       ErrorLogger.error('Audit execution failed with unknown error', wrappedError, auditContext);
       throw wrappedError;
