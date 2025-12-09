@@ -45,8 +45,10 @@ CREATE INDEX IF NOT EXISTS idx_preflights_repo_url ON preflights(repo_url);
 CREATE INDEX IF NOT EXISTS idx_preflights_user_id ON preflights(user_id);
 CREATE INDEX IF NOT EXISTS idx_preflights_github_account_id ON preflights(github_account_id);
 CREATE INDEX IF NOT EXISTS idx_preflights_expires_at ON preflights(expires_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_preflights_repo_user ON preflights(repo_url, user_id) WHERE user_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_preflights_repo_anonymous ON preflights(repo_url) WHERE user_id IS NULL AND is_private = false;
+
+-- Unique constraint for upsert operations (allows ON CONFLICT)
+-- This replaces the partial indexes and enables proper upsert functionality
+ALTER TABLE preflights ADD CONSTRAINT preflights_repo_url_user_id_key UNIQUE (repo_url, user_id);
 
 -- Enable RLS
 ALTER TABLE preflights ENABLE ROW LEVEL SECURITY;

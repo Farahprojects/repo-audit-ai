@@ -5,9 +5,13 @@ VITE_SUPABASE_PROJECT_ID="zlrivxntdtewfagrbtry"
 VITE_SUPABASE_PUBLISHABLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpscml2eG50ZHRld2ZhZ3JidHJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MTQ1MzEsImV4cCI6MjA4MDQ5MDUzMX0.ciu4AOyMt4W5jUQdDH2V1iS0fpWpwHRHylGjrdBnFrs"
 VITE_SUPABASE_URL="https://zlrivxntdtewfagrbtry.supabase.co"
 
-# API Keys - These are now handled server-side via Supabase Edge Functions
-# Set these in your Supabase project settings, not in client-side environment variables
-# GEMINI_API_KEY - Set in Supabase Dashboard > Project Settings > Edge Functions > Environment variables
-# GITHUB_TOKEN - Set in Supabase Dashboard > Project Settings > Edge Functions > Environment variables
+# API Keys - These are handled server-side via Supabase Edge Functions ONLY
+# NEVER expose API tokens client-side as this creates major security vulnerabilities
+# Set these in your Supabase project settings under Edge Functions > Environment variables:
+# GEMINI_API_KEY - Required for audit processing
+# GITHUB_PAT - Required for GitHub API access (Personal Access Token)
+# GITHUB_CLIENT_ID - Required for OAuth (if using GitHub authentication)
+# GITHUB_CLIENT_SECRET - Required for OAuth (if using GitHub authentication)
 
-VITE_GITHUB_TOKEN="your_github_token_here"  # Still needed for client-side GitHub API calls
+# ⚠️  SECURITY WARNING: Do NOT add VITE_GITHUB_TOKEN or any API tokens here!
+# All GitHub API calls are handled server-side through Edge Functions for security.

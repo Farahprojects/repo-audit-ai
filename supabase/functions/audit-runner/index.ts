@@ -24,6 +24,7 @@ import {
 } from '../_shared/utils.ts';
 import { TIER_MAPPING, VALID_TIERS, calculateServerEstimate, mapTier } from '../_shared/costEstimation.ts';
 import { normalizeStrengthsOrIssues, normalizeRiskLevel } from '../_shared/normalization.ts';
+import { calculateHealthScore, generateEgoDrivenSummary } from '../_shared/scoringUtils.ts';
 
 
 
@@ -149,35 +150,12 @@ function aggregateWorkerResults(workerResults: WorkerResult[]): {
     }
   }
 
-  // 🧠 EGO-BASED SCORING ALGORITHM (same as coordinator)
-  const severityWeights = { critical: 5, warning: 2, info: 1 };
-  let rawScore = 0;
-
-  allIssues.forEach((issue: any) => {
-    const severity = (issue.severity || 'info').toLowerCase();
-    const weight = severityWeights[severity as keyof typeof severityWeights] || 1;
-    rawScore += weight;
-  });
-
-  // Use file count from combined app map
+  // 🧠 EGO-BASED SCORING ALGORITHM (now shared)
   const fileCount = combinedAppMap.file_count || allIssues.length * 5; // Rough estimate
-  const normalized = rawScore / Math.log(fileCount + 8);
-  const finalHealthScore = Math.max(0, Math.min(100, Math.round(100 - normalized)));
+  const finalHealthScore = calculateHealthScore({ issues: allIssues, fileCount });
 
-  // Generate ego-driven summary
-  const criticalCount = allIssues.filter((i: any) => i.severity?.toLowerCase() === 'critical').length;
-  const warningCount = allIssues.filter((i: any) => i.severity?.toLowerCase() === 'warning').length;
-
-  let summary: string;
-  if (criticalCount <= 1 && warningCount < 5) {
-    summary = `This repo carries the signature of someone who knows what they're doing. The structure is coherent, conventions are respected, and most of the issues found reflect fine-tuning rather than fundamental gaps. This feels like work from a strong mid-to-senior engineer who understands patterns, separation of concerns, and long-term maintainability.`;
-  } else if (criticalCount <= 3) {
-    summary = `There's a clear foundation here — the architecture shows intent, and the patterns indicate someone who understands modern development practices. But the app is sitting right on the edge of breaking into a higher tier. With a few structural cleanups and more consistency across modules, this could easily shine like a polished product built by a confident engineer.`;
-  } else if (criticalCount <= 7) {
-    summary = `This codebase has moments of real talent — you can see the problem-solving ability and raw capability in the stronger sections. The gaps don't come from incompetence; they come from lack of consistency or rushed delivery. With more structure, this repo could reflect the level of skill that's clearly present in the stronger sections.`;
-  } else {
-    summary = `There's a lot of passion in this project, but it feels like something built without the constraints or patterns of a production environment. The ideas are strong — the execution just needs a reset and a more deliberate structure. With a rebuild guided by clear best practices, this could transform from a chaotic prototype into something that genuinely reflects your capability.`;
-  }
+  // 🎯 EGO-DRIVEN SUMMARY SYSTEM (now shared)
+  const summary = generateEgoDrivenSummary(allIssues);
 
   console.log(`📋 Aggregation complete: ${allIssues.length} total issues collected`);
 
