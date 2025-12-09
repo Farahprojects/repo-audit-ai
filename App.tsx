@@ -11,6 +11,7 @@ import { LandingPage } from './components/LandingPage';
 import { AuditFlow } from './components/AuditFlow';
 import { DashboardPage } from './components/DashboardPage';
 import { DebugService } from './services/debugService';
+import { PreflightRecord } from './services/preflightService';
 
 const AppContent: React.FC = () => {
   const { user, signOut, clearGitHubState } = useAuthContext();
@@ -82,10 +83,28 @@ const AppContent: React.FC = () => {
   };
 
   // Extracted inline functions to prevent recreation on every render
-  const handleRunTier = useCallback((tier: string, url: string, config?: any) => {
+  const handleRunTier = useCallback(async (tier: string, url: string, config?: any) => {
     setRepoUrl(url);
+
+    // When coming from report page, try to reuse existing preflight instead of always going through modal
+    try {
+      const { fetchPreflight } = await import('./services/preflightService');
+      const preflightResponse = await fetchPreflight(url);
+
+      if (preflightResponse.success && preflightResponse.preflight) {
+        // We have a valid preflight, use it directly
+        const preflight = preflightResponse.preflight;
+        await handleStartAuditWithPreflight(url, tier, preflight);
+        return;
+      }
+    } catch (error) {
+      console.warn('Failed to check for existing preflight, falling back to modal:', error);
+      // Fall through to modal approach
+    }
+
+    // No valid preflight found, go through modal
     navigate('preflight');
-  }, [setRepoUrl, navigate]);
+  }, [setRepoUrl, navigate, handleStartAuditWithPreflight]);
 
   const handleStartAuditFromDashboard = useCallback(async (url: string, tier: string) => {
     // Always go through preflight flow - simpler and more reliable
