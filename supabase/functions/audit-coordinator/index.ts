@@ -3,7 +3,7 @@
 // Synthesizes results and SAVES the audit to the database.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
+
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
 import { detectCapabilities } from '../_shared/capabilities.ts';
 import {
@@ -169,25 +169,64 @@ serve(async (req) => {
             githubToken: null
         };
 
-        // 3. Run Synthesizer
-        console.log(`🎓 [audit-coordinator] Synthesizing ${workerResults.length} results...`);
-        const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, workerResults, GEMINI_API_KEY, tierPrompt);
+        // 3. Deterministic Aggregation (No LLM)
+        console.log(`⚡ [audit-coordinator] Aggregating ${workerResults.length} results deterministically...`);
+
+        // Flatten all issues
+        const allIssues = workerResults.flatMap(r => r.findings.issues || []);
+
+        // Deduplicate issues by title + filename
+        const uniqueIssuesMap = new Map<string, any>();
+        allIssues.forEach((issue: any) => {
+            const key = `${issue.title}-${issue.filePath}`;
+            if (!uniqueIssuesMap.has(key)) {
+                uniqueIssuesMap.set(key, issue);
+            }
+        });
+        const minimizedIssues = Array.from(uniqueIssuesMap.values());
+
+        // Calculate Average Score from Workers
+        // Default to 100 if no results, otherwise average valid scores
+        const validScores = workerResults
+            .map(r => r.findings.localScore)
+            .filter(s => typeof s === 'number');
+
+        // Weighted average could be better, but simple average is fine for speed
+        const healthScore = validScores.length > 0
+            ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
+            : 100;
+
+        // Determine Risk Level
+        let riskLevel: 'critical' | 'high' | 'medium' | 'low' = 'low';
+        if (healthScore < 50) riskLevel = 'critical';
+        else if (healthScore < 70) riskLevel = 'high';
+        else if (healthScore < 85) riskLevel = 'medium';
+
+        // Aggregate Strengths/Weaknesses (if workers provided them)
+        const allStrengths = workerResults.flatMap(r => r.findings.strengths || []);
+        const allWeaknesses = workerResults.flatMap(r => r.findings.weaknesses || []);
+
+        // Simple frequency count for top items could be added here, 
+        // but for now just taking unique strings or first few conventions found
+        const topStrengths = [...new Set(allStrengths)].slice(0, 5);
+        const topWeaknesses = [...new Set(allWeaknesses)].slice(0, 5);
+
+        // Template Summary
+        const summary = `Audit complete. Analyzed ${preflightRecord.file_count} files across ${workerResults.length} parallel tasks. Found ${minimizedIssues.length} issues. Overall health score is ${healthScore}/100 with ${riskLevel} risk level. Key concerns include: ${topWeaknesses.slice(0, 3).join(', ') || 'None'}.`;
 
         // 4. Calculate Total Tokens
-        // We sum up: Planner (passed from client) + Workers (sum of results) + Synthesizer (just now)
         const workerTokenUsage = workerResults.reduce((sum, r) => sum + (r.tokenUsage || 0), 0);
-        const totalTokens = (plannerUsage?.totalTokens || 0) + workerTokenUsage + (synthesizerUsage?.totalTokens || 0);
+        const totalTokens = (plannerUsage?.totalTokens || 0) + workerTokenUsage;
 
         // 5. Save to DB
         const serverEstimatedTokens = calculateServerEstimate(tier, fileMap);
 
         // Normalize issues
-        const rawIssues = (finalReport?.issues && finalReport.issues.length > 0) ? finalReport.issues : [];
-        const dbIssues = rawIssues.map((issue: any, index: number) => ({
+        const dbIssues = minimizedIssues.map((issue: any, index: number) => ({
             id: issue.id || `issue-${index}`,
             title: issue.title,
             description: issue.description,
-            category: issue.category || 'Security',
+            category: issue.category || 'General',
             severity: issue.severity || 'warning',
             filePath: issue.filePath || 'Repository-wide',
             lineNumber: issue.line || 0,
@@ -196,9 +235,9 @@ serve(async (req) => {
             cwe: issue.cwe
         }));
 
-        const normalizedTopStrengths = normalizeStrengthsOrIssues(finalReport?.topStrengths || []);
-        const normalizedTopWeaknesses = normalizeStrengthsOrIssues(finalReport?.topWeaknesses || []);
-        const normalizedRiskLevel = normalizeRiskLevel(finalReport?.riskLevel);
+        const normalizedTopStrengths = normalizeStrengthsOrIssues(topStrengths);
+        const normalizedTopWeaknesses = normalizeStrengthsOrIssues(topWeaknesses);
+        const normalizedRiskLevel = normalizeRiskLevel(riskLevel);
 
         console.log(`💾 [audit-coordinator] Saving audit to DB...`);
         const { data: insertedAudit, error: insertError } = await supabase.from('audits').insert({
@@ -206,47 +245,45 @@ serve(async (req) => {
             repo_url: preflightRecord.repo_url,
             tier: tier,
             estimated_tokens: serverEstimatedTokens,
-            health_score: finalReport?.healthScore || 0,
-            summary: finalReport?.summary || "No summary generated.",
+            health_score: healthScore,
+            summary: summary,
             issues: dbIssues,
             total_tokens: totalTokens,
             extra_data: {
                 topStrengths: normalizedTopStrengths,
                 topWeaknesses: normalizedTopWeaknesses,
                 riskLevel: normalizedRiskLevel,
-                productionReady: finalReport?.productionReady ?? null,
-                categoryAssessments: finalReport?.categoryAssessments || null,
-                seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
-                suspiciousFiles: finalReport?.suspiciousFiles || null,
-                overallVerdict: finalReport?.overallVerdict || null,
-                // Store raw breakdown for debug
+                productionReady: healthScore > 80,
+                categoryAssessments: null, // Removed synthesizer assessment
+                seniorDeveloperAssessment: null,
+                suspiciousFiles: null,
+                overallVerdict: null,
                 tokenBreakdown: {
                     planner: plannerUsage?.totalTokens || 0,
                     workers: workerTokenUsage,
-                    synthesizer: synthesizerUsage?.totalTokens || 0
+                    synthesizer: 0
                 }
             }
         }).select().single();
 
         if (insertError) {
             console.error('Failed to save audit:', insertError);
-            // Continue anyway to return result to user, but log error
         }
 
         // 6. Return Final Report
         return createSuccessResponse({
-            healthScore: finalReport.healthScore,
-            summary: finalReport.summary,
+            healthScore: healthScore,
+            summary: summary,
             issues: dbIssues,
             riskLevel: normalizedRiskLevel,
-            productionReady: finalReport.productionReady,
+            productionReady: healthScore > 80,
             topStrengths: normalizedTopStrengths,
             topIssues: normalizedTopWeaknesses,
-            suspiciousFiles: finalReport?.suspiciousFiles || null,
-            categoryAssessments: finalReport?.categoryAssessments || null,
-            seniorDeveloperAssessment: finalReport?.seniorDeveloperAssessment || null,
-            overallVerdict: finalReport?.overallVerdict || null,
-            auditId: insertedAudit?.id, // Return ID so frontend can link to it
+            suspiciousFiles: null,
+            categoryAssessments: null,
+            seniorDeveloperAssessment: null,
+            overallVerdict: null,
+            auditId: insertedAudit?.id,
             meta: {
                 detectedStack,
                 totalTokens
