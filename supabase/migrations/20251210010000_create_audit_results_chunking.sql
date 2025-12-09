@@ -230,24 +230,29 @@ LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = ''
 AS $$
 DECLARE
-    v_audit audits;
+    v_issues JSONB;
+    v_extra_data JSONB;
+    v_results_chunked BOOLEAN;
     v_result JSONB;
 BEGIN
-    -- Get the audit record
-    SELECT * INTO v_audit FROM audits WHERE id = p_audit_id;
+    -- Get the audit record fields we need
+    SELECT issues, extra_data, results_chunked
+    INTO v_issues, v_extra_data, v_results_chunked
+    FROM audits
+    WHERE id = p_audit_id;
 
     IF NOT FOUND THEN
         RETURN NULL;
     END IF;
 
     -- If chunked, reconstruct from chunks
-    IF v_audit.results_chunked THEN
+    IF v_results_chunked THEN
         v_result := reconstruct_audit_results(p_audit_id);
     ELSE
         -- Return original format
         v_result := jsonb_build_object(
-            'issues', COALESCE(v_audit.issues, '[]'),
-            'extra_data', v_audit.extra_data
+            'issues', COALESCE(v_issues, '[]'),
+            'extra_data', v_extra_data
         );
     END IF;
 
