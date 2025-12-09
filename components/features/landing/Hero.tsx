@@ -72,7 +72,7 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze, onSoftStart }) => {
               />
               <button
                 type="submit"
-                className="bg-foreground hover:bg-slate-800 text-background px-6 py-2.5 rounded-md font-medium transition-all flex items-center gap-2 whitespace-nowrap"
+                className="bg-slate-900 hover:bg-black text-white px-6 py-2.5 rounded-md font-medium transition-all flex items-center gap-2 whitespace-nowrap"
               >
                 Start Audit <ArrowRight className="w-4 h-4" />
               </button>
@@ -94,7 +94,7 @@ const Hero: React.FC<HeroProps> = ({ onAnalyze, onSoftStart }) => {
                 </div>
                 <button
                   onClick={handleRunAudit}
-                  className="w-full bg-foreground hover:bg-slate-800 text-background px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 mb-3"
+                  className="w-full bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 mb-3"
                 >
                   Run Audit <ArrowRight className="w-4 h-4" />
                 </button>
