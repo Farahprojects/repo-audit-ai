@@ -67,7 +67,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
           className="flex items-center gap-2 cursor-pointer group z-50 relative"
         >
           <img src="/favicon-32x32.png" alt="SCAI Logo" className="w-6 h-6" />
-          <span className="text-foreground font-bold text-lg tracking-tight">SCAI</span>
+          <span className="text-foreground font-bold text-lg tracking-tight">scai</span>
         </div>
 
         {/* Desktop Nav - Only show when user is not signed in */}
