@@ -1,7 +1,6 @@
 import React from 'react';
 import { Star, AlertTriangle, FileQuestion, FolderTree, FileCode, Shield, Zap, Database, FileText, Rocket, Wrench } from 'lucide-react';
 import { RepoReport } from '../types';
-import { DeepAuditUpsell } from './DeepAuditUpsell';
 
 interface ReportSectionsProps {
   data: RepoReport;
@@ -72,13 +71,6 @@ export const ReportSections: React.FC<ReportSectionsProps> = ({
         </div>
       ) : null}
 
-      {/* Deep Audit Upsell - Only if onRunTier is available */}
-      {onRunTier && (
-        <DeepAuditUpsell
-          report={data}
-          onRunDeepAudit={onRunDeepAudit}
-        />
-      )}
 
       {/* Category Assessments */}
       {data.categoryAssessments && (
@@ -140,13 +132,6 @@ export const ReportSections: React.FC<ReportSectionsProps> = ({
         </div>
       )}
 
-      {/* Overall Verdict */}
-      {data.overallVerdict && (
-        <div className="animate-fade-in border-l-4 border-slate-300 pl-5 py-2">
-          <h3 className="font-semibold text-foreground mb-2">Overall Verdict</h3>
-          <p className="text-slate-600 text-[15px] leading-7">{data.overallVerdict}</p>
-        </div>
-      )}
     </>
   );
 };
