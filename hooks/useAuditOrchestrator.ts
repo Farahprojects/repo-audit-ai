@@ -90,7 +90,7 @@ export const useAuditOrchestrator = ({
       addLog(`[Planner] Generating specialized task breakdown...`);
       setScannerProgress(5);
 
-      const { plan, usage: plannerUsage, preflight } = await AuditService.planAudit(preflightId, tier);
+      const { plan, tier: canonicalTier, usage: plannerUsage, preflight } = await AuditService.planAudit(preflightId, tier);
 
       addLog(`[Planner] Plan generated: ${plan.tasks.length} tasks.`);
       addLog(`[Planner] Focus: ${plan.focusArea || 'General Audit'}`);
@@ -134,7 +134,7 @@ export const useAuditOrchestrator = ({
 
       // Phase 3: Synthesis
       addLog(`[Coordinator] Synthesizing results...`);
-      const finalReport = await AuditService.synthesizeAuditResults(preflightId, workerResults, tier, plannerUsage);
+      const finalReport = await AuditService.synthesizeAuditResults(preflightId, workerResults, canonicalTier, plannerUsage);
 
       addLog(`[Coordinator] Synthesis complete. Found ${finalReport.issues?.length || 0} issues. Health Score: ${finalReport.healthScore}`);
       setScannerProgress(100);

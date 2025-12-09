@@ -205,7 +205,7 @@ Analyze the provided code files according to your mission above. Be thorough and
 While analyzing, also build an "appMap" - a lightweight metadata summary of the project structure you observe.
 
 Return your findings in this exact JSON format:
-{
+    {
   "issues": [
     {
       "id": "unique_id",
@@ -213,10 +213,10 @@ Return your findings in this exact JSON format:
       "category": "appropriate_category",
       "title": "Brief, clear title",
       "description": "Detailed explanation of the issue",
-      "file": "filename.ext",
+      "filePath": "filename.ext",
       "line": 42,
       "badCode": "problematic code snippet",
-      "fixedCode": "suggested fix"
+      "remediation": "suggested fix"
     }
   ],
   "topStrengths": ["key strength 1", "key strength 2"],

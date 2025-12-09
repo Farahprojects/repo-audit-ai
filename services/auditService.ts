@@ -39,7 +39,7 @@ export class AuditService {
   static async planAudit(
     preflightId: string,
     tier: string
-  ): Promise<{ plan: any; detectedStack: any; usage: any; preflight: any }> {
+  ): Promise<{ plan: any; tier: string; detectedStack: any; usage: any; preflight: any }> {
     const { data: result, error } = await supabase.functions.invoke('audit-planner', {
       body: { preflightId, tier }
     });

@@ -117,9 +117,10 @@ serve(async (req) => {
         // Run Planner
         const { result: plan, usage } = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
 
-        // Return the plan along with preflight data for workers (avoids N+1 queries)
+        // Return the plan along with canonical tier and preflight data for workers (avoids N+1 queries)
         return createSuccessResponse({
             plan,
+            tier, // Canonical tier resolved by planner
             detectedStack,
             usage,
             preflight: {
