@@ -14,6 +14,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState<'google' | 'github' | 'apple' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -59,7 +60,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   }, [mode, email, password, onClose]);
 
   const signInWithProvider = useCallback(async (provider: 'google' | 'github' | 'apple') => {
-    setLoading(true);
+    setLoadingProvider(provider);
     setError(null);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -71,7 +72,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       if (error) throw error;
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
-      setLoading(false);
+      setLoadingProvider(null);
     }
   }, []);
 
@@ -116,24 +117,24 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <div className="grid grid-cols-3 gap-3 mb-6">
             <button
               onClick={() => signInWithProvider('google')}
-              disabled={loading}
+              disabled={loading || loadingProvider !== null}
               className="flex items-center justify-center py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <GoogleIcon />}
+              {loadingProvider === 'google' ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <GoogleIcon />}
             </button>
             <button
               onClick={() => signInWithProvider('github')}
-              disabled={loading}
+              disabled={loading || loadingProvider !== null}
               className="flex items-center justify-center py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <Github className="w-5 h-5 text-slate-900" />}
+              {loadingProvider === 'github' ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <Github className="w-5 h-5 text-slate-900" />}
             </button>
             <button
               onClick={() => signInWithProvider('apple')}
-              disabled={loading}
+              disabled={loading || loadingProvider !== null}
               className="flex items-center justify-center py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <Apple className="w-5 h-5 text-slate-900" />}
+              {loadingProvider === 'apple' ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : <Apple className="w-5 h-5 text-slate-900" />}
             </button>
           </div>
 
@@ -185,7 +186,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || loadingProvider !== null}
               className="w-full bg-slate-900 hover:bg-black text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 shadow-sm active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
