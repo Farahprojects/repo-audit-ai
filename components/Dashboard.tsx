@@ -3,7 +3,7 @@ import { ViewState } from '../types';
 import { supabase } from '../src/integrations/supabase/client';
 import { Tables } from '../src/integrations/supabase/types';
 import { Calendar, ExternalLink, TrendingUp, FileText, RefreshCw, AlertCircle, Eye, Search, Zap, AlertTriangle } from 'lucide-react';
-import TierBadges, { TIERS, AuditTier } from './TierBadges';
+import TierBadges, { AuditTier } from './TierBadges';
 import { parseGitHubUrl } from '../services/githubService';
 import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
@@ -57,7 +57,6 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newRepoUrl, setNewRepoUrl] = useState('');
-  const [selectedTier, setSelectedTier] = useState<AuditTier>('shape');
   const [repoError, setRepoError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const { getGitHubToken } = useGitHubAuth();
@@ -104,16 +103,16 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
         throw new Error("Please enter a complete GitHub repository URL (e.g., https://github.com/owner/repository-name)");
       }
 
-      // Skip validation - let the new flow handle preflight lookup
-      // If validation succeeds, proceed with audit
+      // Skip validation - let the preflight flow handle everything
+      // Tier will be selected in the PreflightModal
       if (onStartAudit) {
-        onStartAudit(trimmedUrl, selectedTier);
+        onStartAudit(trimmedUrl, 'shape'); // Tier is selected in PreflightModal
       }
     } catch (error: any) {
       setRepoError(error.message || "Repository not found. Please check the URL and try again.");
       setValidating(false); // Don't navigate if there's an error
     }
-  }, [newRepoUrl, selectedTier, onStartAudit]);
+  }, [newRepoUrl, onStartAudit]);
 
   const handleUpgradeTier = useCallback((repoUrl: string, tier: AuditTier) => {
     if (onStartAudit) {
@@ -214,17 +213,6 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
                 onKeyDown={(e) => e.key === 'Enter' && handleStartNewAudit()}
               />
             </div>
-            <select
-              value={selectedTier}
-              onChange={(e) => setSelectedTier(e.target.value as AuditTier)}
-              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-full text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-w-[140px]"
-            >
-              {Object.entries(TIERS).map(([key, tier]) => (
-                <option key={key} value={key}>
-                  {tier.name}
-                </option>
-              ))}
-            </select>
             <button
               onClick={handleStartNewAudit}
               disabled={!newRepoUrl.trim() || validating}
