@@ -132,12 +132,6 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
               Log in
             </button>
           )}
-          <button
-            onClick={() => onNavigate('landing')}
-            className="bg-foreground text-background hover:bg-slate-800 px-4 py-2 rounded-md text-sm font-medium transition-all shadow-sm hover:shadow-md"
-          >
-            Run Audit
-          </button>
         </div>
 
         {/* Mobile Menu Toggle */}
@@ -186,12 +180,6 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
                     Log In
                   </button>
                 )}
-                <button
-                  onClick={() => handleNavClick('landing')}
-                  className="w-full py-3 bg-foreground text-background rounded-lg hover:bg-slate-800 font-medium shadow-lg"
-                >
-                  Run Audit
-                </button>
               </div>
             </div>
           </div>
