@@ -1,7 +1,7 @@
 // @ts-nocheck - Deno runtime
 // Decrypt GitHub Token - Server-side decryption for secure token access
 
-import { validateRequestBody, ValidationError, validateSupabaseEnv, createSupabaseClient, handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
+import { validateRequestBody, ValidationError, validateSupabaseEnv, createSupabaseClient, handleCorsPreflight, createErrorResponse, createSuccessResponse, getAuthenticatedUserId } from '../_shared/utils.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -83,27 +83,13 @@ Deno.serve(async (req: Request) => {
       return createErrorResponse('Missing authorization header', 401);
     }
 
-    // Extract JWT token from Bearer header
-    const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
-
-    // Decode JWT to get user_id
-    let userId: string | null = null;
+    // Get authenticated user ID
+    let userId: string;
     try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-        const paddedBase64 = base64 + '='.repeat((4 - base64.length % 4) % 4);
-        const decoded = atob(paddedBase64);
-        const payload = JSON.parse(decoded);
-        userId = payload.sub;
-      }
+      userId = await getAuthenticatedUserId(req, supabase);
     } catch (e) {
-      console.error('[decrypt-github-token] Failed to decode JWT:', e);
+      console.error('[decrypt-github-token] Authentication failed:', e);
       return createErrorResponse('Invalid token format', 401);
-    }
-
-    if (!userId) {
-      return createErrorResponse('Could not extract user ID from token', 401);
     }
 
     // Validate request body

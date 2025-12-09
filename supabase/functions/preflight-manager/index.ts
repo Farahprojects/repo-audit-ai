@@ -4,6 +4,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAuthenticatedUserId } from '../_shared/utils.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -70,27 +71,6 @@ function parseGitHubUrl(url: string) {
     return parseGitHubRepo(url);
 }
 
-/**
- * Get user ID from JWT token
- */
-function getUserIdFromToken(authHeader: string | null): string | null {
-    if (!authHeader) return null;
-
-    try {
-        const token = authHeader.replace('Bearer ', '');
-        const parts = token.split('.');
-        if (parts.length !== 3) return null;
-
-        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-        const paddedBase64 = base64 + '='.repeat((4 - base64.length % 4) % 4);
-        const decoded = atob(paddedBase64);
-        const payload = JSON.parse(decoded);
-
-        return payload.sub || null;
-    } catch {
-        return null;
-    }
-}
 
 /**
  * Check if a preflight record is still valid
@@ -365,7 +345,14 @@ serve(async (req) => {
     try {
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
         const authHeader = req.headers.get('authorization');
-        const userId = getUserIdFromToken(authHeader);
+
+        // Get authenticated user ID (returns null if not authenticated)
+        let userId: string | null = null;
+        try {
+            userId = await getAuthenticatedUserId(req, supabase);
+        } catch {
+            // User is not authenticated, userId remains null
+        }
 
         const body: PreflightRequest = await req.json();
         const { action, repoUrl, forceRefresh, userToken } = body;

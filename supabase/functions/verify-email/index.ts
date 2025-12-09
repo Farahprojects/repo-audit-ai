@@ -6,7 +6,7 @@
 
 import {
   corsHeaders,
-  getAuthUserIdFromRequest,
+  getAuthenticatedUserId,
   validateSupabaseEnv,
   createSupabaseClient,
   handleCorsPreflight,
@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
   try {
     // Authenticate user
 
-    const userId = await getAuthUserIdFromRequest(req);
+    const userId = await getAuthenticatedUserId(req, supabase);
 
     // Parse request body
 

@@ -1,6 +1,8 @@
 // @ts-ignore - Deno types are available at runtime in Supabase Edge Functions
 declare const Deno: { env: { get(key: string): string | undefined } };
 
+import { getAuthenticatedUserId } from '../utils.ts';
+
 export class GitHubAuthenticator {
     private static instance: GitHubAuthenticator;
 
@@ -79,42 +81,34 @@ export class GitHubAuthenticator {
             if (!authHeader) return null;
 
             const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+            if (!token) return null;
 
-            // Decode JWT to get user_id
-            let userId: string | null = null;
-            try {
-                const parts = token.split('.');
-                if (parts.length === 3) {
-                    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-                    const paddedBase64 = base64 + '='.repeat((4 - base64.length % 4) % 4);
-                    const decoded = atob(paddedBase64);
-                    const payload = JSON.parse(decoded);
-                    userId = payload.sub;
-                }
-            } catch (e) {
-                console.error('Failed to decode JWT for user lookup');
+            // Import Supabase client - @ts-ignore for ESM URL imports
+            // @ts-ignore
+            const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+            const supabase = createClient(
+                Deno.env.get('SUPABASE_URL')!,
+                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+            );
+
+            // Securely get authenticated user ID using Supabase auth
+            const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+            if (authError || !user) {
+                console.error('Failed to authenticate user:', authError);
                 return null;
             }
 
-            if (userId) {
-                // Import Supabase client - @ts-ignore for ESM URL imports
-                // @ts-ignore
-                const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-                const supabase = createClient(
-                    Deno.env.get('SUPABASE_URL')!,
-                    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-                );
+            const userId = user.id;
 
-                // Get user's GitHub account
-                const { data: githubAccount, error } = await supabase
-                    .from('github_accounts')
-                    .select('access_token_encrypted')
-                    .eq('user_id', userId)
-                    .single();
+            // Get user's GitHub account
+            const { data: githubAccount, error } = await supabase
+                .from('github_accounts')
+                .select('access_token_encrypted')
+                .eq('user_id', userId)
+                .single();
 
-                if (!error && githubAccount) {
-                    return this.decryptToken(githubAccount.access_token_encrypted);
-                }
+            if (!error && githubAccount) {
+                return this.decryptToken(githubAccount.access_token_encrypted);
             }
         } catch (error) {
             console.error('Error retrieving user GitHub token:', error);

@@ -2,7 +2,7 @@
 // GitHub OAuth Start - Secure Server-Side OAuth Initiation
 // Returns OAuth URL with CSRF-protected state token
 
-import { validateSupabaseEnv, createSupabaseClient, handleCorsPreflight, createErrorResponse, createSuccessResponse } from '../_shared/utils.ts';
+import { validateSupabaseEnv, createSupabaseClient, handleCorsPreflight, createErrorResponse, createSuccessResponse, getAuthenticatedUserId } from '../_shared/utils.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -52,36 +52,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Extract JWT token from Bearer header
-    const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
-
-    // Decode JWT to get user_id (gateway already validated it if verify_jwt=true)
-    // JWT format: header.payload.signature
-    let userId: string | null = null;
+    // Get authenticated user ID
+    let userId: string;
     try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        // Decode base64url payload (second part)
-        // Base64URL uses - and _ instead of + and /, and no padding
-        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-        // Add padding if needed
-        while (base64.length % 4) {
-          base64 += '=';
-        }
-        const decoded = atob(base64);
-        const payload = JSON.parse(decoded);
-        userId = payload.sub; // 'sub' is the user ID in Supabase JWT
-      }
+      userId = await getAuthenticatedUserId(req, supabase);
     } catch (e) {
-      console.error('[github-oauth-start] Failed to decode JWT:', e);
+      console.error('[github-oauth-start] Authentication failed:', e);
       return new Response(JSON.stringify({ error: 'Invalid token format' }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'Could not extract user ID from token' }), {
         status: 401,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
