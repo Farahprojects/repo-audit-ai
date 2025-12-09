@@ -351,6 +351,33 @@ export type Database = {
           },
         ]
       }
+      legal: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          last_updated: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          last_updated?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          last_updated?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

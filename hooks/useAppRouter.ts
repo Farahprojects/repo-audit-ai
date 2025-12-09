@@ -25,7 +25,7 @@ export const useAppRouter = () => {
     setPreviousView('landing');
   }, []);
 
-  const isPublicPage = useMemo(() => ['landing', 'pricing', 'about', 'contact', 'preflight', 'dashboard', 'report'].includes(view), [view]);
+  const isPublicPage = useMemo(() => ['landing', 'pricing', 'about', 'contact', 'privacy', 'terms', 'legal', 'preflight', 'dashboard', 'report'].includes(view), [view]);
 
   const getSEO = useCallback((reportData?: RepoReport | null): SEOData => {
     switch (view) {
@@ -52,6 +52,18 @@ export const useAppRouter = () => {
           title: "Contact Sales - SCAI",
           description: "Get in touch with our team for enterprise security audits, on-premise deployments, and partnership inquiries.",
           keywords: "enterprise code security, contact support"
+        };
+      case 'privacy':
+        return {
+          title: "Privacy Policy - SCAI",
+          description: "Learn how SCAI collects, uses, and protects your personal information and data privacy rights.",
+          keywords: "privacy policy, data protection, gdpr compliance, privacy rights"
+        };
+      case 'terms':
+        return {
+          title: "Terms of Service - SCAI",
+          description: "Terms and conditions for using SCAI's AI-powered code auditing and security scanning services.",
+          keywords: "terms of service, user agreement, service terms, legal terms"
         };
       case 'report':
         return {

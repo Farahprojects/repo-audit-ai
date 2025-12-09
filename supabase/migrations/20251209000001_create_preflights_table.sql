@@ -99,7 +99,7 @@ CREATE TRIGGER trigger_preflights_updated_at
 CREATE OR REPLACE FUNCTION cleanup_expired_preflights()
 RETURNS INTEGER
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY DEFINER SET search_path = ''
 AS $$
 DECLARE
     deleted_count INTEGER;

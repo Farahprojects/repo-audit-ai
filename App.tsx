@@ -4,6 +4,9 @@ import Footer from './components/layout/Footer';
 import Pricing from './components/pages/Pricing';
 import About from './components/pages/About';
 import Contact from './components/pages/Contact';
+import Legal from './components/pages/Legal';
+import Privacy from './components/pages/Privacy';
+import Terms from './components/pages/Terms';
 import AuthModal from './components/features/auth/AuthModal';
 import SEO from './components/common/SEO';
 import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useScannerContext, useAuthFlowContext } from './components/layout/AppProviders';
@@ -153,6 +156,12 @@ const AppContent: React.FC = () => {
         return <About />;
       case 'contact':
         return <Contact />;
+      case 'legal':
+        return <Legal onNavigate={navigate} />;
+      case 'privacy':
+        return <Privacy onNavigate={navigate} />;
+      case 'terms':
+        return <Terms onNavigate={navigate} />;
       case 'dashboard':
         return (
           <DashboardPage

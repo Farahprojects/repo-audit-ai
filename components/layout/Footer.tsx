@@ -37,27 +37,27 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           <div>
             <h4 className="text-slate-900 font-bold mb-6">Product</h4>
             <ul className="space-y-4 text-sm text-slate-500">
-              <li><button onClick={() => onNavigate('landing')} className="hover:text-primary transition-colors">Features</button></li>
-              <li><button onClick={() => onNavigate('pricing')} className="hover:text-primary transition-colors">Pricing</button></li>
-              <li><button onClick={() => onNavigate('landing')} className="hover:text-primary transition-colors">Integrations</button></li>
+              <li><button onClick={() => onNavigate('landing')} className="hover:text-slate-700 transition-colors">Features</button></li>
+              <li><button onClick={() => onNavigate('pricing')} className="hover:text-slate-700 transition-colors">Pricing</button></li>
+              <li><button onClick={() => onNavigate('landing')} className="hover:text-slate-700 transition-colors">Integrations</button></li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-slate-900 font-bold mb-6">Company</h4>
             <ul className="space-y-4 text-sm text-slate-500">
-              <li><button onClick={() => onNavigate('about')} className="hover:text-primary transition-colors">Mission</button></li>
-              <li><button onClick={() => onNavigate('about')} className="hover:text-primary transition-colors">Careers</button></li>
-              <li><button onClick={() => onNavigate('contact')} className="hover:text-primary transition-colors">Contact</button></li>
+              <li><button onClick={() => onNavigate('about')} className="hover:text-slate-700 transition-colors">Mission</button></li>
+              <li><button onClick={() => onNavigate('about')} className="hover:text-slate-700 transition-colors">Careers</button></li>
+              <li><button onClick={() => onNavigate('contact')} className="hover:text-slate-700 transition-colors">Contact</button></li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-slate-900 font-bold mb-6">Legal</h4>
             <ul className="space-y-4 text-sm text-slate-500">
-              <li><button className="hover:text-primary transition-colors">Privacy</button></li>
-              <li><button className="hover:text-primary transition-colors">Terms</button></li>
-              <li><button className="hover:text-primary transition-colors">Security</button></li>
+              <li><button onClick={() => onNavigate('privacy')} className="hover:text-slate-700 transition-colors">Privacy</button></li>
+              <li><button onClick={() => onNavigate('terms')} className="hover:text-slate-700 transition-colors">Terms</button></li>
+              <li><button onClick={() => onNavigate('legal')} className="hover:text-slate-700 transition-colors">Legal</button></li>
             </ul>
           </div>
 

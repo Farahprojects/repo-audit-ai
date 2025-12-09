@@ -44,6 +44,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
     { id: 'pricing', label: 'Pricing' },
     { id: 'about', label: 'Mission' },
     { id: 'contact', label: 'Contact' },
+    { id: 'legal', label: 'Legal' },
   ];
 
   const userNavItems: { id: ViewState; label: string; requiresAuth: boolean }[] = [
@@ -77,7 +78,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
               onClick={() => onNavigate(item.id)}
               className={`text-sm font-medium transition-colors duration-200 ${currentView === item.id
                   ? 'text-foreground'
-                  : 'text-slate-500 hover:text-foreground'
+                  : 'text-slate-500 hover:text-slate-700'
                 }`}
             >
               {item.label}
@@ -127,7 +128,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
           ) : (
             <button
               onClick={onSignInClick}
-              className="text-slate-500 hover:text-foreground text-sm font-medium transition-colors"
+              className="text-slate-500 hover:text-slate-700 text-sm font-medium transition-colors"
             >
               Log in
             </button>
@@ -150,9 +151,9 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
-                  className={`text-left font-medium text-lg py-4 border-b border-border ${currentView === item.id
+                  className={`text-left font-medium text-lg py-4 border-b border-border transition-colors ${currentView === item.id
                       ? 'text-foreground'
-                      : 'text-slate-500'
+                      : 'text-slate-500 hover:text-slate-700'
                     }`}
                 >
                   {item.label}

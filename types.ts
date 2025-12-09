@@ -1,4 +1,4 @@
-export type ViewState = 'landing' | 'preflight' | 'scanning' | 'report' | 'pricing' | 'about' | 'contact' | 'dashboard';
+export type ViewState = 'landing' | 'preflight' | 'scanning' | 'report' | 'pricing' | 'about' | 'contact' | 'dashboard' | 'legal' | 'privacy' | 'terms';
 
 export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security' | 'supabase_deep_dive';
 
