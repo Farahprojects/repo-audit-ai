@@ -5,7 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
-import { detectCapabilities } from '../audit-runner/capabilities.ts'; // Re-use capabilities logic
+import { detectCapabilities } from '../_shared/capabilities.ts';
 import {
     validateRequestBody,
     createSupabaseClient,

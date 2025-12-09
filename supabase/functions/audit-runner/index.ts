@@ -7,7 +7,7 @@ import { runPlanner } from '../_shared/agents/planner.ts';
 import { runWorker } from '../_shared/agents/worker.ts';
 import { runSynthesizer } from '../_shared/agents/synthesizer.ts';
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
-import { detectCapabilities } from './capabilities.ts';
+import { detectCapabilities } from '../_shared/capabilities.ts';
 import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
 import {
   validateRequestBody,
