@@ -17,6 +17,8 @@ export interface ValidatedAuditRequest {
   preflightId?: string;
   preflightRecord?: any;
   serverEstimatedTokens: number;
+  action?: 'run' | 'quote';
+  paymentMethodId?: string;
   repoInfo: { owner: string; repo: string };
 }
 
@@ -31,7 +33,8 @@ export class RequestValidator {
       estimatedTokens,
       githubToken,
       preflightId,
-      preflight: preflightData
+      preflight: preflightData,
+      paymentMethodId
     } = body;
 
     // Validate required parameters

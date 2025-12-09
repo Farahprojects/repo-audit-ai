@@ -60,8 +60,58 @@ serve(async (req) => {
     // Extract files from preflight if not provided directly
     const finalFileMap = PreflightService.extractFilesFromPreflight(preflightRecord) || validatedRequest.fileMap;
 
-    // 3. TOKEN MANAGEMENT
+    // 3. TOKEN MANAGEMENT & PRICING
     const effectiveGitHubToken = await TokenService.getEffectiveToken(preflightRecord, validatedRequest.githubToken);
+
+    // Calculate estimated tokens for pricing (used for both Quote and Run)
+    const { ExecutionPricing } = await import('../_shared/services/ExecutionPricing.ts');
+    const { estimateTokens } = await import('../_shared/costEstimation.ts');
+
+    let estimatedTokens = validatedRequest.serverEstimatedTokens;
+    if (!estimatedTokens && preflightRecord) {
+      estimatedTokens = estimateTokens(validatedRequest.tier as any, preflightRecord.fingerprint);
+    }
+    const finalEstimate = estimatedTokens || 10000; // Fallback
+    const quote = ExecutionPricing.calculatePrice(finalEstimate);
+
+    // -- TRANSACTIONAL PRICING CHECK --
+    if (validatedRequest.action === 'quote') {
+      return createSuccessResponse({
+        success: true,
+        quote
+      });
+    }
+
+    // -- PAYMENT ENFORCEMENT --
+    // If we are running (not quoting), we must have a payment method
+    // TODO: We might allow free tier for small public repos later, but for now enforcing strict transactional
+    // const passedBody = await req.json(); // Re-parsing potentially (careful with stream consumption - RequestValidator cloned it?)
+    // Actually RequestValidator reads body. We need to check validatedRequest or parse again if needed. 
+    // Ideally RequestValidator should pass all fields.
+    // Let's assume validation passed `paymentMethodId` if we added it to ValidatedAuditRequest, 
+    // OR we access it from the original request if we didn't consume it fully? 
+    // RequestValidator.validateRequest uses req.json(), so the stream is consumed. 
+    // We MUST update RequestValidator to extract paymentMethodId.
+
+    // STOP: I need to update RequestValidator first to extract paymentMethodId.
+    // I will do that in the next step. For now, I will write the LOGIC assuming it's in validatedRequest.
+
+    /* 
+       Wait, I cannot use 'passedBody' here because stream is consumed.
+       I must rely on validatedRequest having it. 
+       I will mark this step to update RequestValidator Next.
+    */
+
+    if (!validatedRequest.paymentMethodId) {
+      return createErrorResponse(new Error("Payment required for audit execution. Please provide paymentMethodId."), 402);
+    }
+
+    const { PaymentService } = await import('../_shared/services/PaymentService.ts');
+    const paymentResult = await PaymentService.capturePayment(quote.totalCents, 'usd', validatedRequest.paymentMethodId);
+
+    if (!paymentResult.success) {
+      return createErrorResponse(new Error(`Payment declined: ${paymentResult.error}`), 402);
+    }
 
     // 4. SYSTEM PROMPT FETCHING
     const auditRepository = new AuditRepository(supabase);
@@ -115,7 +165,7 @@ serve(async (req) => {
     // SERVER-SIDE TOKEN VALIDATION
     // Check for discrepancies between client and server estimates
     if (validatedRequest.estimatedTokens &&
-        Math.abs(validatedRequest.estimatedTokens - validatedRequest.serverEstimatedTokens) > validatedRequest.serverEstimatedTokens * 0.5) {
+      Math.abs(validatedRequest.estimatedTokens - validatedRequest.serverEstimatedTokens) > validatedRequest.serverEstimatedTokens * 0.5) {
       console.warn(`⚠️ Large discrepancy between client (${validatedRequest.estimatedTokens}) and server (${validatedRequest.serverEstimatedTokens}) estimates`);
     }
 
