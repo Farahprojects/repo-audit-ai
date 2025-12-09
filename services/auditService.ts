@@ -1,9 +1,6 @@
 import { AuditStats, RepoReport, Issue, AuditRecord } from '../types';
 import { Tables } from '../src/integrations/supabase/types';
-import { generateAuditReport } from './geminiService';
-import { parseGitHubUrl } from './githubService';
 import { supabase } from '../src/integrations/supabase/client';
-import { ErrorHandler, ErrorLogger } from './errorService';
 
 export class AuditService {
   // Data normalization helpers for legacy data compatibility
