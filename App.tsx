@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Pricing from './components/Pricing';
@@ -82,6 +82,27 @@ const AppContent: React.FC = () => {
     }
   };
 
+  // Extracted inline functions to prevent recreation on every render
+  const handleRunTier = useCallback((tier: string, url: string, config?: any) => {
+    setRepoUrl(url);
+    navigate('preflight');
+  }, [setRepoUrl, navigate]);
+
+  const handleStartAuditFromDashboard = useCallback(async (url: string, tier: string) => {
+    // Try to find existing preflight data to skip preflight step
+    const { findExistingPreflight } = await import('./services/preflightService');
+    const existingPreflight = await findExistingPreflight(url);
+
+    if (existingPreflight) {
+      // Skip preflight and go directly to audit with existing data
+      await handleStartAuditWithPreflight(url, tier, existingPreflight);
+    } else {
+      // No existing preflight, go through normal preflight flow
+      setRepoUrl(url);
+      navigate('preflight');
+    }
+  }, [handleStartAuditWithPreflight, setRepoUrl, navigate]);
+
   const seoData = getSEO(reportData);
 
   const renderContent = () => {
@@ -110,10 +131,7 @@ const AppContent: React.FC = () => {
             onCancelPreflight={() => navigate(previousView)}
             onRestart={handleRestart}
             onSelectAudit={handleSelectAudit}
-            onRunTier={(tier, url, config) => {
-              setRepoUrl(url);
-              navigate('preflight');
-            }}
+            onRunTier={handleRunTier}
           />
         );
       case 'pricing':
@@ -127,22 +145,7 @@ const AppContent: React.FC = () => {
           <DashboardPage
             onNavigate={navigate}
             onViewReport={handleViewHistoricalReport}
-            onStartAudit={async (url, tier) => {
-              // Try to find existing preflight data to skip preflight step
-              const { findExistingPreflight } = await import('./services/preflightService');
-              const existingPreflight = await findExistingPreflight(url);
-
-              if (existingPreflight) {
-                // Skip preflight and go directly to audit with existing data
-                console.log('🎯 [App] Found existing preflight, skipping preflight step', { preflightId: existingPreflight.id, tier });
-                await handleStartAuditWithPreflight(url, tier, existingPreflight);
-              } else {
-                // No existing preflight, go through normal preflight flow
-                console.log('📋 [App] No existing preflight found, starting preflight flow');
-              setRepoUrl(url);
-              navigate('preflight');
-              }
-            }}
+            onStartAudit={handleStartAuditFromDashboard}
           />
         );
       default:

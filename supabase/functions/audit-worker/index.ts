@@ -64,7 +64,6 @@ serve(async (req) => {
         // 2. Resolve GitHub Token (Server-Side)
         let effectiveGitHubToken: string | null = null;
         if (preflightRecord.is_private && preflightRecord.github_account_id) {
-            console.log(`🔐 [audit-worker] Decrypting token for private repo`);
             const authenticator = GitHubAuthenticator.getInstance();
             effectiveGitHubToken = await authenticator.getTokenByAccountId(preflightRecord.github_account_id);
         }
@@ -112,7 +111,6 @@ serve(async (req) => {
         // a) Verify files exist in preflight
         // b) Fetch content via GitHub API (using server-side token)
         // c) Call Gemini to analyze
-        console.log(`👷 [audit-worker] Running task: ${taskId} (${role})`);
         const { result, usage } = await runWorker(context, task, GEMINI_API_KEY);
 
         // 6. Return Result

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { ViewState, RepoReport, AuditRecord, AuditStats } from '../types';
 import { FileMapItem } from '../services/githubService';
 import PreflightModal from './PreflightModal';
@@ -21,7 +21,7 @@ interface AuditFlowProps {
   onRunTier: (tier: string, url: string, config?: any) => void;
 }
 
-export const AuditFlow: React.FC<AuditFlowProps> = ({
+export const AuditFlow: React.FC<AuditFlowProps> = memo(({
   view,
   previousView,
   repoUrl,
@@ -61,4 +61,4 @@ export const AuditFlow: React.FC<AuditFlowProps> = ({
     default:
       return null;
   }
-};
+});

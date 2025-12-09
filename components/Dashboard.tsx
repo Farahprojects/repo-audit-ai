@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { ViewState } from '../types';
 import { supabase } from '../src/integrations/supabase/client';
 import { Tables } from '../src/integrations/supabase/types';
@@ -15,6 +15,33 @@ interface DashboardProps {
   onStartAudit?: (repoUrl: string, tier: string) => void;
 }
 
+// Utility functions moved outside component to prevent recreation on every render
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const extractRepoName = (repoUrl: string) => {
+  const match = repoUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
+  return match ? match[1] : repoUrl;
+};
+
+const getHealthScoreColor = (score: number | null) => {
+  if (!score) return 'text-slate-400';
+  if (score >= 80) return 'text-green-600';
+  if (score >= 60) return 'text-yellow-600';
+  return 'text-red-600';
+};
+
+const getHealthScoreBg = (score: number | null) => {
+  if (!score) return 'bg-slate-100';
+  if (score >= 80) return 'bg-green-50 border-green-200';
+  if (score >= 60) return 'bg-yellow-50 border-yellow-200';
+  return 'bg-red-50 border-red-200';
+};
+
 // Group audits by repo URL
 interface RepoGroup {
   repoUrl: string;
@@ -25,7 +52,7 @@ interface RepoGroup {
   bestScore: number;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStartAudit }) => {
+const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, onStartAudit }) => {
   const [audits, setAudits] = useState<Audit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,32 +120,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
       onStartAudit(repoUrl, tier);
     }
   }, [onStartAudit]);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const extractRepoName = (repoUrl: string) => {
-    const match = repoUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
-    return match ? match[1] : repoUrl;
-  };
-
-  const getHealthScoreColor = (score: number | null) => {
-    if (!score) return 'text-slate-400';
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getHealthScoreBg = (score: number | null) => {
-    if (!score) return 'bg-slate-100';
-    if (score >= 80) return 'bg-green-50 border-green-200';
-    if (score >= 60) return 'bg-yellow-50 border-yellow-200';
-    return 'bg-red-50 border-red-200';
-  };
 
   // Group audits by repository
   const repoGroups: RepoGroup[] = React.useMemo(() => {
@@ -353,6 +354,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onViewReport, onStart
       </div>
     </div>
   );
-};
+});
 
 export default Dashboard;

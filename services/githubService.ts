@@ -165,14 +165,12 @@ export const fetchRepoFingerprint = async (
   repo: string,
   accessToken?: string
 ): Promise<ComplexityFingerprint> => {
-  console.log('🔍 [fetchRepoFingerprint] Starting fingerprint generation for:', `${owner}/${repo}`);
 
   // Call github-proxy edge function with fingerprint action
   const { data, error } = await supabase.functions.invoke('github-proxy', {
     body: { owner, repo, action: 'fingerprint', userToken: accessToken }
   });
 
-  console.log('🔍 [fetchRepoFingerprint] Edge function response:', { data, error });
 
   if (error) {
     console.error('❌ [fetchRepoFingerprint] GitHub proxy error:', error);
@@ -180,7 +178,6 @@ export const fetchRepoFingerprint = async (
   }
 
   if (data?.error) {
-    console.log('⚠️ [fetchRepoFingerprint] Structured error response:', data);
 
     // Handle specific error codes - same as fetchRepoStats
     if (data.errorCode === 'OWNER_NOT_FOUND') {
@@ -194,7 +191,6 @@ export const fetchRepoFingerprint = async (
     throw new Error(data.error);
   }
 
-  console.log('✅ [fetchRepoFingerprint] Success! Returning fingerprint:', data);
   return data as ComplexityFingerprint;
 }
 
@@ -210,15 +206,12 @@ export const fetchRepoPreflight = async (
   repo: string,
   accessToken?: string
 ): Promise<{ stats: AuditStats; fingerprint: ComplexityFingerprint; fileMap: FileMapItem[] }> => {
-  console.log('🚀 [fetchRepoPreflight] Starting unified preflight for:', `${owner}/${repo}`);
-  console.log('🚀 [fetchRepoPreflight] Access token provided:', !!accessToken);
 
   // Call github-proxy edge function with preflight action
   const { data, error } = await supabase.functions.invoke('github-proxy', {
     body: { owner, repo, action: 'preflight', userToken: accessToken }
   });
 
-  console.log('🚀 [fetchRepoPreflight] Edge function response:', { data, error });
 
   if (error) {
     console.error('❌ [fetchRepoPreflight] GitHub proxy error:', error);
@@ -226,7 +219,6 @@ export const fetchRepoPreflight = async (
   }
 
   if (data?.error) {
-    console.log('⚠️ [fetchRepoPreflight] Structured error response:', data);
 
     // Handle specific error codes
     if (data.errorCode === 'RATE_LIMIT') {
@@ -234,22 +226,18 @@ export const fetchRepoPreflight = async (
     }
 
     if (data.errorCode === 'OWNER_NOT_FOUND') {
-      console.log('❌ [fetchRepoPreflight] Owner does not exist - URL is wrong');
       throw new Error('Repository owner does not exist. Please check the URL spelling.');
     }
 
     if (data.errorCode === 'PRIVATE_REPO') {
-      console.log('🔐 [fetchRepoPreflight] Repo exists but is private');
       throw new Error('PRIVATE_REPO:Repository exists but is private. Connect your GitHub account to access private repositories.');
     }
 
     // Generic error fallback
-    console.log('❌ [fetchRepoPreflight] Generic error:', data.error);
     throw new Error(data.error);
   }
 
   // Success - return combined stats + fingerprint + file map
-  console.log('✅ [fetchRepoPreflight] Success! Returning combined data');
   return {
     stats: data.stats as AuditStats,
     fingerprint: data.fingerprint as ComplexityFingerprint,

@@ -8,13 +8,11 @@ const corsHeaders = {
 };
 
 export async function handleStatsAction(client: GitHubAPIClient, owner: string, repo: string) {
-    console.log(`🔍 [github-proxy] Fetching stats for: ${owner}/${repo}`);
 
     try {
         // First, check if the owner exists
         const ownerExists = await checkOwnerExists(client, owner);
         if (!ownerExists) {
-            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
             return new Response(
                 JSON.stringify({
                     error: 'Repository owner does not exist. Please check the URL spelling.',
@@ -81,13 +79,11 @@ export async function handleStatsAction(client: GitHubAPIClient, owner: string, 
 }
 
 export async function handleFingerprintAction(client: GitHubAPIClient, owner: string, repo: string, branch?: string) {
-    console.log(`🔍 [github-proxy] Generating fingerprint for: ${owner}/${repo}`);
 
     try {
         // First, check if the owner exists
         const ownerExists = await checkOwnerExists(client, owner);
         if (!ownerExists) {
-            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
             return new Response(
                 JSON.stringify({
                     error: 'Repository owner does not exist. Please check the URL spelling.',
@@ -140,13 +136,11 @@ export async function handleFingerprintAction(client: GitHubAPIClient, owner: st
  * Owner not found → { errorCode: 'OWNER_NOT_FOUND', requiresAuth: false }
  */
 export async function handlePreflightAction(client: GitHubAPIClient, owner: string, repo: string, branch?: string) {
-    console.log(`🚀 [github-proxy] PREFLIGHT for: ${owner}/${repo}`);
 
     try {
         // 1. Check if the owner exists (deterministic check)
         const ownerExists = await checkOwnerExists(client, owner);
         if (!ownerExists) {
-            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
             return new Response(
                 JSON.stringify({
                     error: 'Repository owner does not exist. Please check the URL spelling.',
@@ -160,13 +154,10 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
 
         // 2. Fetch repo data (access check happens here)
         // If private without auth, this will throw → handleError catches it
-        console.log(`📊 [github-proxy] Fetching repo data (access check)...`);
         const repoRes = await client.fetchRepo(owner, repo);
         const repoData = await repoRes.json();
-        console.log(`✅ [github-proxy] Repo is accessible`);
 
         // 3. Fetch languages
-        console.log(`🔍 [github-proxy] Fetching languages...`);
         const langRes = await client.fetchLanguages(owner, repo);
         const langData = await langRes.json();
 
@@ -212,12 +203,10 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
 
         // 5. Fetch tree for fingerprint and file map
         const defaultBranch = branch || repoData.default_branch || 'main';
-        console.log(`🌳 [github-proxy] Fetching tree for fingerprint and file map...`);
         const treeRes = await client.fetchTree(owner, repo, defaultBranch);
         const treeData = await treeRes.json();
 
         // 6. Generate fingerprint
-        console.log(`🔐 [github-proxy] Generating complexity fingerprint...`);
         const fingerprint = await ComplexityAnalyzer.generateFingerprint(
             treeData.tree,
             langData,
@@ -248,7 +237,6 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
             type: 'file'
         }));
 
-        console.log(`✅ [github-proxy] PREFLIGHT SUCCESS - returning stats + fingerprint + ${fileMap.length} files`);
 
         // 8. Return combined response
         return new Response(
@@ -260,20 +248,17 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     } catch (error) {
-        console.log(`❌ [github-proxy] PREFLIGHT ERROR - handling...`);
         return handleError(error, owner, repo);
     }
 }
 
 
 export async function handleContentAction(client: GitHubAPIClient, owner: string, repo: string, filePath: string, branch?: string) {
-    console.log(`Fetching file: ${owner}/${repo}/${filePath}`);
 
     try {
         // First, check if the owner exists
         const ownerExists = await checkOwnerExists(client, owner);
         if (!ownerExists) {
-            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
             return new Response(
                 JSON.stringify({
                     error: 'Repository owner does not exist. Please check the URL spelling.',
@@ -308,7 +293,6 @@ export async function handleTreeAction(client: GitHubAPIClient, owner: string, r
         // First, check if the owner exists
         const ownerExists = await checkOwnerExists(client, owner);
         if (!ownerExists) {
-            console.log(`❌ [github-proxy] Owner ${owner} does not exist`);
             return new Response(
                 JSON.stringify({
                     error: 'Repository owner does not exist. Please check the URL spelling.',
@@ -324,7 +308,6 @@ export async function handleTreeAction(client: GitHubAPIClient, owner: string, r
         const repoData = await repoRes.json();
         const defaultBranch = branch || repoData.default_branch || 'main';
 
-        console.log(`Fetching tree for: ${owner}/${repo}@${defaultBranch}`);
 
         const treeRes = await client.fetchTree(owner, repo, defaultBranch);
         const treeData = await treeRes.json();

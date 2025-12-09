@@ -182,11 +182,9 @@ export function createChunks(
     }));
 
     const totalTokens = filesWithTokens.reduce((sum, f) => sum + f.tokens, 0);
-    console.log(`📊 Total tokens in repo: ${totalTokens.toLocaleString()}`);
 
     // If total is small enough, return single chunk
     if (totalTokens <= maxTokensPerChunk) {
-        console.log(`✅ Repo fits in single chunk`);
         return [{
             id: 'all',
             name: 'Full Repository',
@@ -230,7 +228,6 @@ export function createChunks(
     // Sort by priority (highest first)
     chunks.sort((a, b) => b.priority - a.priority);
 
-    console.log(`📦 Created ${chunks.length} chunks:`);
     for (const chunk of chunks) {
         console.log(`   - ${chunk.name}: ${chunk.totalTokens.toLocaleString()} tokens, ${chunk.files.length} files`);
     }

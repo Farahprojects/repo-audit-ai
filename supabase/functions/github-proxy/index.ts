@@ -90,9 +90,7 @@ serve(async (req) => {
 
     // Log authentication status
     if (token) {
-      console.log('🔑 [github-proxy] Using authenticated request with user token');
     } else {
-      console.log('🌐 [github-proxy] Making unauthenticated request (public repo access)');
     }
 
     // 2. Initialize Client

@@ -170,7 +170,6 @@ serve(async (req) => {
         };
 
         // 3. Deterministic Aggregation (No LLM)
-        console.log(`⚡ [audit-coordinator] Aggregating ${workerResults.length} results deterministically...`);
 
         // Flatten all issues
         const allIssues = workerResults.flatMap(r => r.findings.issues || []);
@@ -239,7 +238,6 @@ serve(async (req) => {
         const normalizedTopWeaknesses = normalizeStrengthsOrIssues(topWeaknesses);
         const normalizedRiskLevel = normalizeRiskLevel(riskLevel);
 
-        console.log(`💾 [audit-coordinator] Saving audit to DB...`);
         const { data: insertedAudit, error: insertError } = await supabase.from('audits').insert({
             user_id: userId,
             repo_url: preflightRecord.repo_url,

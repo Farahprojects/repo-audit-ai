@@ -331,7 +331,6 @@ export function useGitHubAuth() {
                             if (!resolved) {
                                 resolved = true;
                                 cleanup();
-                                console.log('⚠️ [useGitHubAuth] Popup closed, checking account...');
                                 
                                 fetchGitHubAccount().then(() => {
                                     setState(prev => {

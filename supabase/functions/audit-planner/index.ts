@@ -58,7 +58,6 @@ serve(async (req) => {
         const tier = mappedTier;
 
         // Fetch Preflight Record
-        console.log(`📋 [audit-planner] Fetching preflight: ${preflightId}`);
         const { data: preflightRecord, error: preflightError } = await supabase
             .from('preflights')
             .select('*')
@@ -116,7 +115,6 @@ serve(async (req) => {
         };
 
         // Run Planner
-        console.log(`🧠 [audit-planner] Generating plan for ${tier} on ${preflightRecord.repo_url}...`);
         const { result: plan, usage } = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
 
         // Return the plan

@@ -44,7 +44,6 @@ const GitHubConnectModal: React.FC<GitHubConnectModalProps> = ({
                     .maybeSingle();
 
                 if (data && !error && !hasConnectedRef.current) {
-                    console.log('✅ [GitHubConnectModal] GitHub account detected, closing modal');
                     hasConnectedRef.current = true;
                     
                     // Clear the interval

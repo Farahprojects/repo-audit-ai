@@ -126,7 +126,6 @@ async function fetchFreshPreflightData(
     defaultBranch: string;
 } | { error: string; errorCode: string; requiresAuth: boolean }> {
 
-    console.log(`📡 [preflight-manager] Fetching fresh data for ${owner}/${repo}`);
 
     // Call github-proxy with preflight action
     const { data, error } = await supabase.functions.invoke('github-proxy', {
@@ -149,7 +148,6 @@ async function fetchFreshPreflightData(
     }
 
     if (data?.error) {
-        console.log(`⚠️ [preflight-manager] GitHub proxy returned error:`, data);
         return {
             error: data.error,
             errorCode: data.errorCode || 'UNKNOWN',
@@ -157,7 +155,6 @@ async function fetchFreshPreflightData(
         };
     }
 
-    console.log(`✅ [preflight-manager] Fresh data fetched successfully`);
 
     return {
         stats: data.stats,
@@ -192,7 +189,6 @@ async function getOrCreatePreflight(
     const { owner, repo } = parsed;
     const normalizedUrl = `https://github.com/${owner}/${repo}`;
 
-    console.log(`🔍 [preflight-manager] Looking for preflight: ${normalizedUrl}, userId: ${userId || 'anonymous'}`);
 
     // Step 1: Try to find an existing valid preflight
     if (!forceRefresh) {
@@ -217,14 +213,12 @@ async function getOrCreatePreflight(
             const existing = existingPreflights[0] as PreflightRecord;
 
             if (isPreflightValid(existing)) {
-                console.log(`✅ [preflight-manager] Found valid cached preflight: ${existing.id}`);
                 return {
                     success: true,
                     preflight: existing,
                     source: 'cache'
                 };
             } else {
-                console.log(`⏰ [preflight-manager] Cached preflight expired or invalid, refreshing...`);
             }
         }
     }
@@ -318,7 +312,6 @@ async function getOrCreatePreflight(
         };
     }
 
-    console.log(`✅ [preflight-manager] Created/updated preflight: ${newPreflight.id}`);
 
     return {
         success: true,
@@ -359,7 +352,6 @@ async function invalidatePreflight(
         return { success: false, error: error.message };
     }
 
-    console.log(`✅ [preflight-manager] Preflight invalidated for ${normalizedUrl}`);
     return { success: true };
 }
 
@@ -378,7 +370,6 @@ serve(async (req) => {
         const body: PreflightRequest = await req.json();
         const { action, repoUrl, forceRefresh, userToken } = body;
 
-        console.log(`🚀 [preflight-manager] Action: ${action}, URL: ${repoUrl}, User: ${userId || 'anonymous'}`);
 
         if (!repoUrl) {
             return new Response(

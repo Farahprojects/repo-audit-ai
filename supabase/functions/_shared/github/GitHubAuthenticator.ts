@@ -34,7 +34,6 @@ export class GitHubAuthenticator {
      */
     async getTokenByAccountId(githubAccountId: string): Promise<string | null> {
         if (!githubAccountId) {
-            console.log('📛 [GitHubAuthenticator] No github_account_id provided');
             return null;
         }
 
@@ -66,7 +65,6 @@ export class GitHubAuthenticator {
             // Decrypt server-side
             const decryptedToken = await this.decryptToken(githubAccount.access_token_encrypted);
             if (decryptedToken) {
-                console.log(`✅ [GitHubAuthenticator] Token decrypted server-side for account: ${githubAccountId}`);
             }
             return decryptedToken;
 

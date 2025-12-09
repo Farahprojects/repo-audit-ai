@@ -178,7 +178,6 @@ serve(async (req) => {
 
     // If preflightId is provided, fetch the preflight from database
     if (preflightId && !preflightRecord) {
-      console.log(`📋 [audit-runner] Fetching preflight record: ${preflightId}`);
       const { data: fetchedPreflight, error: preflightError } = await supabase
         .from('preflights')
         .select('*')
@@ -191,13 +190,11 @@ serve(async (req) => {
       }
 
       preflightRecord = fetchedPreflight;
-      console.log(`✅ [audit-runner] Preflight loaded: ${preflightRecord.repo_url}, ${preflightRecord.file_count} files`);
     }
 
     // Extract files from preflight if not provided directly
     if (preflightRecord && (!fileMap || fileMap.length === 0)) {
       fileMap = preflightRecord.repo_map;
-      console.log(`📂 [audit-runner] Using file map from preflight: ${fileMap?.length || 0} files`);
     }
 
     // SERVER-SIDE TOKEN DECRYPTION
@@ -206,12 +203,10 @@ serve(async (req) => {
     let serverDecryptedToken: string | null = null;
 
     if (preflightRecord?.github_account_id && preflightRecord?.is_private) {
-      console.log(`🔐 [audit-runner] Decrypting token server-side for private repo...`);
       const authenticator = GitHubAuthenticator.getInstance();
       serverDecryptedToken = await authenticator.getTokenByAccountId(preflightRecord.github_account_id);
 
       if (serverDecryptedToken) {
-        console.log(`✅ [audit-runner] Token decrypted server-side (never leaves backend)`);
       } else {
         console.warn(`⚠️ [audit-runner] Failed to decrypt token - private repo files may not be accessible`);
       }
@@ -279,8 +274,6 @@ serve(async (req) => {
     // Build case-insensitive pattern to match owner/repo in file URLs
     const ownerRepoPattern = new RegExp(`/${declaredOwner}/${declaredRepo}/`, 'i');
 
-    console.log(`🔒 URL Validation: Declared repo = ${declaredOwner}/${declaredRepo}`);
-    console.log(`🔒 First 3 file URLs:`, fileMap.slice(0, 3).map((f: any) => f.url || f.path));
 
     // Validate all file URLs are from trusted GitHub domains
     const allowedUrlPatterns = [
@@ -335,9 +328,6 @@ serve(async (req) => {
     const tierPrompt = promptData.prompt;
 
     console.log(`\n${'='.repeat(60)}`);
-    console.log(`🚀 STARTING 5-PASS MAGIC ANALYSIS`);
-    console.log(`📁 Repo: ${repoUrl}`);
-    console.log(`📄 Files: ${fileMap.length}`);
     console.log(`${'='.repeat(60)}\n`);
 
 
@@ -346,7 +336,6 @@ serve(async (req) => {
 
     // Detect Capabilities based on file list
     const detectedStack = detectCapabilities(fileMap);
-    console.log('🕵️ Detected Stack:', detectedStack);
 
     const context: AuditContext = {
       repoUrl,
@@ -380,24 +369,17 @@ serve(async (req) => {
 
 
     console.log(`\n${'='.repeat(60)}`);
-    console.log(`🚀 STARTING "CEO BRAIN" AUDIT`);
-    console.log(`📁 Repo: ${repoUrl}`);
-    console.log(`🗺️ File Map Size: ${fileMap.length} entries`);
     console.log(`${'='.repeat(60)}\n`);
 
     // --- SWARM PIPELINE EXECUTION ---
 
     // 1. MAP PHASE: The Planner (CEO)
     const { result: plan, usage: plannerUsage } = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
-    console.log(`🧠 CEO BRAIN PLAN: Focus on ${plan.focusArea}`);
-    console.log(`📋 Generated ${plan.tasks.length} Worker Assignments:`);
     plan.tasks.forEach((t, i) => {
-      console.log(`   ${i + 1}. [${t.role}] 🎯 Goal: "${t.instruction.slice(0, 80)}..." (Files: ${t.targetFiles?.length || 0})`);
     });
 
     // 2. WORKER PHASE: The Swarm (Parallel Execution)
     const timeStart = Date.now();
-    console.log(`\n🚀 releasing the swarm...`);
 
     const workerPromises = plan.tasks.map(async (task) => {
       return runWorker(context, task, GEMINI_API_KEY);
@@ -425,11 +407,9 @@ serve(async (req) => {
       console.warn(`⚠️ ${failedWorkers}/${workerOutputs.length} workers failed. Continuing with ${swarmResults.length} results.`);
     }
 
-    console.log(`✅ Swarm Complete. Collected ${swarmResults.length} findings.`);
 
     // 3. REDUCE PHASE: The Synthesizer (Editor)
     const { result: finalReport, usage: synthesizerUsage } = await runSynthesizer(context, swarmResults, GEMINI_API_KEY, tierPrompt);
-    console.log(`📝 Final Report Generated. Health Score: ${finalReport.healthScore}`);
 
     const timeEnd = Date.now();
     const durationMs = timeEnd - timeStart;
@@ -440,7 +420,6 @@ serve(async (req) => {
     // SERVER-SIDE TOKEN VALIDATION (Phase 4)
     // Calculate estimate server-side, don't trust client-provided value
     const serverEstimatedTokens = calculateServerEstimate(tier, fileMap);
-    console.log(`📊 Token Estimates - Client: ${estimatedTokens || 'N/A'}, Server: ${serverEstimatedTokens}`);
     if (estimatedTokens && Math.abs(estimatedTokens - serverEstimatedTokens) > serverEstimatedTokens * 0.5) {
       console.warn(`⚠️ Large discrepancy between client (${estimatedTokens}) and server (${serverEstimatedTokens}) estimates`);
     }
@@ -471,8 +450,6 @@ serve(async (req) => {
     const normalizedTopWeaknesses = normalizeStrengthsOrIssues(finalReport?.topWeaknesses || []);
     const normalizedRiskLevel = normalizeRiskLevel(finalReport?.riskLevel);
 
-    console.log(`💾 Saving ${dbIssues.length} issues to DB...`);
-    console.log(`💰 Total Tokens Used: ${totalTokens}`);
 
     const { error: insertError } = await supabase.from('audits').insert({
       user_id: userId,
@@ -498,7 +475,6 @@ serve(async (req) => {
     if (insertError) {
       console.error('Failed to save audit:', insertError);
     } else {
-      console.log('💾 Audit saved to DB');
     }
 
     // Return Result with NORMALIZED data - frontend doesn't need to transform

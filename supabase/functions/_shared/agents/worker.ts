@@ -38,7 +38,6 @@ export async function runWorker(
     apiKey: string
 ): Promise<{ result: WorkerResult; usage: GeminiUsage }> {
 
-    console.log(`👷 Worker [${task.role}] starting task: ${task.instruction.slice(0, 50)}...`);
 
     // SECURITY: Get valid files from preflight (single source of truth)
     const validPaths = getValidFilePaths(context);
@@ -111,7 +110,6 @@ export async function runWorker(
     const apiClient = new GitHubAPIClient(context.githubToken);
     
     const fetchedContent = await Promise.all(filesToFetch.map(async f => {
-        console.log(`📄 [${task.role}] Fetching ${f.path} via GitHub API`);
 
         try {
             const response = await apiClient.fetchFile(
@@ -177,7 +175,6 @@ export async function runWorker(
     }
 
     // Log fetch success rate
-    console.log(`📂 Worker [${task.role}] fetched ${successfulContent.length}/${filesToFetch.length} files successfully`);
 
     const fileContext = successfulContent.join('\n\n');
 
@@ -197,7 +194,6 @@ ${fileContext}`;
 
     const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, { role: 'WORKER' });
 
-    console.log(`✅ Worker [${task.role}] Finished. Analyzed ${successfulContent.length} files. Cost: ${usage.totalTokens} tokens.`);
 
     return {
         result: {

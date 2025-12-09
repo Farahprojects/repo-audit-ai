@@ -200,7 +200,6 @@ export function synthesizeFindings(findings: WorkerFinding[]): SynthesisResult {
     // Generate summary
     const summary = generateSummary(finalScore, sortedIssues, findings.length);
 
-    console.log(`🔄 Synthesis complete:`);
     console.log(`   - Input: ${findings.length} worker findings, ${allIssues.length} total issues`);
     console.log(`   - Output: ${sortedIssues.length} unique issues, score ${finalScore}/100`);
 

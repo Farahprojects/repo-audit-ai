@@ -136,7 +136,6 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      console.log('[verify-email] ✅ Code stored successfully:', insertData);
 
       // Fetch email template from database
 

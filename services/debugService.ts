@@ -66,11 +66,9 @@ export const DebugService = {
     if (localCount > 0) {
       console.group(`📦 localStorage (${localCount} items)`);
       Object.entries(snapshot.localStorage).forEach(([key, value]) => {
-        console.log(`  ${key}:`, value);
       });
       console.groupEnd();
     } else {
-      console.log('📦 localStorage: EMPTY ✓');
     }
     
     // sessionStorage
@@ -78,22 +76,18 @@ export const DebugService = {
     if (sessionCount > 0) {
       console.group(`📋 sessionStorage (${sessionCount} items)`);
       Object.entries(snapshot.sessionStorage).forEach(([key, value]) => {
-        console.log(`  ${key}:`, value);
       });
       console.groupEnd();
     } else {
-      console.log('📋 sessionStorage: EMPTY ✓');
     }
     
     // Cookies
     if (snapshot.cookies.length > 0) {
       console.group(`🍪 cookies (${snapshot.cookies.length} items)`);
       snapshot.cookies.forEach(cookie => {
-        console.log(`  ${cookie}`);
       });
       console.groupEnd();
     } else {
-      console.log('🍪 cookies: EMPTY ✓');
     }
     
     console.groupEnd();
@@ -141,7 +135,6 @@ export const DebugService = {
       console.warn('🚨 Sensitive data patterns found in storage:');
       warnings.forEach(w => console.warn(w));
     } else {
-      console.log('✅ No sensitive data patterns found in storage');
     }
     
     return { found: warnings.length > 0, warnings };
@@ -181,7 +174,6 @@ export const DebugService = {
       return false;
     }
     
-    console.log('✅ All storage cleared - logout successful');
     console.groupEnd();
     return true;
   },
@@ -190,5 +182,4 @@ export const DebugService = {
 // Expose to window for dev console access
 if (typeof window !== 'undefined') {
   (window as any).__DEBUG__ = DebugService;
-  console.log('🔧 Debug utilities available: window.__DEBUG__.logStorageSnapshot(), window.__DEBUG__.verifyCleanLogout()');
 }

@@ -82,7 +82,6 @@ export async function callGemini(
         (options.role ? THINKING_BUDGET[options.role] : THINKING_BUDGET.WORKER);
 
     const roleLabel = options.role || 'UNKNOWN';
-    console.log(`🧠 [${roleLabel}] Calling Gemini with thinkingBudget: ${thinkingBudget === -1 ? 'DYNAMIC' : thinkingBudget}`);
 
     let lastError: any;
 

@@ -82,7 +82,6 @@ export async function runPlanner(context: AuditContext, apiKey: string, tierProm
 
   // Build valid file set from preflight/context (single source of truth)
   const validFiles = new Set(context.files.map(f => f.path));
-  console.log(`📂 Planner has ${validFiles.size} valid files from preflight`);
 
   const fileList = context.files.map(f => f.path).join('\n');
   const userPrompt = `PROJECT OVERVIEW:
@@ -121,13 +120,10 @@ Create a comprehensive task breakdown that ensures complete audit coverage with 
   }
 
   // LOG PLANNING RESULTS
-  console.log(`📋 CEO PLAN: ${sanitizedPlan.tasks.length} tasks created`);
-  console.log(`📂 FILE DISTRIBUTION:`);
   sanitizedPlan.tasks.forEach((task, i) => {
     console.log(`   Task ${i + 1} [${task.role}]: ${task.targetFiles?.length || 0} files`);
   });
   const totalAssigned = sanitizedPlan.tasks.reduce((sum, t) => sum + (t.targetFiles?.length || 0), 0);
-  console.log(`📊 TOTAL FILES ASSIGNED: ${totalAssigned}/${validFiles.size}`);
 
   return { result: sanitizedPlan, usage };
 }

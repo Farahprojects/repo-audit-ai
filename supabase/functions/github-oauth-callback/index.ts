@@ -287,7 +287,6 @@ Deno.serve(async (req: Request) => {
         // State is valid, delete it (one-time use)
         await supabase.from('oauth_csrf_states').delete().eq('state_token', state);
 
-        console.log('[github-oauth-callback] ✅ CSRF validation passed for user:', userId);
       } else {
         console.error('[github-oauth-callback] Invalid state format:', state);
         return createPopupResponse(false, 'Invalid state format');

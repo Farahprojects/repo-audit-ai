@@ -39,11 +39,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
   const loadStats = async () => {
     if (isLoading) {
-      console.log('🚫 [PreflightModal] loadStats already running, skipping');
       return;
     }
 
-    console.log('🚀 [PreflightModal] Starting loadStats for repo:', repoUrl);
     setIsLoading(true);
     setLoading(true);
     setError(null);
@@ -58,7 +56,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     try {
       // Use the new PreflightService which stores data in the database
       // This is the single source of truth for repository metadata
-      console.log('🚀 [PreflightModal] Calling PreflightService.getOrCreate...');
 
       // Note: We don't pass a token here anymore. 
       // The backend uses the session auth header to look up the token server-side.
@@ -67,7 +64,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       if (!response.success) {
         // Check if this is a private repo error
         if (PreflightService.requiresGitHubAuth(response)) {
-          console.log('🔐 [PreflightModal] Private repo detected, opening GitHub connect modal');
           setStep('github-connect');
           setError(null);
           setLoading(false);
@@ -80,7 +76,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       }
 
       const preflight = response.preflight!;
-      console.log('✅ [PreflightModal] Preflight loaded from', response.source, '- ID:', preflight.id);
 
       // Store the preflight ID for downstream use
       setPreflightId(preflight.id);
@@ -108,10 +103,8 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      console.log('🔍 [PreflightModal] Error caught:', message);
       if (message.includes('PRIVATE_REPO:')) {
         // Private repo detected - show GitHub connect modal, NO error message
-        console.log('🔐 [PreflightModal] Private repo detected, opening GitHub connect modal');
         setStep('github-connect');
         setError(null);
         setLoading(false); // Stop loading immediately to show modal
@@ -136,11 +129,9 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
   // Handle starting the GitHub OAuth flow (button click)
   const handleStartGitHubOAuth = useCallback(async () => {
-    console.log('🔐 [PreflightModal] Starting GitHub OAuth flow...');
     const result = await signInWithGitHub();
 
     if (result.success) {
-      console.log('✅ [PreflightModal] GitHub OAuth succeeded, retrying loadStats...');
       // Just retry loading - backend will pick up the new token via session
       loadStats();
     } else {
@@ -151,7 +142,6 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
   // Handle when polling detects GitHub account was connected (modal auto-close)
   const handleGitHubConnected = useCallback(() => {
-    console.log('✅ [PreflightModal] GitHub account detected via polling, retrying loadStats...');
     loadStats();
   }, []);
 
@@ -173,10 +163,8 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
 
   // IMPORTANT: Check for github-connect step FIRST, before loading check
   // This ensures the connect modal shows even if loading state hasn't fully resolved
-  console.log('🔍 [PreflightModal] Render state:', { step, error, loading });
 
   if (step === 'github-connect') {
-    console.log('🎯 [PreflightModal] Showing GitHubConnectModal');
     return (
       <GitHubConnectModal
         repoUrl={repoUrl}
