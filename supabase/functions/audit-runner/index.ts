@@ -177,6 +177,8 @@ function aggregateWorkerResults(workerResults: WorkerResult[]): {
   let seniorDeveloperAssessment: any = null;
   let overallVerdict: string | null = null;
 
+  console.log(`🔄 Aggregating results from ${workerResults.length} workers`);
+
   const riskOrder = { critical: 0, high: 1, medium: 2, low: 3 };
 
   for (const result of workerResults) {
@@ -238,6 +240,8 @@ function aggregateWorkerResults(workerResults: WorkerResult[]): {
   const issueCount = allIssues.length;
   const criticalCount = allIssues.filter(i => i.severity?.toLowerCase() === 'critical').length;
   const summary = `Analysis from ${workerResults.length} workers found ${issueCount} issues${criticalCount > 0 ? ` (${criticalCount} critical)` : ''}. Health score: ${avgHealthScore}/100.`;
+
+  console.log(`📋 Aggregation complete: ${allIssues.length} total issues collected`);
 
   return {
     healthScore: avgHealthScore,
@@ -554,12 +558,14 @@ serve(async (req) => {
       description: issue.description,
       category: issue.category || 'Security',
       severity: issue.severity || 'warning',
-      filePath: issue.filePath || 'Repository-wide',
-      lineNumber: issue.line || 0,
-      badCode: issue.badCode || issue.snippet || '',
-      fixedCode: issue.remediation || '',
+      filePath: issue.file || 'Repository-wide',        // ← Use "file" from worker output
+      lineNumber: issue.line || 0,                      // ← Use "line" from worker output
+      badCode: issue.badCode || '',                     // ← Use "badCode" from worker output
+      fixedCode: issue.fixedCode || '',                 // ← Use "fixedCode" from worker output
       cwe: issue.cwe
     }));
+
+    console.log(`📊 Saving ${dbIssues.length} issues to DB:`, dbIssues.slice(0, 2));
 
     // NORMALIZE LLM OUTPUT (Phase 3)
     // Normalize data before saving to DB and returning to frontend
@@ -592,6 +598,7 @@ serve(async (req) => {
     if (insertError) {
       console.error('Failed to save audit:', insertError);
     } else {
+      console.log('✅ Audit saved to DB with', dbIssues.length, 'issues');
     }
 
     // Return Result with NORMALIZED data - frontend doesn't need to transform
