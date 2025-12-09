@@ -56,11 +56,6 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
             {data.riskLevel.toUpperCase()} RISK
           </span>
         )}
-        {data.productionReady !== undefined && (
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${data.productionReady ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-            {data.productionReady ? '✓ PRODUCTION READY' : '⚠ NOT PRODUCTION READY'}
-          </span>
-        )}
       </div>
 
       {/* Second Row: Branch Info */}
