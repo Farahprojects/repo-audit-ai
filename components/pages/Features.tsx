@@ -34,46 +34,41 @@ const Features: React.FC = () => {
       icon: Layout,
       name: 'Shape Check',
       shortName: 'Shape',
-      description: 'Quick architectural overview and basic code quality assessment.',
-      price: 'Free',
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50'
+      headline: 'Get the Big Picture',
+      description: 'Understanding your codebase architecture is the foundation of good development. Know what you\'re working with before making decisions.',
+      importance: 'Quick architectural overview helps you understand scale, complexity, and potential risks before investing time and resources.'
     },
     {
       icon: Zap,
       name: 'Senior Check',
       shortName: 'Senior',
-      description: 'Comprehensive code review with senior-level insights and best practices.',
-      price: '$9',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
+      headline: 'Code Like a Senior Engineer',
+      description: 'Get insights that take years to develop. Identify patterns, anti-patterns, and improvements that elevate your code quality.',
+      importance: 'Senior-level code review catches issues that junior reviews miss, ensuring your codebase follows industry best practices.'
     },
     {
       icon: TrendingUp,
       name: 'Performance Audit',
       shortName: 'Perf',
-      description: 'Deep performance analysis including database queries, caching, and optimization opportunities.',
-      price: '$19',
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
+      headline: 'Speed Matters to Users',
+      description: 'Slow applications lose users. Identify bottlenecks, optimize queries, and improve response times before they impact your business.',
+      importance: 'Performance issues compound over time. Early optimization saves thousands in infrastructure costs and keeps users engaged.'
     },
     {
       icon: Shield,
       name: 'Security Audit',
       shortName: 'Security',
-      description: 'Complete security assessment covering authentication, authorization, and vulnerability detection.',
-      price: '$49',
-      color: 'text-red-600',
-      bgColor: 'bg-red-50'
+      headline: 'Protect What Matters',
+      description: 'Security breaches can destroy businesses. Find vulnerabilities, misconfigurations, and weak points before attackers do.',
+      importance: 'One security breach can cost millions and damage reputation. Proactive security saves money and builds user trust.'
     },
     {
       icon: Database,
       name: 'Supabase Deep Dive',
       shortName: 'Supabase',
-      description: 'Specialized audit for Supabase projects including RLS policies, Edge Functions, and database schema.',
-      price: '$50',
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50'
+      headline: 'Database Security & Performance',
+      description: 'Your database holds your most valuable data. Ensure RLS policies are correct, queries are optimized, and your schema is secure.',
+      importance: 'Database issues affect everything. Proper configuration prevents data breaches and ensures your app scales efficiently.'
     }
   ];
 
@@ -121,21 +116,31 @@ const Features: React.FC = () => {
 
         {/* Audit Tiers */}
         <div className="mb-24">
-          <h2 className="text-3xl font-bold text-slate-900 mb-12 text-center">Audit Depth Options</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <h2 className="text-3xl font-bold text-slate-900 mb-4 text-center">Choose Your Audit Depth</h2>
+          <p className="text-slate-500 text-center mb-12 max-w-2xl mx-auto">Each audit level builds on the previous, giving you increasingly comprehensive insights into your codebase health.</p>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {auditTiers.map((tier, index) => (
-              <div key={index} className="group bg-white border border-slate-200 rounded-xl p-6 hover:shadow-lg hover:border-slate-300 transition-all">
-                <div className={`w-12 h-12 ${tier.bgColor} rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform`}>
-                  <tier.icon className={`w-6 h-6 ${tier.color}`} />
+              <div key={index} className="group bg-white border border-slate-200 rounded-2xl p-8 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                {/* Header */}
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                    <tier.icon className="w-6 h-6 text-slate-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">{tier.name}</h3>
+                    <span className="text-sm text-slate-500 font-medium">{tier.shortName}</span>
+                  </div>
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">{tier.name}</h3>
-                <p className="text-slate-500 text-sm mb-4 leading-relaxed">{tier.description}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-slate-900">{tier.price}</span>
-                  <span className={`text-xs font-semibold ${tier.color} bg-slate-100 px-2 py-1 rounded-full`}>
-                    {tier.shortName}
-                  </span>
+
+                <h4 className="text-lg font-semibold text-slate-800 mb-4">{tier.headline}</h4>
+
+                <p className="text-slate-600 text-base mb-6 leading-relaxed">{tier.description}</p>
+
+                {/* Importance section */}
+                <div className="bg-slate-50 border-l-4 border-slate-300 p-4 mb-6 rounded-r-lg">
+                  <p className="text-slate-700 text-sm leading-relaxed italic">"{tier.importance}"</p>
                 </div>
+
               </div>
             ))}
           </div>

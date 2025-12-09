@@ -37,7 +37,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           <div>
             <h4 className="text-slate-900 font-bold mb-6">Product</h4>
             <ul className="space-y-4 text-sm text-slate-500">
-              <li><button onClick={() => onNavigate('landing')} className="hover:text-slate-700 transition-colors">Features</button></li>
+              <li><button onClick={() => onNavigate('features')} className="hover:text-slate-700 transition-colors">Features</button></li>
               <li><button onClick={() => onNavigate('pricing')} className="hover:text-slate-700 transition-colors">Pricing</button></li>
               <li><button onClick={() => onNavigate('landing')} className="hover:text-slate-700 transition-colors">Integrations</button></li>
             </ul>
