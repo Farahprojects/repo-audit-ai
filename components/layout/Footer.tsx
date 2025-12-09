@@ -57,7 +57,6 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
             <ul className="space-y-4 text-sm text-slate-500">
               <li><button onClick={() => onNavigate('privacy')} className="hover:text-slate-700 transition-colors">Privacy</button></li>
               <li><button onClick={() => onNavigate('terms')} className="hover:text-slate-700 transition-colors">Terms</button></li>
-              <li><button onClick={() => onNavigate('legal')} className="hover:text-slate-700 transition-colors">Legal</button></li>
             </ul>
           </div>
 
