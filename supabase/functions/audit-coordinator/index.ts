@@ -95,16 +95,36 @@ serve(async (req) => {
         });
         const minimizedIssues = Array.from(uniqueIssuesMap.values());
 
-        // Calculate Average Score from Workers
-        // Default to 100 if no results, otherwise average valid scores
-        const validScores = workerResults
-            .map(r => r.findings.localScore)
-            .filter(s => typeof s === 'number');
+        // 🧠 EGO-BASED SCORING ALGORITHM
+        // Calculate health score using weighted severity and project size normalization
 
-        // Weighted average could be better, but simple average is fine for speed
-        const healthScore = validScores.length > 0
-            ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
-            : 100;
+        // Step 1: Weighted Severity Score
+        const severityWeights = { critical: 5, warning: 2, info: 1 };
+        let rawScore = 0;
+
+        allIssues.forEach((issue: any) => {
+          const severity = (issue.severity || 'info').toLowerCase();
+          const weight = severityWeights[severity as keyof typeof severityWeights] || 1;
+          rawScore += weight;
+        });
+
+        // Step 2: Normalize Based on Project Size
+        // Use file_count from combined app maps (or fallback to preflight)
+        const combinedAppMap = workerResults.reduce((map: any, result) => {
+          const workerMap = result.findings.appMap || {};
+          return {
+            file_count: Math.max(map.file_count || 0, workerMap.file_count || fileMap.length),
+            languages: [...new Set([...(map.languages || []), ...(workerMap.languages || [])])],
+            frameworks: [...new Set([...(map.frameworks || []), ...(workerMap.frameworks || [])])],
+            complexity: workerMap.complexity || map.complexity || 'medium'
+          };
+        }, {});
+
+        const fileCount = combinedAppMap.file_count || fileMap.length;
+        const normalized = rawScore / Math.log(fileCount + 8); // Log normalization
+
+        // Step 3: Convert to 0-100 Final Score
+        const healthScore = Math.max(0, Math.min(100, Math.round(100 - normalized)));
 
         // Determine Risk Level
         let riskLevel: 'critical' | 'high' | 'medium' | 'low' = 'low';
@@ -121,8 +141,43 @@ serve(async (req) => {
         const topStrengths = [...new Set(allStrengths)].slice(0, 5);
         const topWeaknesses = [...new Set(allWeaknesses)].slice(0, 5);
 
-        // Template Summary
-        const summary = `Audit complete. Analyzed ${preflightRecord.file_count} files across ${workerResults.length} parallel tasks. Found ${minimizedIssues.length} issues. Overall health score is ${healthScore}/100 with ${riskLevel} risk level. Key concerns include: ${topWeaknesses.slice(0, 3).join(', ') || 'None'}.`;
+        // 🎯 EGO-DRIVEN SUMMARY SYSTEM
+        // Generate psychologically effective summaries based on ego archetypes
+
+        const crucialCount = minimizedIssues.filter((i: any) => i.severity?.toLowerCase() === 'critical').length;
+        const warningCount = minimizedIssues.filter((i: any) => i.severity?.toLowerCase() === 'warning').length;
+
+        let summary: string;
+        let egoArchetype: string;
+
+        // Determine ego archetype based on issue severity distribution
+        if (crucialCount <= 1 && warningCount < 5) {
+          // 🏆 SENIOR ENGINEER ENERGY
+          egoArchetype = "senior";
+          summary = `This repo carries the signature of someone who knows what they're doing. The structure is coherent, conventions are respected, and most of the issues found reflect fine-tuning rather than fundamental gaps.
+
+This feels like work from a strong mid-to-senior engineer who understands patterns, separation of concerns, and long-term maintainability.
+
+The improvements here won't reshape the project — they'll elevate it.`;
+        } else if (crucialCount <= 3) {
+          // 💪 SOLID FOUNDATION NEEDS PUSH
+          egoArchetype = "solid";
+          summary = `There's a clear foundation here — the architecture shows intent, and the patterns indicate someone who understands modern development practices.
+
+But the app is sitting right on the edge of breaking into a higher tier. With a few structural cleanups and more consistency across modules, this could easily shine like a polished product built by a confident engineer.`;
+        } else if (crucialCount <= 7) {
+          // 🧠 SMART BUT NEEDS DISCIPLINE
+          egoArchetype = "smart";
+          summary = `This codebase has moments of real talent — you can see the problem-solving ability and raw capability in the stronger sections.
+
+The gaps don't come from incompetence; they come from lack of consistency or rushed delivery. With more structure, this repo could reflect the level of skill that's clearly present in the stronger sections.`;
+        } else {
+          // 🔄 RESPECTFUL REBUILD NEEDED
+          egoArchetype = "rebuild";
+          summary = `There's a lot of passion in this project, but it feels like something built without the constraints or patterns of a production environment.
+
+The ideas are strong — the execution just needs a reset and a more deliberate structure. With a rebuild guided by clear best practices, this could transform from a chaotic prototype into something that genuinely reflects your capability.`;
+        }
 
         // 4. Calculate Total Tokens
         const workerTokenUsage = workerResults.reduce((sum, r) => sum + (r.tokenUsage || 0), 0);

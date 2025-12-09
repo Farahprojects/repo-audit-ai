@@ -40,6 +40,7 @@ function aggregateWorkerResults(workerResults: WorkerResult[]): {
   seniorDeveloperAssessment: any | null;
   suspiciousFiles: any[] | null;
   overallVerdict: string | null;
+  appMap: any; // Combined app map from all workers
 } {
   if (!workerResults || workerResults.length === 0) {
     return {
@@ -69,6 +70,22 @@ function aggregateWorkerResults(workerResults: WorkerResult[]): {
   let categoryAssessments: any = null;
   let seniorDeveloperAssessment: any = null;
   let overallVerdict: string | null = null;
+
+  // Aggregate app maps from all workers
+  const combinedAppMap = workerResults.reduce((map: any, result) => {
+    const workerMap = result.findings.appMap || {};
+    return {
+      languages: [...new Set([...(map.languages || []), ...(workerMap.languages || [])])],
+      frameworks: [...new Set([...(map.frameworks || []), ...(workerMap.frameworks || [])])],
+      directory_count: Math.max(map.directory_count || 0, workerMap.directory_count || 0),
+      file_count: Math.max(map.file_count || 0, workerMap.file_count || 0),
+      complexity: workerMap.complexity || map.complexity || 'medium',
+      key_files: [...new Set([...(map.key_files || []), ...(workerMap.key_files || [])])],
+      architecture_patterns: [...new Set([...(map.architecture_patterns || []), ...(workerMap.architecture_patterns || [])])],
+      testing_approach: workerMap.testing_approach || map.testing_approach || 'minimal',
+      config_approach: workerMap.config_approach || map.config_approach || 'centralized'
+    };
+  }, {});
 
   console.log(`🔄 Aggregating results from ${workerResults.length} workers`);
 
@@ -132,19 +149,41 @@ function aggregateWorkerResults(workerResults: WorkerResult[]): {
     }
   }
 
-  // Calculate average health score
-  const avgHealthScore = healthScoreCount > 0 ? Math.round(healthScoreSum / healthScoreCount) : 50;
+  // 🧠 EGO-BASED SCORING ALGORITHM (same as coordinator)
+  const severityWeights = { critical: 5, warning: 2, info: 1 };
+  let rawScore = 0;
 
-  // Generate summary based on aggregated data
-  const issueCount = allIssues.length;
-  const criticalCount = allIssues.filter(i => i.severity?.toLowerCase() === 'critical').length;
-  const summary = `Analysis from ${workerResults.length} workers found ${issueCount} issues${criticalCount > 0 ? ` (${criticalCount} critical)` : ''}. Health score: ${avgHealthScore}/100.`;
+  allIssues.forEach((issue: any) => {
+    const severity = (issue.severity || 'info').toLowerCase();
+    const weight = severityWeights[severity as keyof typeof severityWeights] || 1;
+    rawScore += weight;
+  });
+
+  // Use file count from combined app map
+  const fileCount = combinedAppMap.file_count || allIssues.length * 5; // Rough estimate
+  const normalized = rawScore / Math.log(fileCount + 8);
+  const finalHealthScore = Math.max(0, Math.min(100, Math.round(100 - normalized)));
+
+  // Generate ego-driven summary
+  const criticalCount = allIssues.filter((i: any) => i.severity?.toLowerCase() === 'critical').length;
+  const warningCount = allIssues.filter((i: any) => i.severity?.toLowerCase() === 'warning').length;
+
+  let summary: string;
+  if (criticalCount <= 1 && warningCount < 5) {
+    summary = `This repo carries the signature of someone who knows what they're doing. The structure is coherent, conventions are respected, and most of the issues found reflect fine-tuning rather than fundamental gaps. This feels like work from a strong mid-to-senior engineer who understands patterns, separation of concerns, and long-term maintainability.`;
+  } else if (criticalCount <= 3) {
+    summary = `There's a clear foundation here — the architecture shows intent, and the patterns indicate someone who understands modern development practices. But the app is sitting right on the edge of breaking into a higher tier. With a few structural cleanups and more consistency across modules, this could easily shine like a polished product built by a confident engineer.`;
+  } else if (criticalCount <= 7) {
+    summary = `This codebase has moments of real talent — you can see the problem-solving ability and raw capability in the stronger sections. The gaps don't come from incompetence; they come from lack of consistency or rushed delivery. With more structure, this repo could reflect the level of skill that's clearly present in the stronger sections.`;
+  } else {
+    summary = `There's a lot of passion in this project, but it feels like something built without the constraints or patterns of a production environment. The ideas are strong — the execution just needs a reset and a more deliberate structure. With a rebuild guided by clear best practices, this could transform from a chaotic prototype into something that genuinely reflects your capability.`;
+  }
 
   console.log(`📋 Aggregation complete: ${allIssues.length} total issues collected`);
 
   return {
-    healthScore: avgHealthScore,
-    summary,
+    healthScore: finalHealthScore,
+    summary: summary,
     issues: allIssues,
     topStrengths: allStrengths.slice(0, 5), // Limit to top 5
     topWeaknesses: allWeaknesses.slice(0, 5), // Limit to top 5
@@ -154,6 +193,7 @@ function aggregateWorkerResults(workerResults: WorkerResult[]): {
     seniorDeveloperAssessment,
     suspiciousFiles: allSuspiciousFiles.length > 0 ? allSuspiciousFiles : null,
     overallVerdict,
+    appMap: combinedAppMap,
   };
 }
 

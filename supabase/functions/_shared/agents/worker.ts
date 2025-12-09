@@ -202,6 +202,8 @@ YOUR MISSION: ${task.instruction}
 
 Analyze the provided code files according to your mission above. Be thorough and focused on the specific requirements.
 
+While analyzing, also build an "appMap" - a lightweight metadata summary of the project structure you observe.
+
 Return your findings in this exact JSON format:
 {
   "issues": [
@@ -219,8 +221,21 @@ Return your findings in this exact JSON format:
   ],
   "topStrengths": ["key strength 1", "key strength 2"],
   "topWeaknesses": ["key weakness 1", "key weakness 2"],
-  "healthScore": 75
+  "appMap": {
+    "languages": ["js", "ts"],
+    "frameworks": ["react", "node"],
+    "directory_count": 24,
+    "file_count": 138,
+    "complexity": "medium",
+    "key_files": ["package.json", "Dockerfile", "src/index.ts"],
+    "architecture_patterns": ["modular", "monolithic"],
+    "testing_approach": "minimal|moderate|comprehensive",
+    "config_approach": "centralized|scattered"
+  },
+  "localScore": 75
 }
+
+The appMap should reflect what you observe about the project structure from the files you analyzed. This metadata helps contextualize your findings.
 
 IMPORTANT: Only analyze the code provided. Do not make assumptions about unshown code.`;
 
