@@ -1,10 +1,8 @@
-/// <reference lib="deno.ns" />
-
 // Integration Tests for Complete Audit Flow
 // Tests the integration between services and edge functions
 // Run with: deno test --allow-read --allow-net tests/integration/audit-flow.test.ts
 
-import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals } from "@std/assert";
 
 // Mock Supabase client for integration testing
 class MockSupabaseClient {

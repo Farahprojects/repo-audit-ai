@@ -2,9 +2,7 @@
 // Test the logging, error tracking, and monitoring services
 // Run with: deno test --allow-read --allow-net tests/observability.test.ts
 
-/// <reference lib="deno.ns" />
-
-import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { LoggerService, RequestTracer } from "../supabase/functions/_shared/services/LoggerService.ts";
 import { ErrorTrackingService } from "../supabase/functions/_shared/services/ErrorTrackingService.ts";
 import { RuntimeMonitoringService } from "../supabase/functions/_shared/services/RuntimeMonitoringService.ts";

@@ -1,10 +1,8 @@
-/// <reference lib="deno.ns" />
-
 // Edge Function Tests
 // Test the core logic of edge functions without requiring full Supabase environment
 // Run with: deno test --allow-read --allow-net tests/unit/edge-functions.test.ts
 
-import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 
 // Mock the RequestValidationService for testing
 class MockRequestValidationService {

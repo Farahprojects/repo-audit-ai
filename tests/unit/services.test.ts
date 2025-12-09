@@ -1,9 +1,7 @@
-/// <reference lib="deno.ns" />
-
 // Unit Tests for Service Layer Components
 // Run with: deno test --allow-read --allow-net tests/unit/services.test.ts
 
-import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { CircuitBreakerService, GitHubCircuitBreaker, AICircuitBreaker } from "../../supabase/functions/_shared/services/CircuitBreakerService.ts";
 import { RetryService, GitHubRetry, AIRetry } from "../../supabase/functions/_shared/services/RetryService.ts";
 import { MonitoringService } from "../../supabase/functions/_shared/services/MonitoringService.ts";

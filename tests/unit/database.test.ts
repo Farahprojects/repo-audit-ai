@@ -1,10 +1,8 @@
-/// <reference lib="deno.ns" />
-
 // Database Migration Tests
 // These test the chunking logic without requiring a full database connection
 // Run with: deno test --allow-read tests/unit/database.test.ts
 
-import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 
 // Mock database functions for testing chunking logic
 function mockPgColumnSize(data: any): number {
