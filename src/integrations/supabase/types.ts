@@ -14,6 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_results_chunks: {
+        Row: {
+          audit_id: string
+          chunk_index: number
+          chunk_type: string
+          compressed: boolean | null
+          created_at: string | null
+          data: Json
+          data_size_bytes: number | null
+          id: string
+        }
+        Insert: {
+          audit_id: string
+          chunk_index?: number
+          chunk_type: string
+          compressed?: boolean | null
+          created_at?: string | null
+          data: Json
+          data_size_bytes?: number | null
+          id?: string
+        }
+        Update: {
+          audit_id?: string
+          chunk_index?: number
+          chunk_type?: string
+          compressed?: boolean | null
+          created_at?: string | null
+          data?: Json
+          data_size_bytes?: number | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_results_chunks_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "audit_complete_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_results_chunks_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "audits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_status: {
+        Row: {
+          actual_duration_seconds: number | null
+          completed_at: string | null
+          created_at: string | null
+          current_step: string | null
+          error_details: Json | null
+          error_message: string | null
+          estimated_duration_seconds: number | null
+          failed_at: string | null
+          id: string
+          logs: Json
+          preflight_id: string
+          progress: number
+          report_data: Json | null
+          started_at: string | null
+          status: string
+          tier: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          actual_duration_seconds?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          current_step?: string | null
+          error_details?: Json | null
+          error_message?: string | null
+          estimated_duration_seconds?: number | null
+          failed_at?: string | null
+          id?: string
+          logs?: Json
+          preflight_id: string
+          progress?: number
+          report_data?: Json | null
+          started_at?: string | null
+          status?: string
+          tier: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          actual_duration_seconds?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          current_step?: string | null
+          error_details?: Json | null
+          error_message?: string | null
+          estimated_duration_seconds?: number | null
+          failed_at?: string | null
+          id?: string
+          logs?: Json
+          preflight_id?: string
+          progress?: number
+          report_data?: Json | null
+          started_at?: string | null
+          status?: string
+          tier?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_status_preflight_id_fkey"
+            columns: ["preflight_id"]
+            isOneToOne: true
+            referencedRelation: "preflights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audits: {
         Row: {
           created_at: string
@@ -23,6 +142,7 @@ export type Database = {
           id: string
           issues: Json | null
           repo_url: string
+          results_chunked: boolean | null
           summary: string | null
           tier: string
           total_tokens: number | null
@@ -36,6 +156,7 @@ export type Database = {
           id?: string
           issues?: Json | null
           repo_url: string
+          results_chunked?: boolean | null
           summary?: string | null
           tier?: string
           total_tokens?: number | null
@@ -49,6 +170,7 @@ export type Database = {
           id?: string
           issues?: Json | null
           repo_url?: string
+          results_chunked?: boolean | null
           summary?: string | null
           tier?: string
           total_tokens?: number | null
@@ -60,84 +182,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      audit_status: {
-        Row: {
-          id: string
-          preflight_id: string
-          user_id: string
-          status: string
-          progress: number
-          logs: Json
-          current_step: string | null
-          report_data: Json | null
-          error_message: string | null
-          error_details: Json | null
-          created_at: string
-          updated_at: string
-          started_at: string | null
-          completed_at: string | null
-          failed_at: string | null
-          tier: string
-          estimated_duration_seconds: number | null
-          actual_duration_seconds: number | null
-        }
-        Insert: {
-          id?: string
-          preflight_id: string
-          user_id: string
-          status?: string
-          progress?: number
-          logs?: Json
-          current_step?: string | null
-          report_data?: Json | null
-          error_message?: string | null
-          error_details?: Json | null
-          created_at?: string
-          updated_at?: string
-          started_at?: string | null
-          completed_at?: string | null
-          failed_at?: string | null
-          tier: string
-          estimated_duration_seconds?: number | null
-          actual_duration_seconds?: number | null
-        }
-        Update: {
-          id?: string
-          preflight_id?: string
-          user_id?: string
-          status?: string
-          progress?: number
-          logs?: Json
-          current_step?: string | null
-          report_data?: Json | null
-          error_message?: string | null
-          error_details?: Json | null
-          created_at?: string
-          updated_at?: string
-          started_at?: string | null
-          completed_at?: string | null
-          failed_at?: string | null
-          tier?: string
-          estimated_duration_seconds?: number | null
-          actual_duration_seconds?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "audit_status_preflight_id_fkey"
-            columns: ["preflight_id"]
-            isOneToOne: false
-            referencedRelation: "preflights"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "audit_status_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -337,6 +381,33 @@ export type Database = {
         }
         Relationships: []
       }
+      legal: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          last_updated: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          last_updated?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          last_updated?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       oauth_csrf_states: {
         Row: {
           created_at: string | null
@@ -429,33 +500,6 @@ export type Database = {
           },
         ]
       }
-      legal: {
-        Row: {
-          content: string
-          created_at: string | null
-          id: string
-          last_updated: string | null
-          title: string
-          type: string
-        }
-        Insert: {
-          content: string
-          created_at?: string | null
-          id?: string
-          last_updated?: string | null
-          title: string
-          type: string
-        }
-        Update: {
-          content?: string
-          created_at?: string | null
-          id?: string
-          last_updated?: string | null
-          title?: string
-          type?: string
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           created_at: string
@@ -524,11 +568,72 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      audit_complete_data: {
+        Row: {
+          complete_data: Json | null
+          created_at: string | null
+          estimated_tokens: number | null
+          extra_data: Json | null
+          health_score: number | null
+          id: string | null
+          issues: Json | null
+          repo_url: string | null
+          results_chunked: boolean | null
+          summary: string | null
+          tier: string | null
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Insert: {
+          complete_data?: never
+          created_at?: string | null
+          estimated_tokens?: number | null
+          extra_data?: Json | null
+          health_score?: number | null
+          id?: string | null
+          issues?: Json | null
+          repo_url?: string | null
+          results_chunked?: boolean | null
+          summary?: string | null
+          tier?: string | null
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          complete_data?: never
+          created_at?: string | null
+          estimated_tokens?: number | null
+          extra_data?: Json | null
+          health_score?: number | null
+          id?: string | null
+          issues?: Json | null
+          repo_url?: string | null
+          results_chunked?: boolean | null
+          summary?: string | null
+          tier?: string | null
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      chunk_audit_results: {
+        Args: { p_audit_id: string; p_extra_data?: Json; p_issues?: Json }
+        Returns: number
+      }
       cleanup_expired_oauth_csrf_states: { Args: never; Returns: number }
       cleanup_expired_preflights: { Args: never; Returns: number }
+      get_complete_audit_data: { Args: { p_audit_id: string }; Returns: Json }
+      reconstruct_audit_results: { Args: { p_audit_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
