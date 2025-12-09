@@ -179,31 +179,7 @@ export async function runWorker(
     const fileContext = successfulContent.join('\n\n');
 
     // 2. Analyze
-    const systemPrompt = `You are a ${task.role}. 
-Your goal is to execute the following instruction based on the provided code.
-Focus ONLY on your instruction.
-
-Return your findings in JSON format:
-{
-  "issues": [
-    {
-      "id": "unique_id",
-      "severity": "critical|warning|info",
-      "category": "Security",
-      "title": "Brief title",
-      "description": "Detailed description",
-      "file": "filename.js",
-      "line": 42,
-      "badCode": "problematic code snippet",
-      "fixedCode": "corrected code"
-    }
-  ],
-  "topStrengths": ["strength 1", "strength 2"],
-  "topWeaknesses": ["weakness 1", "weakness 2"],
-  "healthScore": 75
-}
-
-IMPORTANT: You must ONLY analyze the code provided below. Do NOT make assumptions or guess about code that is not shown.`;
+    const systemPrompt = `Analyze this code for the specified issues. Return findings in JSON format.`;
 
     const userPrompt = `INSTRUCTION:
 ${task.instruction}

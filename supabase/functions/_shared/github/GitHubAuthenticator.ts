@@ -83,13 +83,13 @@ export class GitHubAuthenticator {
             const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
             if (!token) return null;
 
-            // Import Supabase client - @ts-ignore for ESM URL imports
-            // @ts-ignore
-            const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-            const supabase = createClient(
-                Deno.env.get('SUPABASE_URL')!,
-                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-            );
+                // Import Supabase client - @ts-ignore for ESM URL imports
+                // @ts-ignore
+                const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+                const supabase = createClient(
+                    Deno.env.get('SUPABASE_URL')!,
+                    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+                );
 
             // Securely get authenticated user ID using Supabase auth
             const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -100,15 +100,15 @@ export class GitHubAuthenticator {
 
             const userId = user.id;
 
-            // Get user's GitHub account
-            const { data: githubAccount, error } = await supabase
-                .from('github_accounts')
-                .select('access_token_encrypted')
-                .eq('user_id', userId)
-                .single();
+                // Get user's GitHub account
+                const { data: githubAccount, error } = await supabase
+                    .from('github_accounts')
+                    .select('access_token_encrypted')
+                    .eq('user_id', userId)
+                    .single();
 
-            if (!error && githubAccount) {
-                return this.decryptToken(githubAccount.access_token_encrypted);
+                if (!error && githubAccount) {
+                    return this.decryptToken(githubAccount.access_token_encrypted);
             }
         } catch (error) {
             console.error('Error retrieving user GitHub token:', error);
