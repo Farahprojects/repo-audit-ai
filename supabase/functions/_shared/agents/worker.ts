@@ -1,6 +1,6 @@
 
 import { AuditContext, WorkerTask, WorkerResult } from './types.ts';
-import { callGemini, GeminiUsage, fetchFileContent, isValidGitHubUrl } from './utils.ts';
+import { callGemini, GeminiUsage } from './utils.ts';
 import { GitHubAPIClient } from '../github/GitHubAPIClient.ts';
 
 // Get the set of valid file paths from context (source of truth from preflight)
@@ -89,80 +89,68 @@ export async function runWorker(
         };
     }
 
-    // SECURITY: Validate URLs before fetching
-    // Extract repo info from preflight if available  
-    const repoOwnerPattern = context.preflight
-        ? new RegExp(`/${context.preflight.owner}/${context.preflight.repo}/`, 'i')
-        : null;
+    // SECURITY: Ensure preflight data is available (required for path-based fetching)
+    if (!context.preflight) {
+        console.error(`🚨 Worker [${task.role}] has no preflight data - cannot fetch files!`);
+        return {
+            result: {
+                taskId: task.id,
+                findings: {
+                    error: "NO_PREFLIGHT_DATA",
+                    message: "Cannot fetch files without preflight data. This is a system error.",
+                    analysis: null,
+                    issues: []
+                },
+                tokenUsage: 0
+            },
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        };
+    }
 
+    // Fetch files by path using GitHub API (preflight provides owner/repo/branch)
+    const apiClient = new GitHubAPIClient(context.githubToken);
+    
     const fetchedContent = await Promise.all(filesToFetch.map(async f => {
-        let content: string;
+        console.log(`📄 [${task.role}] Fetching ${f.path} via GitHub API`);
 
-        if (f.url) {
-            // PRIMARY: Fetch by URL (preferred method)
-            console.log(`📄 [${task.role}] Fetching ${f.path} via URL`);
+        try {
+            const response = await apiClient.fetchFile(
+                context.preflight!.owner,
+                context.preflight!.repo,
+                f.path,
+                context.preflight!.default_branch
+            );
 
-            // Validate URL is from GitHub
-            if (!isValidGitHubUrl(f.url)) {
-                console.error(`🚨 SECURITY: Blocked non-GitHub URL for ${f.path}: ${f.url}`);
+            if (!response.ok) {
+                console.error(`🚨 GitHub API error for ${f.path}: ${response.status}`);
                 return null;
             }
 
-            // If preflight is available, validate URL matches the declared repo
-            if (repoOwnerPattern && !repoOwnerPattern.test(f.url)) {
-                console.error(`🚨 SECURITY: URL does not match declared repo for ${f.path}: ${f.url}`);
+            const fileData = await response.json();
+
+            let content: string;
+            // GitHub API returns content as base64
+            if (fileData.encoding === 'base64' && fileData.content) {
+                content = atob(fileData.content.replace(/\n/g, ''));
+            } else if (fileData.content) {
+                // Sometimes content is already decoded
+                content = fileData.content;
+            } else {
+                console.error(`🚨 No content in GitHub API response for ${f.path}`);
                 return null;
             }
 
-            content = await fetchFileContent(f.url, context.githubToken);
-        } else {
-            // FALLBACK: Fetch by path using GitHub API (when URL is missing)
-            console.log(`🔄 [${task.role}] Fetching ${f.path} via path fallback (no URL available)`);
-
-            if (!context.preflight) {
-                console.error(`🚨 Cannot fetch ${f.path} by path: no preflight data available`);
+            // Check for empty content
+            if (!content || content.trim().length === 0) {
+                console.warn(`⚠️ Empty content returned for ${f.path}`);
                 return null;
             }
 
-            try {
-                const apiClient = new GitHubAPIClient(context.githubToken);
-                const response = await apiClient.fetchFile(
-                    context.preflight.owner,
-                    context.preflight.repo,
-                    f.path,
-                    context.preflight.default_branch
-                );
-
-                if (!response.ok) {
-                    console.error(`🚨 GitHub API error for ${f.path}: ${response.status}`);
-                    return null;
-                }
-
-                const fileData = await response.json();
-
-                // GitHub API returns content as base64
-                if (fileData.encoding === 'base64' && fileData.content) {
-                    content = atob(fileData.content.replace(/\n/g, ''));
-                } else if (fileData.content) {
-                    // Sometimes content is already decoded
-                    content = fileData.content;
-                } else {
-                    console.error(`🚨 No content in GitHub API response for ${f.path}`);
-                    return null;
-                }
-            } catch (error) {
-                console.error(`🚨 Path-based fetch failed for ${f.path}:`, error);
-                return null;
-            }
-        }
-
-        // Check for empty content (could indicate auth failure or deleted file)
-        if (!content || content.trim().length === 0) {
-            console.warn(`⚠️ Empty content returned for ${f.path} - file may be inaccessible or deleted`);
+            return `--- ${f.path} ---\n${content}`;
+        } catch (error) {
+            console.error(`🚨 Fetch failed for ${f.path}:`, error);
             return null;
         }
-
-        return `--- ${f.path} ---\n${content}`;
     }));
 
     // Filter out failed fetches

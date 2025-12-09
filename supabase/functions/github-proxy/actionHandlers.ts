@@ -241,11 +241,11 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
             return codeExtensions.includes(ext) || item.path.includes('Dockerfile') || item.path.includes('Makefile');
         });
 
+        // Only include path, size, and type - NO file content or GitHub API URLs
         const fileMap = filteredTree.map((item: any) => ({
             path: item.path,
             size: item.size || 0,
-            type: 'file',
-            url: item.url // GitHub API blob URL
+            type: 'file'
         }));
 
         console.log(`✅ [github-proxy] PREFLIGHT SUCCESS - returning stats + fingerprint + ${fileMap.length} files`);
