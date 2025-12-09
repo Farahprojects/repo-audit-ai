@@ -130,7 +130,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
           ) : (
             <button
               onClick={onSignInClick}
-              className="text-slate-500 hover:text-slate-700 text-sm font-medium transition-colors"
+              className="bg-black text-white hover:bg-gray-800 text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
             >
               Log in
             </button>
