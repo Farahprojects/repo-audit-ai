@@ -26,6 +26,12 @@ export const useAuthFlow = ({
     if (user) {
       setIsAuthOpen(false);
 
+      // Clean up OAuth hash fragments from URL after successful authentication
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        // Remove the hash fragment to clean up the URL
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+
       // If there's a pending repo URL, start the audit automatically
       if (pendingRepoUrl) {
         setPendingRepoUrl(null);
