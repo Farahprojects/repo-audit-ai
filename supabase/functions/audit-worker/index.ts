@@ -40,7 +40,8 @@ serve(async (req) => {
             taskId,
             instruction,
             role,
-            targetFiles
+            targetFiles,
+            preflight: inlinePreflight // Optional: passed from orchestrator to avoid N+1 queries
         } = body;
 
         // Validate required parameters
@@ -48,17 +49,21 @@ serve(async (req) => {
             return createErrorResponse('Missing required parameters: preflightId, taskId, instruction, role, targetFiles', 400);
         }
 
-        // 1. Fetch Preflight Record
-        // We need this to get the repo map and potentially the GitHub account ID for token decryption
-        const { data: preflightRecord, error: preflightError } = await supabase
-            .from('preflights')
-            .select('*')
-            .eq('id', preflightId)
-            .single();
+        // 1. Use inline preflight if provided, otherwise fetch from DB (fallback)
+        let preflightRecord = inlinePreflight;
+        if (!preflightRecord) {
+            console.log(`[audit-worker] No inline preflight provided, fetching from DB (task: ${taskId})`);
+            const { data, error: preflightError } = await supabase
+                .from('preflights')
+                .select('*')
+                .eq('id', preflightId)
+                .single();
 
-        if (preflightError || !preflightRecord) {
-            console.error(`❌ [audit-worker] Failed to fetch preflight:`, preflightError);
-            return createErrorResponse('Invalid or expired preflight ID', 400);
+            if (preflightError || !data) {
+                console.error(`❌ [audit-worker] Failed to fetch preflight:`, preflightError);
+                return createErrorResponse('Invalid or expired preflight ID', 400);
+            }
+            preflightRecord = data;
         }
 
         // 2. Resolve GitHub Token (Server-Side)

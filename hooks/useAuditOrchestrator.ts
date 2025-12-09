@@ -84,7 +84,7 @@ export const useAuditOrchestrator = ({
       addLog(`[Planner] Generating audit plan...`);
       setScannerProgress(5);
 
-      const { plan, usage: plannerUsage } = await AuditService.planAudit(preflightId, tier);
+      const { plan, usage: plannerUsage, preflight } = await AuditService.planAudit(preflightId, tier);
 
       addLog(`[Planner] Plan generated: ${plan.tasks.length} tasks.`);
       addLog(`[Planner] Focus: ${plan.focusArea || 'General Audit'}`);
@@ -95,11 +95,11 @@ export const useAuditOrchestrator = ({
       const totalTasks = plan.tasks.length;
       let completedTasks = 0;
 
-      // Run tasks in parallel (with concurrency limit if needed, but browser handles ~6 requests fine)
+      // Run tasks in parallel, passing preflight data to avoid N+1 DB queries
       const taskPromises = plan.tasks.map(async (task: any, index: number) => {
         try {
           addLog(`[Worker ${index + 1}] Starting: ${task.role}`);
-          const { result } = await AuditService.runAuditTask(preflightId, task);
+          const { result } = await AuditService.runAuditTask(preflightId, task, preflight);
 
           addLog(`[Worker ${index + 1}] Finished: Found ${result.issues?.length || 0} issues.`);
           completedTasks++;
