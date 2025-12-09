@@ -180,7 +180,6 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Your Dashboard</h1>
           <p className="text-slate-600">
             Audit your repos, track progress, and unlock deeper insights.
           </p>
