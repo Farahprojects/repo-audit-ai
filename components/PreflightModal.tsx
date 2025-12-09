@@ -9,7 +9,7 @@ import { useGitHubAuth } from '../hooks/useGitHubAuth';
 
 interface PreflightModalProps {
   repoUrl: string;
-  onConfirm: (tier: 'lite' | 'deep' | 'ultra', stats: AuditStats, fileMap: FileMapItem[], preflightId?: string) => void;
+  onConfirm: (tier: 'shape' | 'conventions' | 'security', stats: AuditStats, fileMap: FileMapItem[], preflightId?: string) => void;
   onCancel: () => void;
 }
 
@@ -145,7 +145,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     loadStats();
   }, []);
 
-  const handleTierSelect = useCallback((tier: 'lite' | 'deep' | 'ultra') => {
+  const handleTierSelect = useCallback((tier: 'shape' | 'conventions' | 'security') => {
     // Pass preflightId to allow the audit to use stored preflight data
     onConfirm(tier, stats!, fileMap, preflightId || undefined);
   }, [onConfirm, stats, fileMap, preflightId]);
@@ -239,7 +239,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Shape Check</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">Repo structure, folder hygiene, missing files.</p>
                   <button
-                    onClick={() => handleTierSelect('lite')}
+                    onClick={() => handleTierSelect('shape')}
                     className="w-full py-3 border border-slate-200 text-slate-600 rounded-full hover:bg-slate-50 font-medium transition-colors"
                   >
                     Run Free
@@ -257,7 +257,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                   <h4 className="text-lg font-bold text-slate-900 mb-2 mt-2">Senior Check</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">Craftsmanship, types, tests, docs.</p>
                   <button
-                    onClick={() => handleTierSelect('deep')}
+                    onClick={() => handleTierSelect('conventions')}
                     className="w-full py-3 bg-primary text-white font-bold rounded-full hover:bg-blue-600 transition-colors shadow-lg shadow-primary/25"
                   >
                     Run Deep
@@ -287,7 +287,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Security</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">RLS, secrets, auth, vulnerabilities.</p>
                   <button
-                    onClick={() => handleTierSelect('ultra')}
+                    onClick={() => handleTierSelect('security')}
                     className="w-full py-3 border border-red-200 text-red-600 rounded-full hover:bg-red-50 font-bold transition-colors"
                   >
                     Run Security

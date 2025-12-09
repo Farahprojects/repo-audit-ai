@@ -204,10 +204,18 @@ The ideas are strong — the execution just needs a reset and a more deliberate 
         const normalizedTopWeaknesses = normalizeStrengthsOrIssues(topWeaknesses);
         const normalizedRiskLevel = normalizeRiskLevel(riskLevel);
 
+        // Fallback mapping for legacy tier names (safety net)
+        const tierMapping: Record<string, string> = {
+            'lite': 'shape',
+            'deep': 'conventions',
+            'ultra': 'security'
+        };
+        const canonicalTier = tierMapping[tier] || tier;
+
         const { data: insertedAudit, error: insertError } = await supabase.from('audits').insert({
             user_id: userId,
             repo_url: preflightRecord.repo_url,
-            tier: tier,
+            tier: canonicalTier,
             estimated_tokens: serverEstimatedTokens,
             health_score: healthScore,
             summary: summary,
