@@ -19,7 +19,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                 alt="SCAI Logo"
                 className="w-6 h-6"
               />
-              <span className="text-slate-900 font-bold text-lg">scai</span>
+              <span className="text-slate-900 font-bold text-lg tracking-wide">scai</span>
             </div>
             <p className="text-slate-500 text-sm leading-relaxed mb-6">
               The AI-powered senior engineer that audits your code 24/7.
