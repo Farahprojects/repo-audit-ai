@@ -62,7 +62,9 @@ CREATE POLICY "Service role can manage all audit status" ON audit_status
 
 -- Function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_audit_status_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = public
+AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
