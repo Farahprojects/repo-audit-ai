@@ -2,8 +2,10 @@
  * Audit Dispatcher - Central Orchestration Layer
  *
  * This is the single entry point for all audit requests from the UI.
- * It intelligently routes requests between the old system and new orchestrator
- * based on feature flags, user preferences, and system health.
+ * Routes ALL requests to the Universal Reasoning Layer (orchestrator).
+ * NO FALLBACKS - Forces us to fix issues and move forward aggressively.
+ *
+ * Legacy system only accessible via explicit admin override.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -30,7 +32,6 @@ interface RoutingDecision {
   useNewSystem: boolean;
   reason: string;
   confidence: number; // 0-1, how confident we are in this choice
-  fallbackAllowed: boolean;
 }
 
 serve(withPerformanceMonitoring(async (req) => {
@@ -188,91 +189,51 @@ async function makeRoutingDecision(
 
   const { preflightId, tier, userId, options } = params;
 
-  // 1. Check explicit overrides
+  // 1. Check explicit overrides (admin controls)
   if (options.forceLegacy) {
     return {
       useNewSystem: false,
-      reason: 'Explicitly forced to use legacy system',
-      confidence: 1.0,
-      fallbackAllowed: false
+      reason: 'ADMIN OVERRIDE: Forced to use legacy system for debugging',
+      confidence: 1.0
     };
   }
 
   if (options.forceOrchestrator) {
     return {
       useNewSystem: true,
-      reason: 'Explicitly forced to use new orchestrator',
-      confidence: 1.0,
-      fallbackAllowed: true
+      reason: 'ADMIN OVERRIDE: Forced to use orchestrator for testing',
+      confidence: 1.0
     };
   }
 
-  // 2. Check feature flags (can be stored in database or env vars)
+  // 2. Check feature flags - orchestrator should be default enabled
   const featureFlags = await getFeatureFlags(supabase);
 
   if (!featureFlags.orchestratorEnabled) {
     return {
       useNewSystem: false,
-      reason: 'Orchestrator system disabled by feature flag',
-      confidence: 1.0,
-      fallbackAllowed: false
+      reason: 'EMERGENCY: Orchestrator system disabled by feature flag',
+      confidence: 1.0
     };
   }
 
-  // 3. Check user preferences (future: allow users to opt-in/out)
+  // 3. Check user-specific overrides (rare admin cases)
   const userPreferences = await getUserPreferences(supabase, userId);
 
   if (userPreferences.forceLegacy) {
     return {
       useNewSystem: false,
-      reason: 'User preference: legacy system only',
-      confidence: 1.0,
-      fallbackAllowed: false
+      reason: 'USER OVERRIDE: User explicitly requested legacy system',
+      confidence: 1.0
     };
   }
 
-  // 4. A/B Testing logic (canary deployment)
-  const abTestDecision = await evaluateABTest(supabase, userId);
-
-  if (abTestDecision.group === 'orchestrator') {
-    return {
-      useNewSystem: true,
-      reason: `A/B test: user in orchestrator group (${abTestDecision.confidence * 100}% confidence)`,
-      confidence: abTestDecision.confidence,
-      fallbackAllowed: true
-    };
-  }
-
-  // 5. Gradual rollout by tier
-  const tierRollout = getTierRolloutConfig(tier);
-
-  if (tierRollout.enabled && Math.random() < tierRollout.percentage) {
-    return {
-      useNewSystem: true,
-      reason: `Gradual rollout: ${tier} tier (${tierRollout.percentage * 100}% rollout)`,
-      confidence: 0.8,
-      fallbackAllowed: true
-    };
-  }
-
-  // 6. Health checks (if orchestrator is having issues, fallback)
-  const systemHealth = await checkSystemHealth(supabase);
-
-  if (!systemHealth.orchestratorHealthy) {
-    return {
-      useNewSystem: false,
-      reason: 'Orchestrator system unhealthy, using legacy fallback',
-      confidence: 0.9,
-      fallbackAllowed: false
-    };
-  }
-
-  // 7. Default: use legacy system (conservative approach)
+  // 4. DEFAULT: Use NEW orchestrator system
+  // No more conservative defaults - we move forward!
   return {
-    useNewSystem: false,
-    reason: 'Default routing: using proven legacy system',
-    confidence: 0.5,
-    fallbackAllowed: true
+    useNewSystem: true,
+    reason: 'DEFAULT: Using Universal Reasoning Layer (orchestrator)',
+    confidence: 0.9
   };
 }
 
@@ -293,70 +254,58 @@ async function routeToOrchestrator(
 ) {
   const { preflightId, tier, userId, options, correlationId } = params;
 
-  try {
-    LoggerService.info('Invoking orchestrator', {
-      component: 'AuditDispatcher',
+  LoggerService.info('Invoking orchestrator (NO FALLBACK)', {
+    component: 'AuditDispatcher',
+    preflightId,
+    tier,
+    correlationId
+  });
+
+  // Call the new orchestrator with legacy-compatible format
+  const { data, error } = await supabase.functions.invoke('orchestrator', {
+    body: {
       preflightId,
       tier,
-      correlationId
-    });
+      stream: options.enableStreaming || false,
+      thinkingBudget: getThinkingBudgetForTier(tier),
+      maxIterations: options.maxIterations || 50,
+      userId // Pass for tracking
+    }
+  });
 
-    // Call the new orchestrator with legacy-compatible format
-    const { data, error } = await supabase.functions.invoke('orchestrator', {
-      body: {
-        preflightId,
-        tier,
-        stream: options.enableStreaming || false,
-        thinkingBudget: getThinkingBudgetForTier(tier),
-        maxIterations: options.maxIterations || 50,
-        userId // Pass for tracking
-      }
-    });
-
-    if (error) throw error;
-
-    // Return response with routing metadata
-    return new Response(
-      JSON.stringify({
-        ...data,
-        _routing: {
-          system: 'orchestrator',
-          reason: params.routingDecision.reason,
-          confidence: params.routingDecision.confidence
-        }
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
-
-  } catch (error) {
-    LoggerService.error('Orchestrator routing failed', error as Error, {
+  if (error) {
+    LoggerService.error('Orchestrator failed - NO FALLBACK', error as Error, {
       component: 'AuditDispatcher',
       preflightId,
-      correlationId
+      correlationId,
+      errorDetails: error
     });
 
-    // If fallback is allowed and orchestrator fails, try legacy
-    if (params.routingDecision.fallbackAllowed) {
-      LoggerService.info('Attempting fallback to legacy system', {
-        component: 'AuditDispatcher',
-        preflightId,
-        correlationId
-      });
-
-      return await routeToLegacyOrchestrator(supabase, {
-        ...params,
-        routingDecision: {
-          ...params.routingDecision,
-          reason: `Fallback: ${params.routingDecision.reason} (orchestrator failed)`
-        }
-      });
-    }
-
-    // No fallback allowed, return error
-    throw error;
+    // NO FALLBACK - Let the new system succeed or fail on its own
+    throw new Error(`Orchestrator failed: ${error.message || 'Unknown error'}`);
   }
+
+  LoggerService.info('Orchestrator completed successfully', {
+    component: 'AuditDispatcher',
+    preflightId,
+    correlationId,
+    hasData: !!data
+  });
+
+  // Return response with routing metadata
+  return new Response(
+    JSON.stringify({
+      ...data,
+      _routing: {
+        system: 'orchestrator',
+        reason: params.routingDecision.reason,
+        confidence: params.routingDecision.confidence
+      }
+    }),
+    {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    }
+  );
 }
 
 async function routeToLegacyOrchestrator(
@@ -409,9 +358,8 @@ async function routeToLegacyOrchestrator(
 async function getFeatureFlags(supabase: any) {
   // TODO: Implement feature flag storage (database/env/config)
   return {
-    orchestratorEnabled: true, // Start with orchestrator enabled
-    allowFallback: true,
-    enableABTesting: false
+    orchestratorEnabled: true, // NEW SYSTEM IS DEFAULT - NO MORE FALLBACKS
+    enableEmergencyOverride: true, // Allow admin override in critical situations
   };
 }
 
