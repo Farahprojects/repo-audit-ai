@@ -283,7 +283,7 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">Your Repositories</h2>
-              <span className="text-xs text-slate-400">{repoGroups.length} repos</span>
+              <span className="text-xs text-foreground">{repoGroups.length} repos</span>
             </div>
 
             <div className="divide-y divide-slate-100">
