@@ -73,25 +73,16 @@ serve(withPerformanceMonitoring(async (req) => {
       correlationId
     })
 
-    // Update audit status to processing (upsert with conflict handling)
+    // Update audit status to processing
     const { error: statusError } = await supabase
       .from('audit_status')
-      .upsert(
-        {
+      .upsert({
         preflight_id: preflightId,
         user_id: userId,
-          tier: tier,
         status: 'processing',
         progress: 0,
-          logs: ['Audit orchestration started'],
-          started_at: new Date().toISOString(),
-          error_message: null,
-          error_details: null,
-          failed_at: null,
-          completed_at: null
-        },
-        { onConflict: 'preflight_id' }
-      )
+        logs: ['Audit orchestration started']
+      })
 
     if (statusError) {
       const errorMsg = 'Failed to initialize audit status'
@@ -212,33 +203,32 @@ async function orchestrateAudit(
       ...metadata
     })
 
-    // Fire-and-forget progress update to avoid blocking execution
-    supabase
+    const { data: currentLogs } = await supabase
       .from('audit_status')
       .select('logs')
       .eq('preflight_id', preflightId)
       .single()
-      .then(({ data: currentLogs }) => {
-        const updatedLogs = [...(currentLogs?.logs || []), log]
 
-        return supabase
-          .from('audit_status')
-          .update({
-            progress,
-            logs: updatedLogs,
-            current_step: log,
-            updated_at: new Date().toISOString()
-          })
-          .eq('preflight_id', preflightId)
+    const updatedLogs = [...(currentLogs?.logs || []), log]
+
+    const { error } = await supabase
+      .from('audit_status')
+      .update({
+        progress,
+        logs: updatedLogs,
+        current_step: log,
+        updated_at: new Date().toISOString()
       })
-      .catch(error => {
-        LoggerService.error('Failed to update audit progress', undefined, {
-          component: 'AuditOrchestrator',
-          preflightId,
-          error: error.message,
-          correlationId
-        })
+      .eq('preflight_id', preflightId)
+
+    if (error) {
+      LoggerService.error('Failed to update audit progress', undefined, {
+        component: 'AuditOrchestrator',
+        preflightId,
+        error: error.message,
+        correlationId
       })
+    }
   }
 
   try {
@@ -311,8 +301,7 @@ async function orchestrateAudit(
       const taskStart = Date.now()
 
       try {
-        // Send progress update (fire-and-forget)
-        updateProgress(
+        await updateProgress(
           15 + Math.round(((index + 1) / totalTasks) * 10),
           `[Worker ${index + 1}] Starting: ${task.role}`
         )
@@ -349,8 +338,7 @@ async function orchestrateAudit(
         completedTasks++
         const progressPercent = 15 + Math.round((completedTasks / totalTasks) * 70)
 
-        // Send completion update (fire-and-forget)
-        updateProgress(
+        await updateProgress(
           progressPercent,
           `[Worker ${index + 1}] Finished: Found ${result.issues?.length || 0} issues in ${taskDuration}ms.`
         )
@@ -362,8 +350,7 @@ async function orchestrateAudit(
 
         MonitoringService.recordAPIUsage('ai', `audit-worker-${task.role}`, taskDuration, false)
 
-        // Send failure update (fire-and-forget)
-        updateProgress(
+        await updateProgress(
           15 + Math.round((completedTasks / totalTasks) * 70),
           `[Worker ${index + 1}] Failed after ${taskDuration}ms: ${err instanceof Error ? err.message : 'Unknown error'}`
         )
@@ -377,19 +364,8 @@ async function orchestrateAudit(
       }
     })
 
-    // Wait for all workers to complete (with timeout protection)
-    const workerStartTime = Date.now()
     const results = await Promise.all(taskPromises)
     workerResults.push(...results)
-
-    const workerDuration = Date.now() - workerStartTime
-    console.log(`[AuditOrchestrator] All ${totalTasks} workers completed in ${workerDuration}ms`)
-
-    // Check if we're approaching timeout (Edge Functions have ~5-10 min limits)
-    const totalElapsed = Date.now() - startTime
-    if (totalElapsed > 240000) { // 4 minutes
-      console.warn(`[AuditOrchestrator] Long execution detected: ${totalElapsed}ms. Proceeding to synthesis.`)
-    }
 
     await updateProgress(90, `[System] All workers completed. Total tokens used: ${totalTokensUsed}`)
 
@@ -404,8 +380,7 @@ async function orchestrateAudit(
             preflightId,
             workerResults,
             tier: canonicalTier,
-            plannerUsage,
-            userId
+            plannerUsage
           }
         })
       ),

@@ -1,17 +1,5 @@
 project_id = "zlrivxntdtewfagrbtry"
 
-# === INTERNAL FUNCTIONS (called by other edge functions) ===
-# These must have verify_jwt = false because they're called internally
-# by audit-orchestrator using the service role client
-
-[functions.audit-planner]
-verify_jwt = false  # Called internally by audit-orchestrator
-
-[functions.audit-orchestrator]
-verify_jwt = true   # Called by frontend with user JWT
-
-# === Existing functions (updated for orchestration chain) ===
-
 [functions.github-proxy]
 verify_jwt = true
 
@@ -19,10 +7,10 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.audit-worker]
-verify_jwt = false  # Called internally by audit-orchestrator
+verify_jwt = true
 
 [functions.audit-coordinator]
-verify_jwt = false  # Called internally by audit-orchestrator
+verify_jwt = true
 
 [functions.github-oauth-start]
 verify_jwt = true
@@ -41,20 +29,3 @@ verify_jwt = false
 
 [functions.cost-estimator]
 verify_jwt = false
-
-# === Other internal/utility functions ===
-
-[functions.preflight-manager]
-verify_jwt = false  # Needs to work for both auth and anon users
-
-[functions.health-check]
-verify_jwt = false  # Health checks should be public
-
-[functions.metrics]
-verify_jwt = false  # Internal monitoring
-
-[functions.observability]
-verify_jwt = false  # Internal monitoring
-
-[functions.auto-fix-generator]
-verify_jwt = true   # User-initiated action

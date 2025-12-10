@@ -217,7 +217,7 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
             client.getHeaders()
         );
 
-        // 7. Create filtered file map and grouped summaries
+        // 7. Create filtered file map (same logic as handleTreeAction)
         const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.rb', '.php', '.vue', '.svelte', '.css', '.scss', '.html', '.json', '.yaml', '.yml', '.md', '.txt', '.sql', '.sh', '.env.example'];
         const excludePatterns = ['node_modules/', 'dist/', 'build/', '.git/', 'vendor/', '__pycache__/', '.next/', 'coverage/', '.docz/', 'storybook-static/'];
 
@@ -230,94 +230,7 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
             return codeExtensions.includes(ext) || item.path.includes('Dockerfile') || item.path.includes('Makefile');
         });
 
-        // Create semantic file groupings for better LLM understanding
-        const fileGroups: Record<string, { count: number; examples: string[]; totalSize: number }> = {};
-
-        function categorizeFile(path: string, size: number) {
-            const lowerPath = path.toLowerCase();
-
-            // SQL and Database files
-            if (lowerPath.includes('migration') || lowerPath.includes('schema') || path.endsWith('.sql') || lowerPath.includes('supabase/migrations/')) {
-                if (!fileGroups.sql) fileGroups.sql = { count: 0, examples: [], totalSize: 0 };
-                fileGroups.sql.count++;
-                fileGroups.sql.totalSize += size;
-                if (fileGroups.sql.examples.length < 3) fileGroups.sql.examples.push(path);
-            }
-            // React/Vue components
-            else if (path.endsWith('.tsx') || path.endsWith('.jsx') || path.endsWith('.vue') || path.endsWith('.svelte')) {
-                if (!fileGroups.components) fileGroups.components = { count: 0, examples: [], totalSize: 0 };
-                fileGroups.components.count++;
-                fileGroups.components.totalSize += size;
-                if (fileGroups.components.examples.length < 3) fileGroups.components.examples.push(path);
-            }
-            // API routes
-            else if (lowerPath.includes('api/') || lowerPath.includes('routes/') || lowerPath.includes('controllers/')) {
-                if (!fileGroups.api) fileGroups.api = { count: 0, examples: [], totalSize: 0 };
-                fileGroups.api.count++;
-                fileGroups.api.totalSize += size;
-                if (fileGroups.api.examples.length < 3) fileGroups.api.examples.push(path);
-            }
-            // Tests
-            else if (lowerPath.includes('test') || lowerPath.includes('spec') || lowerPath.includes('__tests__')) {
-                if (!fileGroups.tests) fileGroups.tests = { count: 0, examples: [], totalSize: 0 };
-                fileGroups.tests.count++;
-                fileGroups.tests.totalSize += size;
-                if (fileGroups.tests.examples.length < 3) fileGroups.tests.examples.push(path);
-            }
-            // Configuration files
-            else if (path.endsWith('package.json') || path.endsWith('tsconfig.json') || path.endsWith('.config.js') ||
-                     path.endsWith('.config.ts') || path.includes('config.') || path.endsWith('.env')) {
-                if (!fileGroups.config) fileGroups.config = { count: 0, examples: [], totalSize: 0 };
-                fileGroups.config.count++;
-                fileGroups.config.totalSize += size;
-                if (fileGroups.config.examples.length < 3) fileGroups.config.examples.push(path);
-            }
-            // Documentation
-            else if (path.endsWith('.md') || path.endsWith('.txt')) {
-                if (!fileGroups.docs) fileGroups.docs = { count: 0, examples: [], totalSize: 0 };
-                fileGroups.docs.count++;
-                fileGroups.docs.totalSize += size;
-                if (fileGroups.docs.examples.length < 3) fileGroups.docs.examples.push(path);
-            }
-            // TypeScript/JavaScript source
-            else if (path.endsWith('.ts') || path.endsWith('.js')) {
-                if (!fileGroups.source) fileGroups.source = { count: 0, examples: [], totalSize: 0 };
-                fileGroups.source.count++;
-                fileGroups.source.totalSize += size;
-                if (fileGroups.source.examples.length < 3) fileGroups.source.examples.push(path);
-            }
-            // Other languages
-            else if (path.endsWith('.py') || path.endsWith('.java') || path.endsWith('.go') || path.endsWith('.rs') || path.endsWith('.php') || path.endsWith('.rb')) {
-                const lang = path.split('.').pop()!.toUpperCase();
-                const key = `${lang.toLowerCase()}Files`;
-                if (!fileGroups[key]) fileGroups[key] = { count: 0, examples: [], totalSize: 0 };
-                fileGroups[key].count++;
-                fileGroups[key].totalSize += size;
-                if (fileGroups[key].examples.length < 3) fileGroups[key].examples.push(path);
-            }
-            // Catch-all for other files
-            else {
-                if (!fileGroups.other) fileGroups.other = { count: 0, examples: [], totalSize: 0 };
-                fileGroups.other.count++;
-                fileGroups.other.totalSize += size;
-                if (fileGroups.other.examples.length < 3) fileGroups.other.examples.push(path);
-            }
-        }
-
-        // Process all files into groups
-        filteredTree.forEach((item: any) => {
-            categorizeFile(item.path, item.size || 0);
-        });
-
-        // Convert to readable format for LLM
-        const groupedSummary = Object.entries(fileGroups).map(([category, data]) => {
-            const categoryName = category.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-            const sizeKB = Math.round(data.totalSize / 1024);
-            const examples = data.examples.slice(0, 2).join(', ');
-            return `${categoryName}: ${data.count} files (${sizeKB}KB) - ${examples}${data.examples.length > 2 ? '...' : ''}`;
-        });
-
-        // Keep individual file map for workers (they need specific paths)
+        // Only include path, size, and type - NO file content or GitHub API URLs
         const fileMap = filteredTree.map((item: any) => ({
             path: item.path,
             size: item.size || 0,
@@ -330,8 +243,7 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
             JSON.stringify({
                 stats,
                 fingerprint,
-                fileMap,
-                fileGroups: groupedSummary
+                fileMap
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

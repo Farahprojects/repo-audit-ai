@@ -8,53 +8,16 @@ function getValidFilePaths(context: AuditContext): Set<string> {
     return new Set(context.files.map(f => f.path));
 }
 
-// Expand glob patterns to actual file paths (same logic as planner)
-function expandFilePatterns(patterns: string[], validFiles: Set<string>): string[] {
-    const expanded: string[] = [];
-
-    for (const pattern of patterns) {
-        if (pattern.includes('*')) {
-            // Glob pattern - convert to regex and match against valid files
-            // ** matches any number of directories, * matches within directory
-            const regexPattern = '^' +
-                pattern
-                    .replace(/\*\*/g, '.*')  // ** becomes .*
-                    .replace(/\*/g, '[^/]*') // * becomes [^/]*
-                    .replace(/\?/g, '[^/]')  // ? becomes [^/] (single char)
-                + '$';
-
-            const regex = new RegExp(regexPattern);
-
-            for (const file of validFiles) {
-                if (regex.test(file)) {
-                    expanded.push(file);
-                }
-            }
-        } else {
-            // Exact path
-            if (validFiles.has(pattern)) {
-                expanded.push(pattern);
-            }
-        }
-    }
-
-    return expanded;
-}
-
-// Validate and expand task files against preflight
+// Validate and filter task files against preflight
 function validateTargetFiles(
     taskFiles: string[],
     validPaths: Set<string>,
     taskRole: string
 ): { validFiles: string[]; invalidFiles: string[] } {
-    // First expand any glob patterns to actual file paths
-    const expandedFiles = expandFilePatterns(taskFiles, validPaths);
-
-    // Then validate that all expanded files exist in preflight
     const validFiles: string[] = [];
     const invalidFiles: string[] = [];
 
-    for (const path of expandedFiles) {
+    for (const path of taskFiles) {
         if (validPaths.has(path)) {
             validFiles.push(path);
         } else {
@@ -66,7 +29,6 @@ function validateTargetFiles(
         console.warn(`🚫 Worker [${taskRole}] attempted to access ${invalidFiles.length} files NOT in preflight:`, invalidFiles.slice(0, 5));
     }
 
-    console.log(`📋 Worker [${taskRole}]: Expanded ${taskFiles.length} patterns to ${validFiles.length} valid files`);
     return { validFiles, invalidFiles };
 }
 
@@ -164,45 +126,6 @@ export async function runWorker(
 
             const fileData = await response.json();
 
-            // Handle files without content (large files, empty files, symlinks, etc.)
-            if (!fileData.content) {
-                console.warn(`⚠️ No content available for ${f.path}:`, {
-                    type: fileData.type,
-                    size: fileData.size,
-                    encoding: fileData.encoding,
-                    hasDownloadUrl: !!fileData.download_url,
-                    isLargeFile: fileData.size > 1024 * 1024 // > 1MB
-                });
-
-                // For large files, try to fetch via download_url
-                if (fileData.download_url && fileData.size > 1024 * 1024) {
-                    console.log(`📥 Attempting to download large file ${f.path} via download_url`);
-                    try {
-                        const downloadResponse = await fetch(fileData.download_url, {
-                            headers: {
-                                'Authorization': `Bearer ${context.githubToken || apiKey}`,
-                                'Accept': 'application/vnd.github.v3.raw',
-                                'User-Agent': 'SCAI'
-                            }
-                        });
-
-                        if (downloadResponse.ok) {
-                            const content = await downloadResponse.text();
-                            console.log(`✅ Successfully downloaded ${f.path} (${content.length} chars)`);
-                            return `--- ${f.path} ---\n${content}`;
-                        } else {
-                            console.error(`❌ Failed to download ${f.path}: ${downloadResponse.status}`);
-                        }
-                    } catch (downloadError) {
-                        console.error(`❌ Download error for ${f.path}:`, downloadError);
-                    }
-                }
-
-                // Skip files we can't get content for
-                console.log(`⏭️ Skipping ${f.path} - no accessible content`);
-                return null;
-            }
-
             let content: string;
             // GitHub API returns content as base64
             if (fileData.encoding === 'base64' && fileData.content) {
@@ -211,7 +134,7 @@ export async function runWorker(
                 // Sometimes content is already decoded
                 content = fileData.content;
             } else {
-                console.error(`🚨 Unexpected: content field exists but is falsy for ${f.path}`);
+                console.error(`🚨 No content in GitHub API response for ${f.path}`);
                 return null;
             }
 
@@ -324,7 +247,7 @@ Analyze these files according to your mission instructions above.`;
 
     const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, {
       role: 'WORKER',
-      thinkingBudget: 4096 // Fixed budget for workers (less than CEO's dynamic budget)
+      thinkingBudget: -1 // Use dynamic thinking for JSON output
     });
 
     console.log(`🤖 Worker [${task.role}] completed analysis:`, {

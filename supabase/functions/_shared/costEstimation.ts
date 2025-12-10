@@ -12,10 +12,9 @@ export const TIER_MAPPING: Record<string, string> = {
   'shape': 'shape',
   'conventions': 'conventions',
   'supabase_deep_dive': 'supabase_deep_dive',
-  'free': 'free',
 };
 
-export const VALID_TIERS = ['shape', 'conventions', 'performance', 'security', 'supabase_deep_dive', 'free'] as const;
+export const VALID_TIERS = ['shape', 'conventions', 'performance', 'security', 'supabase_deep_dive'] as const;
 export type AuditTier = typeof VALID_TIERS[number];
 
 // Complexity fingerprint interface - single source of truth
@@ -47,9 +46,9 @@ export interface TierCostFormula {
 export const COST_FORMULAS: TierCostFormula[] = [
   {
     tier: 'shape',
-    baseTokens: 0,
-    maxOverrun: 1.0,
-    estimateTokens: (_fp) => 0
+    baseTokens: 5000,
+    maxOverrun: 1.1,
+    estimateTokens: (fp) => 5000 + fp.file_count * 50 + fp.config_files * 200
   },
   {
     tier: 'conventions',
@@ -74,12 +73,6 @@ export const COST_FORMULAS: TierCostFormula[] = [
     baseTokens: 60000,
     maxOverrun: 1.2,
     estimateTokens: (fp) => 60000 + fp.sql_files * 4000 + fp.backend_files * 1000 + fp.api_endpoints_estimated * 1500
-  },
-  {
-    tier: 'free',
-    baseTokens: 0,
-    maxOverrun: 1.0,
-    estimateTokens: (_fp) => 0
   }
 ];
 

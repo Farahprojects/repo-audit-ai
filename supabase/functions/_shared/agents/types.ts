@@ -27,9 +27,6 @@ export interface PreflightData {
     // Repository file map - list of all files with metadata
     repo_map: FileNode[];
 
-    // Grouped file summaries for better LLM understanding
-    fileGroups?: string[];
-
     // Stats snapshot
     stats: {
         files: number;
@@ -67,9 +64,6 @@ export interface PreflightData {
 
     // File count (cached for quick access)
     file_count: number;
-
-    // GitHub account ID (for private repo access)
-    github_account_id?: string;
 }
 
 export interface AuditContext {

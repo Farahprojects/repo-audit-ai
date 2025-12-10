@@ -8,10 +8,9 @@ export const THINKING_BUDGET = {
     CEO: 20000,       // 20k tokens - fixed budget for comprehensive audit planning
     SYNTHESIZER: 100000, // 100k tokens - increased budget for thorough finding consolidation
     WORKER: 10000,    // 10k tokens - high budget for thorough scanning (8k-12k range)
-    MetadataAnalyst: 5000, // 5k tokens - lighter budget for metadata-only analysis
 } as const;
 
-export type AgentRole = 'CEO' | 'SYNTHESIZER' | 'WORKER' | 'MetadataAnalyst';
+export type AgentRole = 'CEO' | 'SYNTHESIZER' | 'WORKER';
 
 export interface GeminiUsage {
     promptTokens: number;
@@ -33,128 +32,38 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
 function extractJson(text: string): any {
-    // 0. Clean the text first - remove thinking tokens and other artifacts
-    let cleanText = text;
-
-    // Remove thinking tokens that might wrap the JSON
-    cleanText = cleanText.replace(/<thinking>[\s\S]*?<\/thinking>/g, '');
-    cleanText = cleanText.replace(/<\/thinking>[\s\S]*$/, ''); // Remove thinking at end
-
-    // Remove any leading/trailing whitespace
-    cleanText = cleanText.trim();
-
-    // Limit processing to reasonable sizes to prevent huge malformed responses
-    if (cleanText.length > 50000) {
-        console.warn(`[extractJson] Response too large (${cleanText.length} chars), truncating to 50KB`);
-        cleanText = cleanText.slice(0, 50000);
-    }
-
     // 1. Try generic JSON.parse first (fastest)
     try {
-        const parsed = JSON.parse(cleanText);
-        // Basic validation - ensure it's an object with expected structure
-        if (typeof parsed === 'object' && parsed !== null) {
-            return parsed;
-        }
+        return JSON.parse(text);
     } catch (e) {
         // Continue to advanced extraction
     }
 
     // 2. Extract from markdown code blocks (```json ... ``` or just ``` ... ```)
     const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
-    const match = cleanText.match(codeBlockRegex);
+    const match = text.match(codeBlockRegex);
     if (match && match[1]) {
         try {
-            const parsed = JSON.parse(match[1].trim());
-            if (typeof parsed === 'object' && parsed !== null) {
-                return parsed;
-            }
+            return JSON.parse(match[1]);
         } catch (e) {
             // content inside code block wasn't valid JSON, continue
         }
     }
 
-    // 3. Look for JSON after thinking tokens (with size limit)
-    const thinkingAfterRegex = /<\/thinking>\s*(\{[\s\S]{10,5000}?\})/; // Min 10, max 5000 chars
-    const thinkingMatch = cleanText.match(thinkingAfterRegex);
-    if (thinkingMatch && thinkingMatch[1]) {
-        try {
-            const parsed = JSON.parse(thinkingMatch[1].trim());
-            if (typeof parsed === 'object' && parsed !== null) {
-                return parsed;
-            }
-        } catch (e) {
-            // Continue to structured search
-        }
-    }
-
-    // 4. Try to find complete JSON objects by looking for balanced braces
-    const jsonObjects = findCompleteJsonObjects(cleanText);
-    for (const jsonObj of jsonObjects) {
-        try {
-            const parsed = JSON.parse(jsonObj);
-            if (typeof parsed === 'object' && parsed !== null &&
-                (parsed.tasks || parsed.issues || parsed.focusArea)) { // Has expected fields
-                console.log(`[extractJson] Found valid JSON object with ${jsonObj.length} chars`);
-                return parsed;
-            }
-        } catch (e) {
-            continue;
-        }
-    }
-
-    // 5. Last resort: Brute force with better validation
-    const firstOpen = cleanText.indexOf('{');
-    const lastClose = cleanText.lastIndexOf('}');
+    // 3. Brute force: Find the first '{' and the last '}'
+    const firstOpen = text.indexOf('{');
+    const lastClose = text.lastIndexOf('}');
 
     if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
-        const potentialJson = cleanText.substring(firstOpen, lastClose + 1);
-        // Only try if it's a reasonable size
-        if (potentialJson.length < 10000) {
-            try {
-                const parsed = JSON.parse(potentialJson);
-                if (typeof parsed === 'object' && parsed !== null) {
-                    console.warn(`[extractJson] Brute force succeeded with ${potentialJson.length} char block`);
-                    return parsed;
-                }
-            } catch (e) {
-                console.warn(`[extractJson] Brute force failed on ${potentialJson.length} char block`);
-            }
+        const potentialJson = text.substring(firstOpen, lastClose + 1);
+        try {
+            return JSON.parse(potentialJson);
+        } catch (e) {
+            // failed to parse extracted block
         }
     }
 
-    console.error(`[extractJson] Could not extract valid JSON. Text length: ${cleanText.length}`);
-    console.error(`[extractJson] Text preview: ${cleanText.slice(0, 300)}...`);
     throw new Error("Could not extract valid JSON from response");
-}
-
-// Helper function to find complete JSON objects
-function findCompleteJsonObjects(text: string): string[] {
-    const objects: string[] = [];
-    let braceCount = 0;
-    let startPos = -1;
-
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-
-        if (char === '{') {
-            if (braceCount === 0) {
-                startPos = i;
-            }
-            braceCount++;
-        } else if (char === '}') {
-            braceCount--;
-            if (braceCount === 0 && startPos !== -1) {
-                const jsonCandidate = text.substring(startPos, i + 1);
-                if (jsonCandidate.length > 10 && jsonCandidate.length < 10000) {
-                    objects.push(jsonCandidate);
-                }
-                startPos = -1;
-            }
-        }
-    }
-
-    return objects;
 }
 
 async function sleep(ms: number) {
@@ -192,7 +101,7 @@ export async function callGemini(
                         ],
                         generationConfig: {
                             temperature: temperature,
-                            maxOutputTokens: options.role === 'CEO' ? 32768 : 16384,  // Higher limit for CEO/planner
+                            maxOutputTokens: 16384,  // Increased for complex planner output
                             responseMimeType: "application/json",
                             // Role-based thinking budget configuration
                             thinkingConfig: {
@@ -231,29 +140,7 @@ export async function callGemini(
                 };
             } catch (e) {
                 console.warn(`[Gemini] JSON Parse Warning (Attempt ${attempt}/${MAX_RETRIES}):`, e);
-                console.warn(`[Gemini] Raw text length: ${text.length} chars`);
-                console.warn(`[Gemini] First 200 chars: ${text.slice(0, 200)}`);
-                console.warn(`[Gemini] Last 200 chars: ${text.slice(-200)}`);
-
-                // Try to identify common issues
-                if (text.includes('<thinking>') || text.includes('</thinking>')) {
-                    console.warn(`[Gemini] Response contains thinking tokens - extracting JSON from between them`);
-                    const thinkingRegex = /<\/thinking>\s*(\{[\s\S]*\})\s*$/;
-                    const thinkingMatch = text.match(thinkingRegex);
-                    if (thinkingMatch && thinkingMatch[1]) {
-                        try {
-                            const extractedJson = JSON.parse(thinkingMatch[1]);
-                            console.warn(`[Gemini] Successfully extracted JSON from after thinking tokens`);
-                            return {
-                                data: extractedJson,
-                                usage
-                            };
-                        } catch (thinkingError) {
-                            console.warn(`[Gemini] Failed to parse JSON after thinking tokens:`, thinkingError);
-                        }
-                    }
-                }
-
+                console.debug(`[Gemini] Failed Content Preview: ${text.slice(0, 500)}...`);
                 throw new Error('Invalid JSON response from Gemini');
             }
 

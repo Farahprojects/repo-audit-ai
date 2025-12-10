@@ -2,7 +2,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { runWorker } from '../_shared/agents/worker.ts';
-import { runMetadataAnalyst } from '../_shared/agents/MetadataAnalyst.ts';
 import { AuditContext, WorkerTask } from '../_shared/agents/types.ts';
 import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
 import {
@@ -120,21 +119,7 @@ serve(async (req) => {
         // a) Verify files exist in preflight
         // b) Fetch content via GitHub API (using server-side token)
         // c) Call Gemini to analyze
-        // 5. Run the Worker
-        let result: any;
-        let usage: any;
-
-        if (role === 'MetadataAnalyst') {
-            // Run Metadata Analyst (Free Tier)
-            const metadataResult = await runMetadataAnalyst(context, GEMINI_API_KEY);
-            result = metadataResult.result;
-            usage = metadataResult.usage;
-        } else {
-            // Run Standard Worker
-            const workerResult = await runWorker(context, task, GEMINI_API_KEY);
-            result = workerResult.result;
-            usage = workerResult.usage;
-        }
+        const { result, usage } = await runWorker(context, task, GEMINI_API_KEY);
 
         // 6. Return Result
         return createSuccessResponse({

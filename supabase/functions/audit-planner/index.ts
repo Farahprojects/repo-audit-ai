@@ -29,8 +29,6 @@ const ENV = validateSupabaseEnv({
     SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 });
 
-// File filtering moved to preflight - planner now uses grouped summaries
-
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 
 serve(async (req) => {
@@ -84,16 +82,13 @@ serve(async (req) => {
         const tierPrompt = promptData.prompt;
 
         // Prepare Context using Preflight Data
-        const fullFileMap = preflightRecord.repo_map || [];
-
-        // detectCapabilities needs ALL files for accurate tech stack detection
-        const detectedStack = detectCapabilities(fullFileMap);
+        const fileMap = preflightRecord.repo_map || [];
+        const detectedStack = detectCapabilities(fileMap);
 
         // Build context conditionally to handle exactOptionalPropertyTypes
-        // Use full file map for planning context (workers still get individual access)
         const context: AuditContext = {
             repoUrl: preflightRecord.repo_url,
-            files: fullFileMap.map((f: any) => ({
+            files: fileMap.map((f: any) => ({
                 path: f.path,
                 type: 'file',
                 size: f.size,
@@ -107,44 +102,20 @@ serve(async (req) => {
                 owner: preflightRecord.owner,
                 repo: preflightRecord.repo,
                 default_branch: preflightRecord.default_branch,
-                repo_map: fullFileMap, // Keep FULL map for workers (they need all files)
-                fileGroups: preflightRecord.file_groups, // Grouped summaries for LLM planning
+                repo_map: preflightRecord.repo_map,
                 stats: preflightRecord.stats,
                 fingerprint: preflightRecord.fingerprint,
                 is_private: preflightRecord.is_private,
                 fetch_strategy: preflightRecord.fetch_strategy,
                 token_valid: preflightRecord.token_valid,
-                file_count: preflightRecord.file_count,
-                github_account_id: preflightRecord.github_account_id
+                file_count: preflightRecord.file_count
             },
             detectedStack
             // githubToken omitted - not needed for planning (metadata only)
         };
 
         // Run Planner
-        let plan: any;
-        let usage: any = { totalTokens: 0, promptTokens: 0, completionTokens: 0 };
-
-        if (tier === 'shape' || tier === 'free') {
-            // Free Tier / Shape: Bypass Planner and return static Metadata task
-            console.log(`[audit-planner] Generating static plan for ${tier} tier`);
-            plan = {
-                focusArea: "Metadata & Structure Audit",
-                tasks: [
-                    {
-                        id: `metadata-${Date.now()}`,
-                        role: "MetadataAnalyst",
-                        instruction: "Perform a structural and metadata analysis of the repository using heuristics. Do not read file contents.",
-                        targetFiles: [] // Metadata analyst doesn't need target files
-                    }
-                ]
-            };
-        } else {
-            // Paid Tiers: Run full Gemini Planner
-            const plannerResult = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
-            plan = plannerResult.result;
-            usage = plannerResult.usage;
-        }
+        const { result: plan, usage } = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
 
         // Return the plan along with canonical tier and preflight data for workers (avoids N+1 queries)
         return createSuccessResponse({
