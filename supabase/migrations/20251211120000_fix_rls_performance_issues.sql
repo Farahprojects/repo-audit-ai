@@ -116,10 +116,9 @@ DROP POLICY IF EXISTS "legal_service_manage" ON legal;
 CREATE POLICY "legal_public_read" ON legal
   FOR SELECT USING (true);
 
--- Service role can manage (insert/update/delete) legal documents
-CREATE POLICY "legal_service_manage" ON legal
-  FOR INSERT USING ((select auth.role()) = 'service_role')
-  WITH CHECK ((select auth.role()) = 'service_role');
+-- Service role can manage legal documents (separate policies)
+CREATE POLICY "legal_service_insert" ON legal
+  FOR INSERT WITH CHECK ((select auth.role()) = 'service_role');
 
 CREATE POLICY "legal_service_update" ON legal
   FOR UPDATE USING ((select auth.role()) = 'service_role')
