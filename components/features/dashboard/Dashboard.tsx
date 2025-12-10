@@ -305,7 +305,7 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
                         compact
                       />
 
-                      <p className="text-xs text-slate-400 mt-2">
+                      <p className="text-xs text-foreground mt-2">
                         Last audit: {formatDate(group.latestAudit.created_at)}
                       </p>
                     </div>
