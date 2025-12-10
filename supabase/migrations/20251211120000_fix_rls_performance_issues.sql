@@ -97,7 +97,7 @@ CREATE POLICY "Service role can manage oauth_csrf_states" ON oauth_csrf_states
 -- Fix service role only tables (no auth function calls needed)
 -- email_messages, domain_slugs, email_notification_templates already have permissive policies for service role
 
--- Fix verification_codes policies (if they exist)
+-- Fix verification_codes policies (now that table exists)
 DROP POLICY IF EXISTS "Users can view their own verification codes" ON public.verification_codes;
 DROP POLICY IF EXISTS "Users can create their own verification codes" ON public.verification_codes;
 DROP POLICY IF EXISTS "Users can delete their own verification codes" ON public.verification_codes;
