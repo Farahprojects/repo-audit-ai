@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.cost-estimator]
 verify_jwt = false
+
+[functions.orchestrator]
+verify_jwt = true
