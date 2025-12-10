@@ -247,7 +247,7 @@ Analyze these files according to your mission instructions above.`;
 
     const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, {
       role: 'WORKER',
-      thinkingBudget: -1 // Use dynamic thinking for JSON output
+      thinkingBudget: 4096 // Fixed budget for workers (less than CEO's dynamic budget)
     });
 
     console.log(`🤖 Worker [${task.role}] completed analysis:`, {
