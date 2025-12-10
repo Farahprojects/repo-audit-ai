@@ -1,5 +1,6 @@
 import { runPlanner } from '../_shared/agents/planner.ts';
 import { runWorker } from '../_shared/agents/worker.ts';
+import { runMetadataAnalyst } from '../_shared/agents/MetadataAnalyst.ts';
 import { AuditContext, WorkerResult } from '../_shared/agents/types.ts';
 
 export interface OrchestrationResult {
@@ -74,6 +75,30 @@ export class AuditOrchestrator {
       durationMs,
       failedWorkers,
       plannerUsage
+    };
+  }
+
+  async executeMetadataAnalysis(context: AuditContext): Promise<OrchestrationResult> {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`METADATA ANALYSIS - FREE TIER`);
+    console.log(`${'='.repeat(60)}\n`);
+
+    const timeStart = Date.now();
+
+    // Run the single metadata analyst agent
+    const result = await runMetadataAnalyst(context, this.geminiApiKey);
+
+    const timeEnd = Date.now();
+    const durationMs = timeEnd - timeStart;
+
+    // Construct a pseudo-OrchestrationResult
+    return {
+      plan: { focusArea: "Metadata Audit", tasks: [] }, // No complex plan
+      swarmResults: [result.result],
+      totalTokens: result.usage.totalTokens, // Only one agent
+      durationMs,
+      failedWorkers: 0,
+      plannerUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0 }
     };
   }
 }

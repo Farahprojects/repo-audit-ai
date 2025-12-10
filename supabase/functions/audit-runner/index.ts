@@ -83,39 +83,22 @@ serve(async (req) => {
     }
 
     // -- PAYMENT ENFORCEMENT --
-    // If we are running (not quoting), we must have a payment method
-    // TODO: We might allow free tier for small public repos later, but for now enforcing strict transactional
-    // const passedBody = await req.json(); // Re-parsing potentially (careful with stream consumption - RequestValidator cloned it?)
-    // Actually RequestValidator reads body. We need to check validatedRequest or parse again if needed. 
-    // Ideally RequestValidator should pass all fields.
-    // Let's assume validation passed `paymentMethodId` if we added it to ValidatedAuditRequest, 
-    // OR we access it from the original request if we didn't consume it fully? 
-    // RequestValidator.validateRequest uses req.json(), so the stream is consumed. 
-    // We MUST update RequestValidator to extract paymentMethodId.
+    // Skip payment for free tier (and 'shape' alias)
+    if (validatedRequest.tier !== 'free' && validatedRequest.tier !== 'shape') {
+      if (!validatedRequest.paymentMethodId) {
+        return createErrorResponse(new Error("Payment required for audit execution. Please provide paymentMethodId."), 402);
+      }
 
-    // STOP: I need to update RequestValidator first to extract paymentMethodId.
-    // I will do that in the next step. For now, I will write the LOGIC assuming it's in validatedRequest.
+      const { PaymentService } = await import('../_shared/services/PaymentService.ts');
+      const paymentResult = await PaymentService.capturePayment(quote.totalCents, 'usd', validatedRequest.paymentMethodId);
 
-    /* 
-       Wait, I cannot use 'passedBody' here because stream is consumed.
-       I must rely on validatedRequest having it. 
-       I will mark this step to update RequestValidator Next.
-    */
-
-    if (!validatedRequest.paymentMethodId) {
-      return createErrorResponse(new Error("Payment required for audit execution. Please provide paymentMethodId."), 402);
+      if (!paymentResult.success) {
+        return createErrorResponse(new Error(`Payment declined: ${paymentResult.error}`), 402);
+      }
     }
 
-    const { PaymentService } = await import('../_shared/services/PaymentService.ts');
-    const paymentResult = await PaymentService.capturePayment(quote.totalCents, 'usd', validatedRequest.paymentMethodId);
-
-    if (!paymentResult.success) {
-      return createErrorResponse(new Error(`Payment declined: ${paymentResult.error}`), 402);
-    }
-
-    // 4. SYSTEM PROMPT FETCHING
+    // 4. SYSTEM PROMPT FETCHING (Repository Init)
     const auditRepository = new AuditRepository(supabase);
-    const tierPrompt = await auditRepository.fetchTierPrompt(validatedRequest.tier);
 
     // 5. CONTEXT BUILDING
     const detectedStack = detectCapabilities(finalFileMap);
@@ -156,7 +139,16 @@ serve(async (req) => {
 
     // 6. SWARM PIPELINE EXECUTION
     const orchestrator = new AuditOrchestrator(GEMINI_API_KEY);
-    const orchestrationResult = await orchestrator.executeSwarmPipeline(context, tierPrompt);
+
+    let orchestrationResult;
+
+    // Treat 'shape' as the free metadata tier
+    if (validatedRequest.tier === 'free' || validatedRequest.tier === 'shape') {
+      orchestrationResult = await orchestrator.executeMetadataAnalysis(context);
+    } else {
+      const tierPrompt = await auditRepository.fetchTierPrompt(validatedRequest.tier);
+      orchestrationResult = await orchestrator.executeSwarmPipeline(context, tierPrompt);
+    }
 
     // 7. RESULTS AGGREGATION
     const aggregatedReport: AggregatedReport = ResultsAggregator.aggregateWorkerResults(orchestrationResult.swarmResults);

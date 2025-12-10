@@ -10,7 +10,7 @@ export const THINKING_BUDGET = {
     WORKER: 10000,    // 10k tokens - high budget for thorough scanning (8k-12k range)
 } as const;
 
-export type AgentRole = 'CEO' | 'SYNTHESIZER' | 'WORKER';
+export type AgentRole = 'CEO' | 'SYNTHESIZER' | 'WORKER' | 'MetadataAnalyst';
 
 export interface GeminiUsage {
     promptTokens: number;

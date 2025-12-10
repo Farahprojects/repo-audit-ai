@@ -8,8 +8,11 @@ Then, you must BREAK DOWN the goal into specific tasks for your workers.
 CRITICAL REQUIREMENTS:
 - You have 3-5 WORKERS available. Create EXACTLY the number of tasks that matches available workers.
 - DISTRIBUTE FILES EVENLY across all workers. Each worker should get roughly the same number of files.
-- ANALYZE the Audit Goal to extract specific CHECKLIST ITEMS and RULES that workers must follow.
-- For each task, provide a DETAILED INSTRUCTION that includes the specific checklist items/rules from the Audit Goal.
+- ANALYZE the Audit Goal to extract specific CHECKLIST ITEMS and RULES.
+- **INTELLIGENT MAPPING**: You must map specific rules to the file types they apply to. 
+  - Do NOT assign SQL checks to frontend files.
+  - Do NOT assign React/UI checks to backend files.
+- For each task, provide a DETAILED INSTRUCTION that includes *only* the checklist items relevant to the assigned files.
 - Assign a specialized ROLE to each task based on the audit focus areas.
 - Assign specific FILES to each task from the provided File Map. Max 20 files per task.
 - IMPORTANT: You can ONLY assign files that are listed in the File Map. Do NOT invent or guess file paths.
@@ -20,7 +23,8 @@ PLANNING STEPS:
 2. Extract key checklist items/rules from the Audit Goal
 3. Group related files by functionality/type
 4. Assign specialized roles based on file groupings
-5. Write detailed instructions incorporating the extracted rules/checklist
+5. Filter the checklist items: Assign ONLY relevant rules to each worker based on their file types
+6. Write detailed instructions incorporating the filtered rules
 
 Return JSON:
 {
@@ -29,7 +33,7 @@ Return JSON:
     {
       "id": "task_1",
       "role": "Security Specialist",
-      "instruction": "Follow these specific rules from the audit goal: [list extracted rules]. Check these files for: [specific checklist items]. Focus on: [detailed requirements].",
+      "instruction": "Follow these specific rules RELEVANT to your files: [list filtered rules]. Check these files for: [specific checklist items]. Focus on: [detailed requirements].",
       "targetFiles": ["file1.js", "file2.ts", "file3.sql"]
     }
   ]
@@ -96,10 +100,10 @@ CLIENT AUDIT GOAL & REQUIREMENTS:
 ${tierPrompt}
 
 PLANNING REQUIREMENTS:
-1. Extract the specific checklist items, rules, and focus areas from the Audit Goal above
-2. Create 3-5 tasks (one per worker) with EVEN file distribution
-3. Each task must include the extracted rules/checklist items in its instruction
-4. Group related files logically by functionality (auth, database, frontend, etc.)
+1. Extract the specific checklist items from the Audit Goal above
+2. Match each checklist item to the file types it applies to (e.g. "RLS checks" -> "*.sql", "React checks" -> "*.tsx")
+3. Create 3-5 tasks with EVEN file distribution
+4. For each task, include ONLY the extracted rules that match the assigned files
 5. Provide detailed, actionable instructions for each worker
 
 Create a comprehensive task breakdown that ensures complete audit coverage with no gaps or overlaps.`;
