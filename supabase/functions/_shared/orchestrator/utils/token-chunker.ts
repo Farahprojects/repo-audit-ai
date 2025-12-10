@@ -162,8 +162,9 @@ export class TokenChunker {
         let currentChunk: typeof files = [];
         let currentTokens = 0;
 
-        for (const [dir, dirFiles] of dirGroups) {
-            const dirTokens = dirFiles.reduce((sum, f) =>
+        for (const entry of dirGroups.entries()) {
+            const [dir, dirFiles] = entry;
+            const dirTokens = dirFiles.reduce((sum: number, f: { path: string; content?: string }) =>
                 sum + this.estimateTokens(f.path) + this.estimateTokens(f.content || ''), 0
             );
 
@@ -179,9 +180,9 @@ export class TokenChunker {
 
                 // If dir is too large, split it
                 if (dirTokens > maxTokensPerChunk) {
-                    const subChunks = this.chunk(dirFiles, maxTokensPerChunk);
+                    const subChunks: typeof files[] = this.chunk(dirFiles, maxTokensPerChunk);
                     chunks.push(...subChunks.slice(0, -1));
-                    currentChunk = subChunks[subChunks.length - 1];
+                    currentChunk = subChunks[subChunks.length - 1] || [];
                     currentTokens = this.estimateTokens(JSON.stringify(currentChunk));
                 } else {
                     currentChunk = dirFiles;

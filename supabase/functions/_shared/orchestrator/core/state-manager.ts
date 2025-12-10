@@ -305,7 +305,7 @@ export class StateManager {
      */
     async buildCompressedContext(maxRecentSteps: number = 5): Promise<CompressedContext> {
         const recentSteps = await this.getRecentSteps(maxRecentSteps);
-        const toolsUsed = [...new Set(recentSteps.filter(s => s.toolCalled).map(s => s.toolCalled!))];
+        const toolsUsed = Array.from(new Set(recentSteps.filter(s => s.toolCalled).map(s => s.toolCalled!)));
 
         // Build summary from recent steps
         const summaryParts = recentSteps.map(s => {

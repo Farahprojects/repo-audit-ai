@@ -123,7 +123,7 @@ export class ContextBuilder {
     summarizeSteps(steps: ReasoningStep[]): string {
         if (steps.length === 0) return 'No previous steps.';
 
-        const toolsUsed = [...new Set(steps.filter(s => s.toolCalled).map(s => s.toolCalled!))];
+        const toolsUsed = Array.from(new Set(steps.filter(s => s.toolCalled).map(s => s.toolCalled!)));
         const successfulTools = steps.filter(s => s.toolCalled && s.toolOutput).length;
 
         const summary = [
@@ -193,7 +193,7 @@ export class ContextBuilder {
      * Build compressed context for long conversations
      */
     compress(steps: ReasoningStep[]): CompressedContext {
-        const toolsUsed = [...new Set(steps.filter(s => s.toolCalled).map(s => s.toolCalled!))];
+        const toolsUsed = Array.from(new Set(steps.filter(s => s.toolCalled).map(s => s.toolCalled!)));
         const recentSteps = steps.slice(-this.config.maxRecentSteps);
 
         // Extract key facts
