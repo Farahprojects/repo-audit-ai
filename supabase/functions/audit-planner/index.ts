@@ -115,7 +115,29 @@ serve(async (req) => {
         };
 
         // Run Planner
-        const { result: plan, usage } = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
+        let plan: any;
+        let usage: any = { totalTokens: 0, promptTokens: 0, completionTokens: 0 };
+
+        if (tier === 'shape' || tier === 'free') {
+            // Free Tier / Shape: Bypass Planner and return static Metadata task
+            console.log(`[audit-planner] Generating static plan for ${tier} tier`);
+            plan = {
+                focusArea: "Metadata & Structure Audit",
+                tasks: [
+                    {
+                        id: `metadata-${Date.now()}`,
+                        role: "MetadataAnalyst",
+                        instruction: "Perform a structural and metadata analysis of the repository using heuristics. Do not read file contents.",
+                        targetFiles: [] // Metadata analyst doesn't need target files
+                    }
+                ]
+            };
+        } else {
+            // Paid Tiers: Run full Gemini Planner
+            const plannerResult = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
+            plan = plannerResult.result;
+            usage = plannerResult.usage;
+        }
 
         // Return the plan along with canonical tier and preflight data for workers (avoids N+1 queries)
         return createSuccessResponse({
