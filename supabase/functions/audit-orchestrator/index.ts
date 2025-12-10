@@ -79,6 +79,7 @@ serve(withPerformanceMonitoring(async (req) => {
       .upsert({
         preflight_id: preflightId,
         user_id: userId,
+        tier: tier,
         status: 'processing',
         progress: 0,
         logs: ['Audit orchestration started']
