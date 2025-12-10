@@ -164,6 +164,19 @@ export async function runWorker(
 
             const fileData = await response.json();
 
+            // Debug: Log the response structure for problematic files
+            if (!fileData.content) {
+                console.error(`🚨 No content in GitHub API response for ${f.path}:`, {
+                    type: fileData.type,
+                    size: fileData.size,
+                    encoding: fileData.encoding,
+                    hasContent: !!fileData.content,
+                    download_url: fileData.download_url,
+                    url: fileData.url
+                });
+                return null;
+            }
+
             let content: string;
             // GitHub API returns content as base64
             if (fileData.encoding === 'base64' && fileData.content) {
@@ -172,7 +185,7 @@ export async function runWorker(
                 // Sometimes content is already decoded
                 content = fileData.content;
             } else {
-                console.error(`🚨 No content in GitHub API response for ${f.path}`);
+                console.error(`🚨 Unexpected: content field exists but is falsy for ${f.path}`);
                 return null;
             }
 
