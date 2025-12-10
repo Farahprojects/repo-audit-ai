@@ -11,8 +11,7 @@
 // @ts-ignore - Deno environment provides global Deno object
 declare const Deno: any;
 
-// Deno.serve is built-in for modern Supabase Edge Functions
-// import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore - Deno environment provides these imports
 import { corsHeaders } from '../_shared/cors.ts';
 // @ts-ignore - Deno environment provides these imports
@@ -44,8 +43,7 @@ interface RoutingDecision {
   confidence: number; // 0-1, how confident we are in this choice
 }
 
-Deno.// @ts-ignore - Deno.serve is available in Deno runtime
-Deno.serve(withPerformanceMonitoring(async (req) => {
+serve(withPerformanceMonitoring(async (req) => {
   const tracer = LoggerService.startRequest('audit-dispatcher', {
     component: 'AuditDispatcher',
     function: 'serve'

@@ -1,5 +1,4 @@
-// Deno.serve is built-in for modern Supabase Edge Functions
-// import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from '@supabase/supabase-js';
 
 // Core orchestrator imports
@@ -49,8 +48,7 @@ interface OrchestratorRequest {
 // Main Handler
 // ============================================================================
 
-// @ts-ignore - Deno.serve is available in Deno runtime
-Deno.serve(async (req) => {
+serve(async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
