@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.orchestrator]
 verify_jwt = true
+
+[functions.audit-dispatcher]
+verify_jwt = true
