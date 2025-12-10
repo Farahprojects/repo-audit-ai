@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../src/integrations/supabase/client';
 import { FileText, Shield, ArrowLeft } from 'lucide-react';
 import { ViewState } from '../../types';
+import { sanitizeLegalContent } from '../../utils/contentSanitization';
 
 interface LegalProps {
   onNavigate: (view: ViewState) => void;
@@ -138,13 +139,13 @@ const Legal: React.FC<LegalProps> = ({ onNavigate }) => {
                   </span>
                 </div>
 
-                <div className="prose prose-slate max-w-none">
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: activeDocument.content.replace(/\n/g, '<br>').replace(/^## (.+)$/gm, '<h2 class="text-xl font-semibold text-slate-900 mt-8 mb-4">$1</h2>').replace(/^### (.+)$/gm, '<h3 class="text-lg font-medium text-slate-800 mt-6 mb-3">$1</h3>')
-                    }}
-                  />
-                </div>
+              <div className="prose prose-slate max-w-none">
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeLegalContent(activeDocument.content)
+                  }}
+                />
+              </div>
               </div>
             ) : (
               <div className="text-center py-12">

@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.2",
+    "dompurify": "^3.3.1",
     "lovable-tagger": "^1.1.11",
     "lucide-react": "^0.555.0",
     "react": "^19.2.1",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@deno/types": "^0.0.1",
     "@tailwindcss/postcss": "^4.1.17",
+    "@types/dompurify": "^3.0.5",
     "@types/node": "^22.19.2",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.22",

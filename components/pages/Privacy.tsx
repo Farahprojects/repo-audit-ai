@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../src/integrations/supabase/client';
 import { Shield, ArrowLeft } from 'lucide-react';
 import { ViewState } from '../../types';
+import { sanitizeLegalContent } from '../../utils/contentSanitization';
 
 interface PrivacyProps {
   onNavigate: (view: ViewState) => void;
@@ -113,7 +114,7 @@ const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
               <div className="prose prose-slate max-w-none">
                 <div
                   dangerouslySetInnerHTML={{
-                    __html: document.content.replace(/\n/g, '<br>').replace(/^## (.+)$/gm, '<h2 class="text-xl font-semibold text-slate-900 mt-8 mb-4">$1</h2>').replace(/^### (.+)$/gm, '<h3 class="text-lg font-medium text-slate-800 mt-6 mb-3">$1</h3>')
+                    __html: sanitizeLegalContent(document.content)
                   }}
                 />
               </div>
