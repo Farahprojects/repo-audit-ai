@@ -64,12 +64,12 @@ export class LoggerService {
   }
 
   static error(message: string, error?: Error, context: LogContext = {}): void {
-    const errorContext = { ...context, error };
+    const errorContext = { ...context, ...(error ? { error } : {}) };
     this.log('ERROR', message, errorContext, error?.stack);
   }
 
   static critical(message: string, error?: Error, context: LogContext = {}): void {
-    const errorContext = { ...context, error };
+    const errorContext = { ...context, ...(error ? { error } : {}) };
     this.log('CRITICAL', message, errorContext, error?.stack);
 
     // For critical errors, also send alerts (in production this would integrate with alerting systems)

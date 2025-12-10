@@ -29,10 +29,11 @@
   },
   "exclude": [
     "dist",
-    "node_modules"
+    "node_modules",
+    "supabase/functions/**/*",
+    "tests/**/*"
   ],
   "include": [
-    "**/*",
-    "supabase/functions/**/*"
+    "**/*"
   ]
 }

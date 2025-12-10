@@ -92,7 +92,7 @@ export class AuditExecutionService {
         type: 'file',
         size: f.size,
         // Content is explicitly undefined here, agents must fetch it
-        content: undefined,
+        content: undefined as unknown as string,
         url: f.url
       })),
       tier,
@@ -112,7 +112,7 @@ export class AuditExecutionService {
         file_count: preflightRecord.file_count
       } : undefined,
       detectedStack, // Pass to agents if needed, but mainly for response
-      githubToken // Server-decrypted token (never leaves backend)
+      githubToken: githubToken || undefined // Server-decrypted token (never leaves backend)
     };
 
     return context;

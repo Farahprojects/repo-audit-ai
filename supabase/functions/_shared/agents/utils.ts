@@ -42,7 +42,7 @@ function extractJson(text: string): any {
     // 2. Extract from markdown code blocks (```json ... ``` or just ``` ... ```)
     const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
     const match = text.match(codeBlockRegex);
-    if (match) {
+    if (match && match[1]) {
         try {
             return JSON.parse(match[1]);
         } catch (e) {

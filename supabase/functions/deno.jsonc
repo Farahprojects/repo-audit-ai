@@ -1,15 +1,12 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["deno.ns", "ES2022", "DOM", "DOM.Iterable", "WebWorker"],
-    "types": ["https://deno.land/x/types/deno.d.ts"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
-    "allowJs": true,
-    "noEmit": true,
-    "skipLibCheck": true,
+    "lib": [
+      "deno.ns",
+      "ES2022",
+      "DOM",
+      "DOM.Iterable",
+      "WebWorker"
+    ],
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,

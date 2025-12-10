@@ -95,7 +95,7 @@ export class ErrorTrackingService {
       level,
       message,
       category,
-      metadata
+      ...(metadata ? { metadata } : {}) // Only include if defined
     };
 
     this.breadcrumbs.push(breadcrumb);
@@ -140,12 +140,12 @@ export class ErrorTrackingService {
     return {
       name: err.name || 'Error',
       message: err.message || 'Unknown error',
-      stack: err.stack,
+      stack: err.stack || '', // Ensure string
       code: (err as any).code,
       cause: err.cause as Error,
       timestamp: new Date().toISOString(),
-      url: typeof globalThis !== 'undefined' ? (globalThis as any).location?.href : undefined,
-      userAgent: typeof globalThis !== 'undefined' ? (globalThis as any).navigator?.userAgent : undefined,
+      ...(typeof globalThis !== 'undefined' && (globalThis as any).location?.href ? { url: (globalThis as any).location.href } : {}),
+      ...(typeof globalThis !== 'undefined' && (globalThis as any).navigator?.userAgent ? { userAgent: (globalThis as any).navigator.userAgent } : {}),
       ...context
     };
   }
@@ -256,7 +256,9 @@ export class ErrorTrackingService {
       if (!acc[err.fingerprint]) {
         acc[err.fingerprint] = { count: 0, lastError: err.error.message };
       }
-      acc[err.fingerprint].count += err.occurrences;
+      if (acc[err.fingerprint]) {
+        acc[err.fingerprint].count += err.occurrences;
+      }
       return acc;
     }, {} as Record<string, { count: number; lastError: string }>);
 

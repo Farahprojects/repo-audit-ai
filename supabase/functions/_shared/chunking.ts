@@ -27,12 +27,15 @@ function groupByFolder(files: FileInfo[]): Map<string, FileInfo[]> {
     for (const file of files) {
         // Extract top-level folder (e.g., "src" from "src/components/Button.tsx")
         const parts = file.path.split('/');
-        const folder = parts.length > 1 ? parts[0] : '_root';
+        const folder = (parts.length > 1 ? parts[0] : '_root') || '_root';
 
         if (!folders.has(folder)) {
             folders.set(folder, []);
         }
-        folders.get(folder)!.push(file);
+        const fileList = folders.get(folder);
+        if (fileList) {
+            fileList.push(file);
+        }
     }
 
     return folders;

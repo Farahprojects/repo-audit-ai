@@ -31,9 +31,42 @@ run_test_suite() {
     fi
 }
 
+# Function to run type checks
+run_type_check() {
+    local check_name=$1
+    local check_command=$2
+
+    echo -e "\n🔍 Running ${check_name}..."
+    echo "----------------------------------------"
+
+    if $check_command 2>/dev/null; then
+        echo -e "${GREEN}✅ ${check_name} PASSED${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ ${check_name} FAILED${NC}"
+        return 1
+    fi
+}
+
 # Track test results
 PASSED=0
 FAILED=0
+
+# Run type checks
+echo -e "\n🔍 TYPE CHECKS"
+echo "=============="
+
+if run_type_check "Deno Functions Type Check" "deno check supabase/functions/**/*.{ts,tsx}"; then
+    ((PASSED++))
+else
+    ((FAILED++))
+fi
+
+if run_type_check "Frontend Type Check" "npx tsc --noEmit"; then
+    ((PASSED++))
+else
+    ((FAILED++))
+fi
 
 # Run unit tests
 echo -e "\n🏗️  UNIT TESTS"

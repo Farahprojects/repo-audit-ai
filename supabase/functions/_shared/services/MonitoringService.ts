@@ -87,14 +87,20 @@ export class MonitoringService {
       if (!acc[metric.name]) {
         acc[metric.name] = []
       }
-      acc[metric.name].push(metric)
+      const metricList = acc[metric.name];
+      if (metricList) {
+        metricList.push(metric)
+      }
       return acc
     }, {} as Record<string, MetricData[]>)
 
     // Calculate aggregations
     for (const [name, metrics] of Object.entries(grouped)) {
       const values = metrics.map(m => m.value)
-      summary.breakdowns[name] = {
+      if (!summary['breakdowns']) {
+        summary['breakdowns'] = {};
+      }
+      summary['breakdowns'][name] = {
         count: metrics.length,
         sum: values.reduce((a, b) => a + b, 0),
         avg: values.reduce((a, b) => a + b, 0) / values.length,
@@ -114,8 +120,9 @@ export class MonitoringService {
     const summary = this.getMetricsSummary(1) // Last hour
 
     // Check for high error rates
-    const errorMetrics = summary.breakdowns['audit.errors'] || { count: 0 }
-    const totalAudits = (summary.breakdowns['audit.duration'] || { count: 0 }).count
+    const breakdowns = summary['breakdowns'] as Record<string, any> || {};
+    const errorMetrics = breakdowns['audit.errors'] || { count: 0 }
+    const totalAudits = (breakdowns['audit.duration'] || { count: 0 }).count
 
     const errorRate = totalAudits > 0 ? (errorMetrics.count / totalAudits) * 100 : 0
 
@@ -144,7 +151,7 @@ export class MonitoringService {
     ).length
 
     const status = failingChecks === 0 ? 'healthy' :
-                   failingChecks === 1 ? 'degraded' : 'unhealthy'
+      failingChecks === 1 ? 'degraded' : 'unhealthy'
 
     return { status, checks }
   }

@@ -19,7 +19,7 @@ export class ComplexityAnalyzer {
         // Language analysis
         const languages = Object.keys(langData);
         const primary_language = languages.length > 0 ? languages[0] : 'Unknown';
-        const totalBytes = Object.values(langData).reduce((a: number, b: number) => a + b, 0) as number;
+        const totalBytes = (Object.values(langData) as number[]).reduce((a: number, b: number) => a + b, 0);
         const language_mix: Record<string, number> = {};
 
         languages.forEach(lang => {
