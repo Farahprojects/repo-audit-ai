@@ -6,7 +6,9 @@ import {
   validateFilePath,
   ValidationError,
   parseGitHubRepo
+// @ts-ignore - Deno environment provides these imports
 } from '../utils.ts';
+// @ts-ignore - Deno environment provides these imports
 import { VALID_TIERS, mapTier } from '../costEstimation.ts';
 
 export interface AuditRequest {

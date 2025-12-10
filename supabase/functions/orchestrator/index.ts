@@ -1,16 +1,13 @@
-/**
- * Universal Orchestrator - Edge Function Endpoint
- * 
- * This endpoint exposes the orchestrator with SSE streaming for real-time
- * reasoning visibility.
- */
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Deno.serve is built-in for modern Supabase Edge Functions
+// import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from '@supabase/supabase-js';
 
 // Core orchestrator imports
+// @ts-ignore - Deno environment provides these imports
 import { Orchestrator, createOrchestrator } from '../_shared/orchestrator/core/orchestrator.ts';
+// @ts-ignore - Deno environment provides these imports
 import { createToolRegistry } from '../_shared/orchestrator/core/tool-registry.ts';
+// @ts-ignore - Deno environment provides these imports
 import {
     Task,
     PermissionLevel,
@@ -19,8 +16,11 @@ import {
 } from '../_shared/orchestrator/core/types.ts';
 
 // Tool imports
+// @ts-ignore - Deno environment provides these imports
 import { githubTools } from '../_shared/orchestrator/tools/github-tools.ts';
+// @ts-ignore - Deno environment provides these imports
 import { dbTools } from '../_shared/orchestrator/tools/db-tools.ts';
+// @ts-ignore - Deno environment provides these imports
 import { auditTools } from '../_shared/orchestrator/tools/audit-tools.ts';
 
 const corsHeaders = {
@@ -49,7 +49,8 @@ interface OrchestratorRequest {
 // Main Handler
 // ============================================================================
 
-serve(async (req) => {
+// @ts-ignore - Deno.serve is available in Deno runtime
+Deno.serve(async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
@@ -65,8 +66,11 @@ serve(async (req) => {
 
     try {
         // Initialize Supabase client
+        // @ts-ignore - Deno.env is available in Deno runtime
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        // @ts-ignore - Deno.env is available in Deno runtime
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        // @ts-ignore - Deno.env is available in Deno runtime
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY')!;
 
         console.log('[Orchestrator] Environment check:', {
@@ -177,10 +181,16 @@ serve(async (req) => {
 
     } catch (error) {
         console.error('[Orchestrator] Error:', error);
+        console.error('[Orchestrator] Error stack:', error instanceof Error ? error.stack : 'No stack');
+
+        const errorResponse = {
+            error: error instanceof Error ? error.message : 'Internal server error',
+            timestamp: new Date().toISOString(),
+            requestId: crypto.randomUUID()
+        };
+
         return new Response(
-            JSON.stringify({
-                error: error instanceof Error ? error.message : 'Internal server error'
-            }),
+            JSON.stringify(errorResponse),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

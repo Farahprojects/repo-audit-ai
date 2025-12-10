@@ -8,13 +8,22 @@
  * Legacy system only accessible via explicit admin override.
  */
 
+// @ts-ignore - Deno environment provides global Deno object
+declare const Deno: any;
+
 // Deno.serve is built-in for modern Supabase Edge Functions
 // import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-ignore - Deno environment provides these imports
 import { corsHeaders } from '../_shared/cors.ts';
+// @ts-ignore - Deno environment provides these imports
 import { createClient } from '@supabase/supabase-js';
+// @ts-ignore - Deno environment provides these imports
 import { RequestValidationService } from '../_shared/services/RequestValidationService.ts';
+// @ts-ignore - Deno environment provides these imports
 import { LoggerService, RequestTracer } from '../_shared/services/LoggerService.ts';
+// @ts-ignore - Deno environment provides these imports
 import { ErrorTrackingService } from '../_shared/services/ErrorTrackingService.ts';
+// @ts-ignore - Deno environment provides these imports
 import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/services/RuntimeMonitoringService.ts';
 
 interface AuditRequest {
@@ -35,6 +44,7 @@ interface RoutingDecision {
   confidence: number; // 0-1, how confident we are in this choice
 }
 
+Deno.// @ts-ignore - Deno.serve is available in Deno runtime
 Deno.serve(withPerformanceMonitoring(async (req) => {
   const tracer = LoggerService.startRequest('audit-dispatcher', {
     component: 'AuditDispatcher',
@@ -55,7 +65,9 @@ Deno.serve(withPerformanceMonitoring(async (req) => {
     });
 
     // Initialize Supabase client
+    // @ts-ignore - Deno.env is available in Deno runtime
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    // @ts-ignore - Deno.env is available in Deno runtime
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -90,7 +102,6 @@ Deno.serve(withPerformanceMonitoring(async (req) => {
       preflightId,
       tier,
       userId,
-      options,
       correlationId
     });
 
@@ -107,7 +118,6 @@ Deno.serve(withPerformanceMonitoring(async (req) => {
 
     LoggerService.info('Routing decision made', {
       component: 'AuditDispatcher',
-      decision: routingDecision,
       preflightId,
       correlationId
     });
@@ -183,7 +193,7 @@ async function makeRoutingDecision(
   params: {
     preflightId: string;
     tier: string;
-    userId: string;
+    userId?: string;
     options: any;
   }
 ): Promise<RoutingDecision> {
@@ -219,14 +229,16 @@ async function makeRoutingDecision(
   }
 
   // 3. Check user-specific overrides (rare admin cases)
-  const userPreferences = await getUserPreferences(supabase, userId);
+  if (userId) {
+    const userPreferences = await getUserPreferences(supabase, userId);
 
-  if (userPreferences.forceLegacy) {
-    return {
-      useNewSystem: false,
-      reason: 'USER OVERRIDE: User explicitly requested legacy system',
-      confidence: 1.0
-    };
+    if (userPreferences.forceLegacy) {
+      return {
+        useNewSystem: false,
+        reason: 'USER OVERRIDE: User explicitly requested legacy system',
+        confidence: 1.0
+      };
+    }
   }
 
   // 4. DEFAULT: Use NEW orchestrator system
@@ -247,7 +259,7 @@ async function routeToOrchestrator(
   params: {
     preflightId: string;
     tier: string;
-    userId: string;
+    userId?: string;
     options: any;
     routingDecision: RoutingDecision;
     correlationId: string;
@@ -278,8 +290,7 @@ async function routeToOrchestrator(
     LoggerService.error('Orchestrator failed - NO FALLBACK', error as Error, {
       component: 'AuditDispatcher',
       preflightId,
-      correlationId,
-      errorDetails: error
+      correlationId
     });
 
     // NO FALLBACK - Let the new system succeed or fail on its own
@@ -289,8 +300,7 @@ async function routeToOrchestrator(
   LoggerService.info('Orchestrator completed successfully', {
     component: 'AuditDispatcher',
     preflightId,
-    correlationId,
-    hasData: !!data
+    correlationId
   });
 
   // Return response with routing metadata
@@ -314,7 +324,7 @@ async function routeToLegacyOrchestrator(
   params: {
     preflightId: string;
     tier: string;
-    userId: string;
+    userId?: string;
     options: any;
     routingDecision: RoutingDecision;
     correlationId: string;

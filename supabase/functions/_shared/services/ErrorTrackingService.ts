@@ -1,5 +1,8 @@
 /// <reference lib="deno.ns" />
 
+// @ts-ignore - Deno environment provides global Deno object
+declare const Deno: any;
+
 // Advanced Error Tracking and Reporting Service
 // Captures detailed error information for debugging and monitoring
 

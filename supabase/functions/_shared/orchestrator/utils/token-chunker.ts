@@ -162,7 +162,7 @@ export class TokenChunker {
         let currentChunk: typeof files = [];
         let currentTokens = 0;
 
-        for (const entry of dirGroups.entries()) {
+        for (const entry of Array.from(dirGroups.entries())) {
             const [dir, dirFiles] = entry;
             const dirTokens = dirFiles.reduce((sum: number, f: { path: string; content?: string }) =>
                 sum + this.estimateTokens(f.path) + this.estimateTokens(f.content || ''), 0

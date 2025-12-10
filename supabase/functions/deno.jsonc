@@ -2,6 +2,7 @@
   "compilerOptions": {
     "lib": [
       "deno.ns",
+      "deno.unstable",
       "ES2022",
       "DOM",
       "DOM.Iterable",
@@ -12,7 +13,8 @@
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "allowImportingTsExtensions": true
   },
   "imports": {
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.7.1"

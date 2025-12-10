@@ -1,5 +1,8 @@
 /// <reference lib="deno.ns" />
 
+// @ts-ignore - Deno environment provides global Deno object
+declare const Deno: any;
+
 // Real-time Runtime Monitoring and Performance Tracking
 // Provides live visibility into system performance and health
 

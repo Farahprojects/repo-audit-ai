@@ -55,7 +55,7 @@ export class ToolRegistry {
     getToolList(userPermissions?: PermissionLevel[]): ToolDescription[] {
         const descriptions: ToolDescription[] = [];
 
-        for (const tool of this.tools.values()) {
+        for (const tool of Array.from(this.tools.values())) {
             // If no permissions filter, include all tools
             if (!userPermissions) {
                 descriptions.push({
