@@ -2,29 +2,33 @@
 
 This directory contains isolated tests for the new Universal Reasoning Layer, completely separate from the old audit system.
 
+## ⚠️ Important: Authentication Required
+
+**The orchestrator requires proper user authentication.** The tests will show JWT errors until you authenticate through your application.
+
 ## Quick Start
 
 ### Prerequisites
-1. Set environment variables:
+1. **Authenticate first:** Log into your SCAI application in the browser
+2. **Get session token:** Copy the JWT from browser dev tools (Application → Local Storage → `supabase.auth.token`)
+3. **Set environment variables:**
    ```bash
-   export SUPABASE_URL="your-supabase-url"
+   export SUPABASE_URL="https://zlrivxntdtewfagrbtry.supabase.co"
    export SUPABASE_ANON_KEY="your-anon-key"
-   ```
-
-2. Get a preflight ID from your database:
-   ```sql
-   SELECT id, repo_url, created_at FROM preflights LIMIT 5;
+   export USER_JWT="your-session-jwt-from-browser"
    ```
 
 ### Run Tests
 
 ```bash
-# Test with legacy API format (backward compatible)
-node tests/orchestrator-test.js YOUR_PREFLIGHT_ID security
+# 1. Test endpoint accessibility (will show auth error)
+node tests/orchestrator-direct-test.js
 
-# Test with different tiers
-node tests/orchestrator-test.js YOUR_PREFLIGHT_ID performance
-node tests/orchestrator-test.js YOUR_PREFLIGHT_ID comprehensive
+# 2. Create a real preflight through the UI first, then:
+node tests/get-preflight.js  # Get available preflight IDs
+
+# 3. Test with real data (requires authentication)
+node tests/orchestrator-test.js YOUR_PREFLIGHT_ID security
 ```
 
 ## What the Tests Do

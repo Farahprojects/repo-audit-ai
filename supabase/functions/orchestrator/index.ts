@@ -69,7 +69,15 @@ serve(async (req) => {
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY')!;
 
+        console.log('[Orchestrator] Environment check:', {
+            hasSupabaseUrl: !!supabaseUrl,
+            hasSupabaseKey: !!supabaseKey,
+            hasGeminiKey: !!geminiApiKey,
+            geminiKeyLength: geminiApiKey?.length
+        });
+
         if (!geminiApiKey) {
+            console.error('[Orchestrator] GEMINI_API_KEY is missing from environment');
             throw new Error('GEMINI_API_KEY not configured');
         }
 
