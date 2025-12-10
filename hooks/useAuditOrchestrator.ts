@@ -81,8 +81,8 @@ export const useAuditOrchestrator = ({
     try {
       addLog(`[System] Starting server-side audit orchestration for ${tier}...`);
 
-      // Call the server-side orchestrator
-      const { data: orchestrationResponse, error: orchestrationError } = await supabase.functions.invoke('audit-orchestrator', {
+      // Call the server-side orchestrator (via dispatcher)
+      const { data: orchestrationResponse, error: orchestrationError } = await supabase.functions.invoke('audit-dispatcher', {
         body: {
           preflightId,
           tier,
