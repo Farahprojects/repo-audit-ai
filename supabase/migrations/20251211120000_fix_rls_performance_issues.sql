@@ -94,8 +94,39 @@ DROP POLICY IF EXISTS "Service role can manage oauth_csrf_states" ON oauth_csrf_
 CREATE POLICY "Service role can manage oauth_csrf_states" ON oauth_csrf_states
   FOR ALL USING ((select auth.role()) = 'service_role');
 
--- Fix service role only tables (no auth function calls needed)
--- email_messages, domain_slugs, email_notification_templates already have permissive policies for service role
+-- Fix email infrastructure tables (auth_rls_initplan)
+DROP POLICY IF EXISTS "Allow service role full access" ON public.email_messages;
+DROP POLICY IF EXISTS "Allow service role full access" ON public.domain_slugs;
+DROP POLICY IF EXISTS "Allow service role full access" ON public.email_notification_templates;
+
+CREATE POLICY "Allow service role full access" ON public.email_messages
+  FOR ALL USING ((select auth.role()) = 'service_role');
+
+CREATE POLICY "Allow service role full access" ON public.domain_slugs
+  FOR ALL USING ((select auth.role()) = 'service_role');
+
+CREATE POLICY "Allow service role full access" ON public.email_notification_templates
+  FOR ALL USING ((select auth.role()) = 'service_role');
+
+-- Fix legal table multiple permissive policies
+DROP POLICY IF EXISTS "legal_public_read" ON legal;
+DROP POLICY IF EXISTS "legal_service_manage" ON legal;
+
+-- Public read access for legal documents
+CREATE POLICY "legal_public_read" ON legal
+  FOR SELECT USING (true);
+
+-- Service role can manage (insert/update/delete) legal documents
+CREATE POLICY "legal_service_manage" ON legal
+  FOR INSERT USING ((select auth.role()) = 'service_role')
+  WITH CHECK ((select auth.role()) = 'service_role');
+
+CREATE POLICY "legal_service_update" ON legal
+  FOR UPDATE USING ((select auth.role()) = 'service_role')
+  WITH CHECK ((select auth.role()) = 'service_role');
+
+CREATE POLICY "legal_service_delete" ON legal
+  FOR DELETE USING ((select auth.role()) = 'service_role');
 
 -- Fix verification_codes policies (now that table exists)
 DROP POLICY IF EXISTS "Users can view their own verification codes" ON public.verification_codes;
