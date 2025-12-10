@@ -389,7 +389,8 @@ async function orchestrateAudit(
             preflightId,
             workerResults,
             tier: canonicalTier,
-            plannerUsage
+            plannerUsage,
+            userId
           }
         })
       ),
