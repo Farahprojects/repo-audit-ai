@@ -114,9 +114,7 @@ Provide a health score (0-100) and a brief summary.`;
         0.2,
         {
             role: 'MetadataAnalyst',
-            // If we can pass model override in options, we should. 
-            // Assuming existing callGemini supports it or defaults to a good one.
-            // We'll trust the default for now or update utils later if needed.
+            thinkingBudget: -1 // Enable dynamic thinking budget for better reasoning
         }
     );
 
