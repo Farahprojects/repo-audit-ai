@@ -58,7 +58,7 @@ export class RetryService {
         // Add jitter to prevent thundering herd
         const jitteredDelay = delay + Math.random() * 1000
 
-        console.log(`Attempt ${attempt} failed, retrying in ${Math.round(jitteredDelay)}ms:`, error.message)
+        console.log(`Attempt ${attempt} failed, retrying in ${Math.round(jitteredDelay)}ms:`, error instanceof Error ? error.message : String(error))
         await this.sleep(jitteredDelay)
       }
     }

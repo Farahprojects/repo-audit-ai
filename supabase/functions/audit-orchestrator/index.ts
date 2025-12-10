@@ -292,7 +292,7 @@ async function orchestrateAudit(
     })
 
     // Phase 2: Execution (Workers) with resilience
-    const workerResults = []
+    const workerResults: any[] = []
     const totalTasks = plan.tasks.length
     let completedTasks = 0
 

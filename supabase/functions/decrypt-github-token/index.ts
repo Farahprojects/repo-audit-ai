@@ -134,6 +134,6 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     console.error('Error in decrypt-github-token:', error);
-    return createErrorResponse(error.message || 'Internal server error', 500);
+    return createErrorResponse(error instanceof Error ? error.message : 'Internal server error', 500);
   }
 });

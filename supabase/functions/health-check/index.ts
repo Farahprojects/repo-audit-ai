@@ -56,7 +56,7 @@ serve(async (req) => {
     )
 
     // Determine overall status
-    const checkStatuses = [dbCheck.status, cbCheck.status, auditCheck.status, resourceCheck.status]
+    const checkStatuses = [dbCheck!.status, cbCheck!.status, auditCheck!.status, resourceCheck!.status]
     const hasFailures = checkStatuses.includes('fail')
     const hasWarnings = checkStatuses.includes('warn')
 
@@ -69,10 +69,10 @@ serve(async (req) => {
       version: '1.0.0', // You might want to read this from package.json or env
       uptime: Date.now() - START_TIME,
       checks: {
-        database: dbCheck,
-        circuitBreakers: cbCheck,
-        recentAudits: auditCheck,
-        systemResources: resourceCheck
+        database: dbCheck!,
+        circuitBreakers: cbCheck!,
+        recentAudits: auditCheck!,
+        systemResources: resourceCheck!
       },
       metrics: MonitoringService.getMetricsSummary(1) // Last hour
     }
@@ -200,8 +200,8 @@ async function checkRecentAudits(supabase: any): Promise<HealthCheck> {
     if (error) throw error
 
     const total = recentAudits?.length || 0
-    const failed = recentAudits?.filter(a => a.status === 'failed').length || 0
-    const completed = recentAudits?.filter(a => a.status === 'completed').length || 0
+    const failed = recentAudits?.filter((a: any) => a.status === 'failed').length || 0
+    const completed = recentAudits?.filter((a: any) => a.status === 'completed').length || 0
 
     const failureRate = total > 0 ? (failed / total) * 100 : 0
 

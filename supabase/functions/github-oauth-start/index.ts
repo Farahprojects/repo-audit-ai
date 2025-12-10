@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: error.message,
+        message: error instanceof Error ? error.message : 'Internal server error',
       }),
       {
         status: 500,

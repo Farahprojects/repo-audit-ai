@@ -382,10 +382,9 @@ serve(async (req) => {
 
             case 'invalidate':
                 const invalidateResult = await invalidatePreflight(supabase, repoUrl, userId);
-                response = {
-                    success: invalidateResult.success,
-                    error: invalidateResult.error
-                };
+                response = invalidateResult.error ?
+                    { success: invalidateResult.success, error: invalidateResult.error } :
+                    { success: invalidateResult.success };
                 break;
 
             default:

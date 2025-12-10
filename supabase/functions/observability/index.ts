@@ -171,9 +171,10 @@ serve(async (req) => {
     console.error('Observability API error:', error)
 
     // Log the error
+    const endpoint = new URL(req.url).searchParams.get('endpoint');
     LoggerService.error('Observability API error', error as Error, {
       component: 'ObservabilityAPI',
-      endpoint: new URL(req.url).searchParams.get('endpoint')
+      ...(endpoint && { endpoint })
     })
 
     return new Response(JSON.stringify({

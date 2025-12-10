@@ -69,14 +69,16 @@ serve(async (req) => {
         const fileMap = preflightRecord.repo_map || [];
         const detectedStack = detectCapabilities(fileMap);
 
-        const context: AuditContext = {
+        // Build context conditionally to handle exactOptionalPropertyTypes
+        const baseContext: AuditContext = {
             repoUrl: preflightRecord.repo_url,
-            files: fileMap.map(f => ({ ...f, type: 'file', content: undefined, url: f.url })),
+            files: fileMap.map((f: any) => ({ ...f, type: 'file', url: f.url })),
             tier,
             preflight: preflightRecord as any, // Use full preflight record
-            detectedStack,
-            githubToken: null
+            detectedStack
         };
+
+        const context: AuditContext = baseContext; // No githubToken needed in this case
 
         // 3. Deterministic Aggregation (No LLM)
 

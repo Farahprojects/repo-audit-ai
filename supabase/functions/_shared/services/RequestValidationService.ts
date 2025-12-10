@@ -107,6 +107,9 @@ export class RequestValidationService {
     }
 
     // Validate tier
+    if (!request.tier) {
+      throw new ValidationError('tier is required');
+    }
     const tier = mapTier(request.tier);
     if (!tier) {
       throw new ValidationError(`Invalid audit tier: ${request.tier}. Valid tiers: ${VALID_TIERS.join(', ')}`);
@@ -136,16 +139,24 @@ export class RequestValidationService {
       }
     }
 
-    return {
+    // Build ValidatedRequest conditionally to handle exactOptionalPropertyTypes
+    const baseRequest: ValidatedRequest = {
       repoUrl: request.repoUrl,
       fileMap,
       tier,
-      estimatedTokens: request.estimatedTokens,
-      githubToken: request.githubToken,
-      preflightId: request.preflightId,
-      preflightRecord,
       repoInfo
     };
+
+    // Add optional properties conditionally
+    const validatedRequest: ValidatedRequest = {
+      ...baseRequest,
+      ...(request.estimatedTokens !== undefined && { estimatedTokens: request.estimatedTokens }),
+      ...(request.githubToken && { githubToken: request.githubToken }),
+      ...(request.preflightId && { preflightId: request.preflightId }),
+      ...(preflightRecord && { preflightRecord })
+    };
+
+    return validatedRequest;
   }
 
   /**

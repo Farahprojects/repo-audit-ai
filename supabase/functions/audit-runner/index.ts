@@ -120,33 +120,39 @@ serve(async (req) => {
     // 5. CONTEXT BUILDING
     const detectedStack = detectCapabilities(finalFileMap);
 
-    const context: AuditContext = {
+    // Build context conditionally to handle exactOptionalPropertyTypes
+    const baseContext = {
       repoUrl: validatedRequest.repoUrl,
       files: finalFileMap.map(f => ({
         path: f.path,
         type: 'file',
         size: f.size,
-        content: undefined,
         url: f.url
+        // content omitted - agents must fetch it
       })),
       tier: validatedRequest.tier,
-      preflight: preflightRecord ? {
-        id: preflightRecord.id,
-        repo_url: preflightRecord.repo_url,
-        owner: preflightRecord.owner,
-        repo: preflightRecord.repo,
-        default_branch: preflightRecord.default_branch,
-        repo_map: preflightRecord.repo_map,
-        stats: preflightRecord.stats,
-        fingerprint: preflightRecord.fingerprint,
-        is_private: preflightRecord.is_private,
-        fetch_strategy: preflightRecord.fetch_strategy,
-        token_valid: preflightRecord.token_valid,
-        file_count: preflightRecord.file_count
-      } : undefined,
-      detectedStack,
-      githubToken: effectiveGitHubToken
-    };
+      ...(preflightRecord && {
+        preflight: {
+          id: preflightRecord.id,
+          repo_url: preflightRecord.repo_url,
+          owner: preflightRecord.owner,
+          repo: preflightRecord.repo,
+          default_branch: preflightRecord.default_branch,
+          repo_map: preflightRecord.repo_map,
+          stats: preflightRecord.stats,
+          fingerprint: preflightRecord.fingerprint,
+          is_private: preflightRecord.is_private,
+          fetch_strategy: preflightRecord.fetch_strategy,
+          token_valid: preflightRecord.token_valid,
+          file_count: preflightRecord.file_count
+        }
+      }),
+      detectedStack
+    } as AuditContext;
+
+    const context: AuditContext = effectiveGitHubToken ?
+      { ...baseContext, githubToken: effectiveGitHubToken } :
+      baseContext;
 
     // 6. SWARM PIPELINE EXECUTION
     const orchestrator = new AuditOrchestrator(GEMINI_API_KEY);
@@ -185,7 +191,7 @@ serve(async (req) => {
       productionReady: aggregatedReport.productionReady,
       categoryAssessments: aggregatedReport.categoryAssessments,
       seniorDeveloperAssessment: aggregatedReport.seniorDeveloperAssessment,
-      suspiciousFiles: aggregatedReport.suspiciousFiles,
+      suspiciousFiles: aggregatedReport.suspiciousFiles || [],
       overallVerdict: aggregatedReport.overallVerdict,
     };
 

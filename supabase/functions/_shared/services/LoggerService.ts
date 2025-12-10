@@ -77,14 +77,15 @@ export class LoggerService {
   }
 
   private static log(level: LogEntry['level'], message: string, context: LogContext, stack?: string): void {
-    const entry: LogEntry = {
+    const baseEntry = {
       timestamp: new Date().toISOString(),
       level,
       message,
       context: { ...context },
-      stack,
       correlationId: context.correlationId || this.generateCorrelationId()
     };
+
+    const entry: LogEntry = stack ? { ...baseEntry, stack } : baseEntry;
 
     // Add to in-memory log store
     this.logs.push(entry);

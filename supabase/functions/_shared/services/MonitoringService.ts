@@ -127,7 +127,7 @@ export class MonitoringService {
     const errorRate = totalAudits > 0 ? (errorMetrics.count / totalAudits) * 100 : 0
 
     // Check for slow response times
-    const avgDuration = (summary.breakdowns['audit.duration'] || { avg: 0 }).avg
+    const avgDuration = (summary['breakdowns']['audit.duration'] || { avg: 0 }).avg
 
     const checks = {
       errorRate: {

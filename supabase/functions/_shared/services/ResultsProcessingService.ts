@@ -74,7 +74,7 @@ export class ResultsProcessingService {
     const allSuspiciousFiles: any[] = [];
     let healthScoreSum = 0;
     let healthScoreCount = 0;
-    let mostSevereRiskLevel: string | null = null;
+    let mostSevereRiskLevel: keyof typeof riskOrder | null = null;
     let productionReady: boolean | null = null;
     let categoryAssessments: any = null;
     let seniorDeveloperAssessment: any = null;
@@ -137,7 +137,7 @@ export class ResultsProcessingService {
 
       // Track most severe risk level
       if (findings.riskLevel) {
-        const level = String(findings.riskLevel).toLowerCase();
+        const level = String(findings.riskLevel).toLowerCase() as keyof typeof riskOrder;
         if (!mostSevereRiskLevel || (riskOrder[level] ?? 99) < (riskOrder[mostSevereRiskLevel] ?? 99)) {
           mostSevereRiskLevel = level;
         }
@@ -191,7 +191,7 @@ export class ResultsProcessingService {
       healthScore: aggregatedReport.healthScore,
       summary: aggregatedReport.summary,
       issues: this.normalizeIssues(aggregatedReport.issues),
-      riskLevel: normalizeRiskLevel(aggregatedReport.riskLevel),
+      riskLevel: normalizeRiskLevel(aggregatedReport.riskLevel) || 'low',
       topStrengths: normalizeStrengthsOrIssues(aggregatedReport.topStrengths),
       topIssues: normalizeStrengthsOrIssues(aggregatedReport.topWeaknesses),
       suspiciousFiles: aggregatedReport.suspiciousFiles,

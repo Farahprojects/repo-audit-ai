@@ -85,19 +85,26 @@ export class AuditExecutionService {
     // Detect Capabilities based on file list
     const detectedStack = detectCapabilities(fileMap);
 
-    const context: AuditContext = {
+    // Build context conditionally to handle exactOptionalPropertyTypes
+    const baseContext: AuditContext = {
       repoUrl,
       files: fileMap.map(f => ({
         path: f.path,
         type: 'file',
         size: f.size,
         // Content is explicitly undefined here, agents must fetch it
-        content: undefined as unknown as string,
+        // content omitted - agents must fetch it
         url: f.url
       })),
       tier,
-      // Pass preflight data to agents - single source of truth
-      preflight: preflightRecord ? {
+      detectedStack // Pass to agents if needed, but mainly for response
+    };
+
+    // Add optional properties conditionally to handle exactOptionalPropertyTypes
+    const contextWithToken = githubToken ? { ...baseContext, githubToken } : baseContext;
+    const context: AuditContext = preflightRecord ? {
+      ...contextWithToken,
+      preflight: {
         id: preflightRecord.id,
         repo_url: preflightRecord.repo_url,
         owner: preflightRecord.owner,
@@ -110,10 +117,8 @@ export class AuditExecutionService {
         fetch_strategy: preflightRecord.fetch_strategy,
         token_valid: preflightRecord.token_valid,
         file_count: preflightRecord.file_count
-      } : undefined,
-      detectedStack, // Pass to agents if needed, but mainly for response
-      githubToken: githubToken || undefined // Server-decrypted token (never leaves backend)
-    };
+      }
+    } : (contextWithToken as AuditContext);
 
     return context;
   }

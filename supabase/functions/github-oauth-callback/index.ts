@@ -259,8 +259,8 @@ Deno.serve(async (req: Request) => {
     try {
       const parts = state.split(':');
       if (parts.length >= 4 && parts[0] === 'user_id') {
-        userId = parts[1];
-        timestamp = parseInt(parts[2], 10);
+        userId = parts[1] || null;
+        timestamp = parts[2] ? parseInt(parts[2], 10) : null;
 
         // Verify state exists in database and hasn't expired
         const { data: storedState, error: stateError } = await supabase

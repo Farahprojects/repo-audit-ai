@@ -33,9 +33,9 @@ export async function handleStatsAction(client: GitHubAPIClient, owner: string, 
         const langData = await langRes.json();
 
         const languages = Object.keys(langData);
-        const primaryLang = languages.length > 0 ? languages[0] : 'Unknown';
-        const totalBytes = Object.values(langData).reduce((a: number, b: number) => a + b, 0) as number;
-        const primaryBytes = (langData[primaryLang] as number) || 0;
+        const primaryLang = languages.length > 0 ? languages[0]! : 'Unknown';
+        const totalBytes = Object.values(langData as Record<string, number>).reduce((a: number, b: number) => a + b, 0);
+        const primaryBytes = (langData as Record<string, number>)[primaryLang] || 0;
         const languagePercent = totalBytes > 0 ? Math.round((primaryBytes / totalBytes) * 100) : 0;
 
         const estTokens = Math.round((repoData.size * 1024) / 4);
@@ -163,9 +163,9 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
 
         // 4. Build stats object
         const languages = Object.keys(langData);
-        const primaryLang = languages.length > 0 ? languages[0] : 'Unknown';
-        const totalBytes = Object.values(langData).reduce((a: number, b: number) => a + b, 0) as number;
-        const primaryBytes = (langData[primaryLang] as number) || 0;
+        const primaryLang = languages.length > 0 ? languages[0]! : 'Unknown';
+        const totalBytes = Object.values(langData as Record<string, number>).reduce((a: number, b: number) => a + b, 0);
+        const primaryBytes = (langData as Record<string, number>)[primaryLang] || 0;
         const languagePercent = totalBytes > 0 ? Math.round((primaryBytes / totalBytes) * 100) : 0;
 
         const estTokens = Math.round((repoData.size * 1024) / 4);
@@ -388,7 +388,7 @@ function handleError(error: any, owner?: string, repo?: string) {
 
     // Parse HTTP status code from error message
     const statusMatch = message.match(/(\d{3})/);
-    const statusCode = statusMatch ? parseInt(statusMatch[1]) : null;
+    const statusCode = statusMatch ? parseInt(statusMatch[1]!) : null;
 
     console.log('[handleError] Parsing error:', { message, statusCode, owner, repo });
 

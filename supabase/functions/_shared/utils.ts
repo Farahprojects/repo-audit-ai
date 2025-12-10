@@ -220,22 +220,22 @@ export function parseGitHubRepo(input: string): GitHubRepo | null {
   // Normalize whitespace and trim
   let url = input.trim();
 
-  // Handle simple owner/repo format first
-  if (!url.includes('.') && url.includes('/')) {
-    const parts = url.split('/').filter(Boolean);
-    if (parts.length === 2) {
-      const [owner, repoWithGit] = parts;
-      const repo = repoWithGit.replace(/\.git$/, "");
-      if (owner && repo) {
-        return {
-          owner,
-          repo,
-          normalized: `${owner}/${repo}`,
-        };
+    // Handle simple owner/repo format first
+    if (!url.includes('.') && url.includes('/')) {
+      const parts = url.split('/').filter(Boolean);
+      if (parts.length === 2) {
+        const [owner, repoWithGit] = parts;
+        const repo = repoWithGit!.replace(/\.git$/, "");
+        if (owner && repo) {
+          return {
+            owner,
+            repo,
+            normalized: `${owner}/${repo}`,
+          };
+        }
       }
+      return null;
     }
-    return null;
-  }
 
   // Convert SSH to https-like format
   // git@github.com:owner/repo.git
@@ -259,8 +259,8 @@ export function parseGitHubRepo(input: string): GitHubRepo | null {
 
     if (parts.length < 2) return null;
 
-    const owner = decodeURIComponent(parts[0]);
-    let repo = decodeURIComponent(parts[1]);
+    const owner = decodeURIComponent(parts[0]!);
+    let repo = decodeURIComponent(parts[1]!);
 
     // Strip .git
     repo = repo.replace(/\.git$/, "");

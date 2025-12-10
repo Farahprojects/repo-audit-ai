@@ -256,9 +256,8 @@ export class ErrorTrackingService {
       if (!acc[err.fingerprint]) {
         acc[err.fingerprint] = { count: 0, lastError: err.error.message };
       }
-      if (acc[err.fingerprint]) {
-        acc[err.fingerprint].count += err.occurrences;
-      }
+      // At this point we know acc[err.fingerprint] exists
+      acc[err.fingerprint]!.count += err.occurrences;
       return acc;
     }, {} as Record<string, { count: number; lastError: string }>);
 

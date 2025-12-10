@@ -85,14 +85,15 @@ serve(async (req) => {
         const fileMap = preflightRecord.repo_map || [];
         const detectedStack = detectCapabilities(fileMap);
 
+        // Build context conditionally to handle exactOptionalPropertyTypes
         const context: AuditContext = {
             repoUrl: preflightRecord.repo_url,
             files: fileMap.map((f: any) => ({
                 path: f.path,
                 type: 'file',
                 size: f.size,
-                content: undefined, // Content not needed for planning
                 url: f.url
+                // content omitted - not needed for planning
             })),
             tier,
             preflight: {
@@ -109,8 +110,8 @@ serve(async (req) => {
                 token_valid: preflightRecord.token_valid,
                 file_count: preflightRecord.file_count
             },
-            detectedStack,
-            githubToken: null // Not needed for planning (metadata only)
+            detectedStack
+            // githubToken omitted - not needed for planning (metadata only)
         };
 
         // Run Planner

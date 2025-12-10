@@ -75,13 +75,14 @@ serve(async (req) => {
         // 3. Construct Minimal Context
         // We only need enough context for the worker to fetch the *specific* files it needs
         // We pass the FULL file map so the worker can validate paths, but content is undefined
-        const context: AuditContext = {
+        // Build context conditionally to handle exactOptionalPropertyTypes
+        const baseContext: AuditContext = {
             repoUrl: preflightRecord.repo_url,
             files: preflightRecord.repo_map.map((f: any) => ({
                 path: f.path,
                 type: 'file',
                 size: f.size,
-                content: undefined,
+                // content omitted
                 url: f.url
             })),
             tier: 'worker', // Placeholder, not used by worker directly
@@ -98,9 +99,12 @@ serve(async (req) => {
                 fetch_strategy: preflightRecord.fetch_strategy,
                 token_valid: preflightRecord.token_valid,
                 file_count: preflightRecord.file_count
-            },
-            githubToken: effectiveGitHubToken
+            }
         };
+
+        const context: AuditContext = effectiveGitHubToken ?
+            { ...baseContext, githubToken: effectiveGitHubToken } :
+            baseContext;
 
         // 4. Construct the Task Object
         const task: WorkerTask = {

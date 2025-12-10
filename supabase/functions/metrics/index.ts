@@ -134,9 +134,9 @@ async function getAPIMetrics(supabase: any, hours: number): Promise<any> {
     if (error) throw error
 
     const totalCalls = data?.length || 0
-    const failedCalls = data?.filter(a => a.failed_at).length || 0
+    const failedCalls = data?.filter((a: any) => a.failed_at).length || 0
     const avgDuration = data?.length ?
-      data.reduce((sum, a) => sum + (a.actual_duration_seconds || 0), 0) / data.length : 0
+      data.reduce((sum: number, a: any) => sum + (a.actual_duration_seconds || 0), 0) / data.length : 0
 
     return {
       totalCalls,
@@ -162,13 +162,13 @@ async function getAuditStats(supabase: any, hours: number): Promise<any> {
 
     if (error) throw error
 
-    const byTier = (data || []).reduce((acc, audit) => {
+    const byTier = (data || []).reduce((acc: any, audit: any) => {
       const tier = audit.tier || 'unknown'
       if (!acc[tier]) acc[tier] = { count: 0, avgHealthScore: 0, scores: [] }
       acc[tier].count++
       if (audit.health_score) {
         acc[tier].scores.push(audit.health_score)
-        acc[tier].avgHealthScore = acc[tier].scores.reduce((a, b) => a + b, 0) / acc[tier].scores.length
+        acc[tier].avgHealthScore = acc[tier].scores.reduce((a: number, b: number) => a + b, 0) / acc[tier].scores.length
       }
       return acc
     }, {} as any)
@@ -197,7 +197,7 @@ async function getUserActivity(supabase: any, hours: number): Promise<any> {
 
     if (error) throw error
 
-    const uniqueUsers = new Set(data?.map(a => a.user_id).filter(Boolean))
+    const uniqueUsers = new Set(data?.map((a: any) => a.user_id).filter(Boolean))
     const totalAudits = data?.length || 0
     const avgAuditsPerUser = uniqueUsers.size > 0 ? totalAudits / uniqueUsers.size : 0
 
@@ -228,14 +228,14 @@ async function getRecentFailures(supabase: any, hours: number): Promise<any> {
 
     if (error) throw error
 
-    const failures = (data || []).map(failure => ({
+    const failures = (data || []).map((failure: any) => ({
       tier: failure.tier,
       error: failure.error_message,
       timestamp: failure.failed_at || failure.created_at,
       details: failure.error_details
     }))
 
-    const byTier = failures.reduce((acc, failure) => {
+    const byTier = failures.reduce((acc: any, failure: any) => {
       const tier = failure.tier || 'unknown'
       acc[tier] = (acc[tier] || 0) + 1
       return acc
