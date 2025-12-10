@@ -8,6 +8,7 @@ export const THINKING_BUDGET = {
     CEO: 20000,       // 20k tokens - fixed budget for comprehensive audit planning
     SYNTHESIZER: 100000, // 100k tokens - increased budget for thorough finding consolidation
     WORKER: 10000,    // 10k tokens - high budget for thorough scanning (8k-12k range)
+    MetadataAnalyst: 5000, // 5k tokens - lighter budget for metadata-only analysis
 } as const;
 
 export type AgentRole = 'CEO' | 'SYNTHESIZER' | 'WORKER' | 'MetadataAnalyst';

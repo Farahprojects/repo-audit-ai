@@ -73,17 +73,25 @@ serve(withPerformanceMonitoring(async (req) => {
       correlationId
     })
 
-    // Update audit status to processing
+    // Update audit status to processing (upsert with conflict handling)
     const { error: statusError } = await supabase
       .from('audit_status')
-      .upsert({
-        preflight_id: preflightId,
-        user_id: userId,
-        tier: tier,
-        status: 'processing',
-        progress: 0,
-        logs: ['Audit orchestration started']
-      })
+      .upsert(
+        {
+          preflight_id: preflightId,
+          user_id: userId,
+          tier: tier,
+          status: 'processing',
+          progress: 0,
+          logs: ['Audit orchestration started'],
+          started_at: new Date().toISOString(),
+          error_message: null,
+          error_details: null,
+          failed_at: null,
+          completed_at: null
+        },
+        { onConflict: 'preflight_id' }
+      )
 
     if (statusError) {
       const errorMsg = 'Failed to initialize audit status'
