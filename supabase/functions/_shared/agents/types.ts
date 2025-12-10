@@ -64,6 +64,9 @@ export interface PreflightData {
 
     // File count (cached for quick access)
     file_count: number;
+
+    // GitHub account ID (for private repo access)
+    github_account_id?: string;
 }
 
 export interface AuditContext {

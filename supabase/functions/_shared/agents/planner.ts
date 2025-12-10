@@ -7,76 +7,99 @@ Then, you must BREAK DOWN the goal into specific tasks for your workers.
 
 CRITICAL REQUIREMENTS:
 - You have 3-5 WORKERS available. Create EXACTLY the number of tasks that matches available workers.
-- DISTRIBUTE FILES EVENLY across all workers. Each worker should get roughly the same number of files.
 - ANALYZE the Audit Goal to extract specific CHECKLIST ITEMS and RULES.
-- **INTELLIGENT MAPPING**: You must map specific rules to the file types they apply to. 
+- **INTELLIGENT MAPPING**: You must map specific rules to the file types they apply to.
   - Do NOT assign SQL checks to frontend files.
   - Do NOT assign React/UI checks to backend files.
 - For each task, provide a DETAILED INSTRUCTION that includes *only* the checklist items relevant to the assigned files.
 - Assign a specialized ROLE to each task based on the audit focus areas.
-- Assign specific FILES to each task from the provided File Map. Max 20 files per task.
-- IMPORTANT: You can ONLY assign files that are listed in the File Map. Do NOT invent or guess file paths.
+- Use GLOB PATTERNS for targetFiles (e.g., "src/components/**", "*.sql") - NOT individual file lists.
+- Keep targetFiles array SHORT (2-5 patterns per task).
 - Each worker gets a comprehensive task description with actionable steps.
 
 PLANNING STEPS:
-1. Count total files and divide evenly among 3-5 workers
+1. Analyze the repository structure and file types provided
 2. Extract key checklist items/rules from the Audit Goal
-3. Group related files by functionality/type
-4. Assign specialized roles based on file groupings
-5. Filter the checklist items: Assign ONLY relevant rules to each worker based on their file types
+3. Group related functionality by file type patterns
+4. Assign specialized roles based on functionality groupings
+5. Filter the checklist items: Assign ONLY relevant rules to each worker based on their file patterns
 6. Write detailed instructions incorporating the filtered rules
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON object with this exact structure. Do NOT include any explanations, file listings, or text outside the JSON:
 
 {
-  "focusArea": "Executive summary of the plan...",
+  "focusArea": "Brief summary (1-2 sentences max)...",
   "tasks": [
     {
       "id": "task_1",
       "role": "Security Specialist",
-      "instruction": "Follow these specific rules RELEVANT to your files: [list filtered rules]. Check these files for: [specific checklist items]. Focus on: [detailed requirements].",
-      "targetFiles": ["file1.js", "file2.ts", "file3.sql"]
+      "instruction": "Check for: [specific items]. Focus on: [requirements].",
+      "targetFiles": ["src/auth/**", "supabase/functions/**"]  // USE GLOB PATTERNS, NOT individual files
     }
   ]
 }
 
-CRITICAL: Output ONLY the JSON. No markdown, no explanations, no file listings.`;
+CRITICAL RULES:
+- Use GLOB PATTERNS (e.g., "src/components/**", "*.sql") instead of listing individual files
+- Keep targetFiles array SHORT (2-5 patterns per task)
+- Keep focusArea to 1-2 sentences MAX
+- Total JSON output must be under 5KB`;
 
-// Validate and filter tasks to only include files that exist in the preflight
-function sanitizeSwarmPlan(plan: SwarmPlan, validFiles: Set<string>): SwarmPlan {
-  const sanitizedTasks: WorkerTask[] = [];
-  let totalInvalidFiles = 0;
+// Expand glob patterns to actual file paths
+function expandFilePatterns(patterns: string[], validFiles: Set<string>): string[] {
+  const expanded: string[] = [];
 
-  for (const task of plan.tasks) {
-    const originalCount = task.targetFiles?.length || 0;
+  for (const pattern of patterns) {
+    if (pattern.includes('*')) {
+      // Glob pattern - convert to regex and match against valid files
+      // ** matches any number of directories, * matches within directory
+      const regexPattern = '^' +
+        pattern
+          .replace(/\*\*/g, '.*')  // ** becomes .*
+          .replace(/\*/g, '[^/]*') // * becomes [^/]*
+          .replace(/\?/g, '[^/]')  // ? becomes [^/] (single char)
+        + '$';
 
-    // Filter to only valid file paths
-    const validTargetFiles = (task.targetFiles || []).filter(path => {
-      if (validFiles.has(path)) {
-        return true;
+      const regex = new RegExp(regexPattern);
+
+      for (const file of validFiles) {
+        if (regex.test(file)) {
+          expanded.push(file);
+        }
       }
-      totalInvalidFiles++;
-      return false;
-    });
-
-    // Only include task if it has at least one valid file
-    if (validTargetFiles.length > 0) {
-      sanitizedTasks.push({
-        ...task,
-        targetFiles: validTargetFiles
-      });
-
-      if (validTargetFiles.length < originalCount) {
-        console.warn(`📋 Task [${task.role}] had ${originalCount - validTargetFiles.length} invalid files removed`);
+    } else {
+      // Exact path
+      if (validFiles.has(pattern)) {
+        expanded.push(pattern);
       }
-    } else if (originalCount > 0) {
-      console.warn(`🚫 Task [${task.role}] removed entirely - ALL ${originalCount} files were invalid`);
     }
   }
 
-  if (totalInvalidFiles > 0) {
-    console.warn(`🚫 Planner attempted to assign ${totalInvalidFiles} total invalid files (removed)`);
+  return expanded;
+}
+
+// Validate and expand tasks - convert glob patterns to actual file paths
+function sanitizeSwarmPlan(plan: SwarmPlan, validFiles: Set<string>): SwarmPlan {
+  const sanitizedTasks: WorkerTask[] = [];
+
+  for (const task of plan.tasks) {
+    const patterns = task.targetFiles || [];
+
+    // Expand glob patterns to actual file paths
+    const expandedFiles = expandFilePatterns(patterns, validFiles);
+
+    console.log(`📋 Task [${task.role}]: Expanded ${patterns.length} patterns to ${expandedFiles.length} files`);
+
+    // Only include task if it has at least one file after expansion
+    if (expandedFiles.length > 0) {
+      sanitizedTasks.push({
+        ...task,
+        targetFiles: expandedFiles
+      });
+    } else {
+      console.warn(`🚫 Task [${task.role}] removed - no files matched patterns: ${patterns.join(', ')}`);
+    }
   }
 
   return {

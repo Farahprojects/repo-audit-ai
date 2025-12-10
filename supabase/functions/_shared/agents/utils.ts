@@ -192,7 +192,7 @@ export async function callGemini(
                         ],
                         generationConfig: {
                             temperature: temperature,
-                            maxOutputTokens: 16384,  // Increased for complex planner output
+                            maxOutputTokens: options.role === 'CEO' ? 32768 : 16384,  // Higher limit for CEO/planner
                             responseMimeType: "application/json",
                             // Role-based thinking budget configuration
                             thinkingConfig: {
