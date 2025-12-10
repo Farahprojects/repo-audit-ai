@@ -164,16 +164,42 @@ export async function runWorker(
 
             const fileData = await response.json();
 
-            // Debug: Log the response structure for problematic files
+            // Handle files without content (large files, empty files, symlinks, etc.)
             if (!fileData.content) {
-                console.error(`🚨 No content in GitHub API response for ${f.path}:`, {
+                console.warn(`⚠️ No content available for ${f.path}:`, {
                     type: fileData.type,
                     size: fileData.size,
                     encoding: fileData.encoding,
-                    hasContent: !!fileData.content,
-                    download_url: fileData.download_url,
-                    url: fileData.url
+                    hasDownloadUrl: !!fileData.download_url,
+                    isLargeFile: fileData.size > 1024 * 1024 // > 1MB
                 });
+
+                // For large files, try to fetch via download_url
+                if (fileData.download_url && fileData.size > 1024 * 1024) {
+                    console.log(`📥 Attempting to download large file ${f.path} via download_url`);
+                    try {
+                        const downloadResponse = await fetch(fileData.download_url, {
+                            headers: {
+                                'Authorization': `Bearer ${context.githubToken || apiKey}`,
+                                'Accept': 'application/vnd.github.v3.raw',
+                                'User-Agent': 'SCAI'
+                            }
+                        });
+
+                        if (downloadResponse.ok) {
+                            const content = await downloadResponse.text();
+                            console.log(`✅ Successfully downloaded ${f.path} (${content.length} chars)`);
+                            return `--- ${f.path} ---\n${content}`;
+                        } else {
+                            console.error(`❌ Failed to download ${f.path}: ${downloadResponse.status}`);
+                        }
+                    } catch (downloadError) {
+                        console.error(`❌ Download error for ${f.path}:`, downloadError);
+                    }
+                }
+
+                // Skip files we can't get content for
+                console.log(`⏭️ Skipping ${f.path} - no accessible content`);
                 return null;
             }
 
