@@ -26,7 +26,9 @@ PLANNING STEPS:
 5. Filter the checklist items: Assign ONLY relevant rules to each worker based on their file types
 6. Write detailed instructions incorporating the filtered rules
 
-Return JSON:
+OUTPUT FORMAT:
+Return ONLY a valid JSON object with this exact structure. Do NOT include any explanations, file listings, or text outside the JSON:
+
 {
   "focusArea": "Executive summary of the plan...",
   "tasks": [
@@ -37,7 +39,9 @@ Return JSON:
       "targetFiles": ["file1.js", "file2.ts", "file3.sql"]
     }
   ]
-}`;
+}
+
+CRITICAL: Output ONLY the JSON. No markdown, no explanations, no file listings.`;
 
 // Validate and filter tasks to only include files that exist in the preflight
 function sanitizeSwarmPlan(plan: SwarmPlan, validFiles: Set<string>): SwarmPlan {
@@ -106,7 +110,9 @@ PLANNING REQUIREMENTS:
 4. For each task, include ONLY the extracted rules that match the assigned files
 5. Provide detailed, actionable instructions for each worker
 
-Create a comprehensive task breakdown that ensures complete audit coverage with no gaps or overlaps.`;
+Create a comprehensive task breakdown that ensures complete audit coverage with no gaps or overlaps.
+
+OUTPUT: Return ONLY a valid JSON object. Do NOT include any explanations, file listings, thinking processes, or content outside the JSON structure.`;
 
   const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.1, { role: 'CEO' });
 
