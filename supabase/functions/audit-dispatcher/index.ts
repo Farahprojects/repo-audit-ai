@@ -8,7 +8,8 @@
  * Legacy system only accessible via explicit admin override.
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Deno.serve is built-in for modern Supabase Edge Functions
+// import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
 import { RequestValidationService } from '../_shared/services/RequestValidationService.ts';
@@ -19,7 +20,7 @@ import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/
 interface AuditRequest {
   preflightId: string;
   tier: string;
-  userId: string;
+  userId?: string;  // Optional - will get from JWT if not provided
   options?: {
     forceLegacy?: boolean;     // Force old system
     forceOrchestrator?: boolean; // Force new system
@@ -34,7 +35,7 @@ interface RoutingDecision {
   confidence: number; // 0-1, how confident we are in this choice
 }
 
-serve(withPerformanceMonitoring(async (req) => {
+Deno.serve(withPerformanceMonitoring(async (req) => {
   const tracer = LoggerService.startRequest('audit-dispatcher', {
     component: 'AuditDispatcher',
     function: 'serve'
