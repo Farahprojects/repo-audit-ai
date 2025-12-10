@@ -76,11 +76,70 @@ serve(async (req) => {
         const supabase = createClient(supabaseUrl, supabaseKey);
 
         // Parse request
-        const body: OrchestratorRequest = await req.json();
+        const body: OrchestratorRequest & { preflightId?: string; tier?: string } = await req.json();
 
-        if (!body.task?.description) {
+        let task: Task;
+
+        // LEGACY SUPPORT: If preflightId and tier are provided, build an audit task
+        if (body.preflightId && body.tier) {
+            console.log(`[Orchestrator] Legacy request received: preflight=${body.preflightId}, tier=${body.tier}`);
+
+            // 1. Fetch preflight to get repo details
+            const { data: preflight, error: preflightError } = await supabase
+                .from('preflights')
+                .select('*')
+                .eq('id', body.preflightId)
+                .single();
+
+            if (preflightError || !preflight) {
+                throw new Error(`Preflight not found: ${preflightError?.message}`);
+            }
+
+            // 2. Fetch system prompt for the tier
+            // Note: 'shape' and 'free' might not have prompts in the table if they were handled by logic
+            // But for 'security', 'performance', etc., they should be there.
+            const { data: promptData, error: promptError } = await supabase
+                .from('system_prompts')
+                .select('prompt')
+                .eq('tier', body.tier)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            let instruction = `Perform a ${body.tier} audit on this repository.`;
+            if (promptData?.prompt) {
+                instruction += `\n\nGUIDELINES FROM SYSTEM:\n${promptData.prompt}`;
+            } else {
+                console.warn(`[Orchestrator] No system prompt found for tier: ${body.tier}, using default.`);
+            }
+
+            task = {
+                id: crypto.randomUUID(),
+                description: instruction,
+                type: 'audit',
+                context: {
+                    repoUrl: preflight.repo_url,
+                    preflightId: body.preflightId,
+                    tier: body.tier,
+                    isPrivate: preflight.is_private
+                },
+                thinkingBudget: body.thinkingBudget || 'audit',
+                maxIterations: body.maxIterations || 50,
+                requiredPermissions: [PermissionLevel.READ, PermissionLevel.WRITE]
+            };
+
+        } else if (body.task?.description) {
+            // STANDARD REQUEST
+            task = {
+                id: crypto.randomUUID(),
+                description: body.task.description,
+                type: body.task.type || 'custom',
+                context: body.task.context,
+                thinkingBudget: body.thinkingBudget || 'audit',
+                maxIterations: body.maxIterations || 50
+            };
+        } else {
             return new Response(
-                JSON.stringify({ error: 'Missing task description' }),
+                JSON.stringify({ error: 'Missing task description or legacy params (preflightId, tier)' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
@@ -93,16 +152,6 @@ serve(async (req) => {
             const { data: { user } } = await supabase.auth.getUser(token);
             userId = user?.id;
         }
-
-        // Create task object
-        const task: Task = {
-            id: crypto.randomUUID(),
-            description: body.task.description,
-            type: body.task.type || 'custom',
-            context: body.task.context,
-            thinkingBudget: body.thinkingBudget || 'audit',
-            maxIterations: body.maxIterations || 50
-        };
 
         // Create tool registry with all available tools
         const toolRegistry = createToolRegistry();
