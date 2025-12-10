@@ -147,5 +147,13 @@ CREATE POLICY "Users can delete their own verification codes" ON public.verifica
 -- by combining overlapping policies into single consolidated ones
 -- ============================================
 
--- Note: The audit_results_chunks table mentioned in the linter issues
--- doesn't appear to exist in current migrations, so no fixes needed there
+-- Fix audit_results_chunks table policies (auth_rls_initplan + multiple_permissive_policies)
+DROP POLICY IF EXISTS "Users can view their own audit result chunks" ON audit_results_chunks;
+DROP POLICY IF EXISTS "Service role can manage all audit result chunks" ON audit_results_chunks;
+
+-- Consolidated policy: Users can view their own chunks, service role can manage all
+CREATE POLICY "audit_results_chunks_access_policy" ON audit_results_chunks
+  FOR ALL USING (
+    (select auth.role()) = 'service_role' OR
+    (select auth.uid()) = (select audits.user_id from audits where audits.id = audit_results_chunks.audit_id)
+  );
