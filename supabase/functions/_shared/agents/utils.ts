@@ -33,37 +33,61 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
 function extractJson(text: string): any {
+    // 0. Clean the text first - remove thinking tokens and other artifacts
+    let cleanText = text;
+
+    // Remove thinking tokens that might wrap the JSON
+    cleanText = cleanText.replace(/<thinking>[\s\S]*?<\/thinking>/g, '');
+    cleanText = cleanText.replace(/<\/thinking>[\s\S]*$/, ''); // Remove thinking at end
+
+    // Remove any leading/trailing whitespace
+    cleanText = cleanText.trim();
+
     // 1. Try generic JSON.parse first (fastest)
     try {
-        return JSON.parse(text);
+        return JSON.parse(cleanText);
     } catch (e) {
         // Continue to advanced extraction
     }
 
     // 2. Extract from markdown code blocks (```json ... ``` or just ``` ... ```)
     const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
-    const match = text.match(codeBlockRegex);
+    const match = cleanText.match(codeBlockRegex);
     if (match && match[1]) {
         try {
-            return JSON.parse(match[1]);
+            return JSON.parse(match[1].trim());
         } catch (e) {
             // content inside code block wasn't valid JSON, continue
         }
     }
 
-    // 3. Brute force: Find the first '{' and the last '}'
-    const firstOpen = text.indexOf('{');
-    const lastClose = text.lastIndexOf('}');
-
-    if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
-        const potentialJson = text.substring(firstOpen, lastClose + 1);
+    // 3. Look for JSON after thinking tokens
+    const thinkingAfterRegex = /<\/thinking>\s*(\{[\s\S]*?\})/;
+    const thinkingMatch = cleanText.match(thinkingAfterRegex);
+    if (thinkingMatch && thinkingMatch[1]) {
         try {
-            return JSON.parse(potentialJson);
+            return JSON.parse(thinkingMatch[1].trim());
         } catch (e) {
-            // failed to parse extracted block
+            // Continue to brute force
         }
     }
 
+    // 4. Brute force: Find the first '{' and the last '}'
+    const firstOpen = cleanText.indexOf('{');
+    const lastClose = cleanText.lastIndexOf('}');
+
+    if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+        const potentialJson = cleanText.substring(firstOpen, lastClose + 1);
+        try {
+            return JSON.parse(potentialJson);
+        } catch (e) {
+            console.warn(`[extractJson] Brute force failed. First 200 chars: ${cleanText.slice(0, 200)}`);
+            console.warn(`[extractJson] Last 200 chars: ${cleanText.slice(-200)}`);
+            console.warn(`[extractJson] Extracted block: ${potentialJson.slice(0, 200)}...`);
+        }
+    }
+
+    console.error(`[extractJson] Could not extract valid JSON. Full text length: ${cleanText.length}`);
     throw new Error("Could not extract valid JSON from response");
 }
 
@@ -141,7 +165,29 @@ export async function callGemini(
                 };
             } catch (e) {
                 console.warn(`[Gemini] JSON Parse Warning (Attempt ${attempt}/${MAX_RETRIES}):`, e);
-                console.debug(`[Gemini] Failed Content Preview: ${text.slice(0, 500)}...`);
+                console.warn(`[Gemini] Raw text length: ${text.length} chars`);
+                console.warn(`[Gemini] First 200 chars: ${text.slice(0, 200)}`);
+                console.warn(`[Gemini] Last 200 chars: ${text.slice(-200)}`);
+
+                // Try to identify common issues
+                if (text.includes('<thinking>') || text.includes('</thinking>')) {
+                    console.warn(`[Gemini] Response contains thinking tokens - extracting JSON from between them`);
+                    const thinkingRegex = /<\/thinking>\s*(\{[\s\S]*\})\s*$/;
+                    const thinkingMatch = text.match(thinkingRegex);
+                    if (thinkingMatch && thinkingMatch[1]) {
+                        try {
+                            const extractedJson = JSON.parse(thinkingMatch[1]);
+                            console.warn(`[Gemini] Successfully extracted JSON from after thinking tokens`);
+                            return {
+                                data: extractedJson,
+                                usage
+                            };
+                        } catch (thinkingError) {
+                            console.warn(`[Gemini] Failed to parse JSON after thinking tokens:`, thinkingError);
+                        }
+                    }
+                }
+
                 throw new Error('Invalid JSON response from Gemini');
             }
 
