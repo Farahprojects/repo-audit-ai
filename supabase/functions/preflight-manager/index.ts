@@ -101,6 +101,7 @@ async function fetchFreshPreflightData(
     stats: any;
     fingerprint: any;
     fileMap: FileMapItem[];
+    fileGroups: string[];
     isPrivate: boolean;
     defaultBranch: string;
 } | { error: string; errorCode: string; requiresAuth: boolean }> {
@@ -139,6 +140,7 @@ async function fetchFreshPreflightData(
         stats: data.stats,
         fingerprint: data.fingerprint,
         fileMap: data.fileMap || [],
+        fileGroups: data.fileGroups || [],
         isPrivate: data.stats?.isPrivate || false,
         defaultBranch: data.stats?.defaultBranch || 'main'
     };
@@ -235,6 +237,7 @@ async function getOrCreatePreflight(
         repo,
         default_branch: freshData.defaultBranch,
         repo_map: freshData.fileMap,
+        file_groups: freshData.fileGroups,
         stats: freshData.stats,
         fingerprint: freshData.fingerprint,
         is_private: freshData.isPrivate,
@@ -285,7 +288,8 @@ async function getOrCreatePreflight(
                 ...preflightData,
                 id: 'ephemeral-' + Date.now(),
                 created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                updated_at: new Date().toISOString(),
+                file_groups: freshData.fileGroups
             } as PreflightRecord,
             source: 'fresh'
         };

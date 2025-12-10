@@ -8,16 +8,53 @@ function getValidFilePaths(context: AuditContext): Set<string> {
     return new Set(context.files.map(f => f.path));
 }
 
-// Validate and filter task files against preflight
+// Expand glob patterns to actual file paths (same logic as planner)
+function expandFilePatterns(patterns: string[], validFiles: Set<string>): string[] {
+    const expanded: string[] = [];
+
+    for (const pattern of patterns) {
+        if (pattern.includes('*')) {
+            // Glob pattern - convert to regex and match against valid files
+            // ** matches any number of directories, * matches within directory
+            const regexPattern = '^' +
+                pattern
+                    .replace(/\*\*/g, '.*')  // ** becomes .*
+                    .replace(/\*/g, '[^/]*') // * becomes [^/]*
+                    .replace(/\?/g, '[^/]')  // ? becomes [^/] (single char)
+                + '$';
+
+            const regex = new RegExp(regexPattern);
+
+            for (const file of validFiles) {
+                if (regex.test(file)) {
+                    expanded.push(file);
+                }
+            }
+        } else {
+            // Exact path
+            if (validFiles.has(pattern)) {
+                expanded.push(pattern);
+            }
+        }
+    }
+
+    return expanded;
+}
+
+// Validate and expand task files against preflight
 function validateTargetFiles(
     taskFiles: string[],
     validPaths: Set<string>,
     taskRole: string
 ): { validFiles: string[]; invalidFiles: string[] } {
+    // First expand any glob patterns to actual file paths
+    const expandedFiles = expandFilePatterns(taskFiles, validPaths);
+
+    // Then validate that all expanded files exist in preflight
     const validFiles: string[] = [];
     const invalidFiles: string[] = [];
 
-    for (const path of taskFiles) {
+    for (const path of expandedFiles) {
         if (validPaths.has(path)) {
             validFiles.push(path);
         } else {
@@ -29,6 +66,7 @@ function validateTargetFiles(
         console.warn(`🚫 Worker [${taskRole}] attempted to access ${invalidFiles.length} files NOT in preflight:`, invalidFiles.slice(0, 5));
     }
 
+    console.log(`📋 Worker [${taskRole}]: Expanded ${taskFiles.length} patterns to ${validFiles.length} valid files`);
     return { validFiles, invalidFiles };
 }
 

@@ -27,6 +27,9 @@ export interface PreflightData {
     // Repository file map - list of all files with metadata
     repo_map: FileNode[];
 
+    // Grouped file summaries for better LLM understanding
+    fileGroups?: string[];
+
     // Stats snapshot
     stats: {
         files: number;

@@ -2,49 +2,23 @@ import { AuditContext, SwarmPlan, WorkerTask } from './types.ts';
 import { callGemini, GeminiUsage } from './utils.ts';
 
 const SYSTEM_PROMPT = `You are the CEO / PLANNER of a Code Audit Team.
-Your job is to read the Client's Audit Goal and the File Map.
-Then, you must BREAK DOWN the goal into specific tasks for your workers.
 
-CRITICAL REQUIREMENTS:
-- You have 3-5 WORKERS available. Create EXACTLY the number of tasks that matches available workers.
-- ANALYZE the Audit Goal to extract specific CHECKLIST ITEMS and RULES.
-- **INTELLIGENT MAPPING**: You must map specific rules to the file types they apply to.
-  - Do NOT assign SQL checks to frontend files.
-  - Do NOT assign React/UI checks to backend files.
-- For each task, provide a DETAILED INSTRUCTION that includes *only* the checklist items relevant to the assigned files.
-- Assign a specialized ROLE to each task based on the audit focus areas.
-- Use GLOB PATTERNS for targetFiles (e.g., "src/components/**", "*.sql") - NOT individual file lists.
-- Keep targetFiles array SHORT (2-5 patterns per task).
-- Each worker gets a comprehensive task description with actionable steps.
+You receive repository file groupings and audit rules.
+Create 3-5 tasks that cover different aspects of the codebase.
+All workers get the same audit rules - they just focus on different file groups.
 
-PLANNING STEPS:
-1. Analyze the repository structure and file types provided
-2. Extract key checklist items/rules from the Audit Goal
-3. Group related functionality by file type patterns
-4. Assign specialized roles based on functionality groupings
-5. Filter the checklist items: Assign ONLY relevant rules to each worker based on their file patterns
-6. Write detailed instructions incorporating the filtered rules
-
-OUTPUT FORMAT:
-Return ONLY a valid JSON object with this exact structure. Do NOT include any explanations, file listings, or text outside the JSON:
-
+Return ONLY JSON:
 {
-  "focusArea": "Brief summary (1-2 sentences max)...",
+  "focusArea": "Brief summary of the audit plan...",
   "tasks": [
     {
       "id": "task_1",
-      "role": "Security Specialist",
-      "instruction": "Check for: [specific items]. Focus on: [requirements].",
-      "targetFiles": ["src/auth/**", "supabase/functions/**"]  // USE GLOB PATTERNS, NOT individual files
+      "role": "Worker 1",
+      "instruction": "Follow the audit rules for these file groups",
+      "targetFiles": ["src/**", "*.ts"]
     }
   ]
-}
-
-CRITICAL RULES:
-- Use GLOB PATTERNS (e.g., "src/components/**", "*.sql") instead of listing individual files
-- Keep targetFiles array SHORT (2-5 patterns per task)
-- Keep focusArea to 1-2 sentences MAX
-- Total JSON output must be under 5KB`;
+}`;
 
 // Expand glob patterns to actual file paths
 function expandFilePatterns(patterns: string[], validFiles: Set<string>): string[] {
@@ -111,31 +85,15 @@ function sanitizeSwarmPlan(plan: SwarmPlan, validFiles: Set<string>): SwarmPlan 
 export async function runPlanner(context: AuditContext, apiKey: string, tierPrompt: string): Promise<{ result: SwarmPlan; usage: GeminiUsage }> {
   console.log('Running Pass 0: Planner (Swarm CEO)...');
 
-  // Build valid file set from preflight/context (single source of truth)
-  const validFiles = new Set(context.files.map(f => f.path));
+  // Use grouped file summaries for better LLM understanding
+  const fileGroups = context.preflight?.fileGroups || [];
+  const userPrompt = `Repository Overview:
+${fileGroups.join('\n')}
 
-  const fileList = context.files.map(f => f.path).join('\n');
-  const userPrompt = `PROJECT OVERVIEW:
-- Total files: ${context.files.length}
-- Worker capacity: 3-5 parallel workers available
-- File distribution: Distribute files EVENLY across workers
-
-PROJECT FILE MAP (ONLY use these files - do not invent any others):
-${fileList}
-
-CLIENT AUDIT GOAL & REQUIREMENTS:
+Audit rules:
 ${tierPrompt}
 
-PLANNING REQUIREMENTS:
-1. Extract the specific checklist items from the Audit Goal above
-2. Match each checklist item to the file types it applies to (e.g. "RLS checks" -> "*.sql", "React checks" -> "*.tsx")
-3. Create 3-5 tasks with EVEN file distribution
-4. For each task, include ONLY the extracted rules that match the assigned files
-5. Provide detailed, actionable instructions for each worker
-
-Create a comprehensive task breakdown that ensures complete audit coverage with no gaps or overlaps.
-
-OUTPUT: Return ONLY a valid JSON object. Do NOT include any explanations, file listings, thinking processes, or content outside the JSON structure.`;
+Create 3-5 tasks covering these file groups. All tasks use the same audit rules above.`;
 
   const { data, usage } = await callGemini(apiKey, SYSTEM_PROMPT, userPrompt, 0.1, { role: 'CEO' });
 
@@ -145,7 +103,8 @@ OUTPUT: Return ONLY a valid JSON object. Do NOT include any explanations, file l
     console.warn("Planner returned no tasks!");
   }
 
-  // SECURITY: Validate and sanitize the plan to remove any hallucinated file paths
+  // SECURITY: Validate and sanitize the plan (using empty set since we work with groups now)
+  const validFiles = new Set(context.files.map(f => f.path));
   const sanitizedPlan = sanitizeSwarmPlan(data, validFiles);
 
   if (sanitizedPlan.tasks.length === 0 && data.tasks.length > 0) {
