@@ -114,6 +114,20 @@ serve(async (req) => {
                 .maybeSingle();
 
             let instruction = `Perform a ${body.tier} audit on this repository.`;
+
+            // INJECT CONTEXT DIRECTLY
+            if (preflight) {
+                instruction += `\n\nREPOSITORY CONTEXT:\n`;
+                instruction += `URL: ${preflight.repo_url}\n`;
+                instruction += `Owner/Repo: ${preflight.owner}/${preflight.repo}\n`;
+                instruction += `Language: ${preflight.stats?.language}\n`;
+
+                if (preflight.repo_map) {
+                    // Truncate if too huge, but usually passed fully
+                    instruction += `\nFILE STRUCTURE (Repo Map):\n${JSON.stringify(preflight.repo_map, null, 2)}\n`;
+                }
+            }
+
             if (promptData?.prompt) {
                 instruction += `\n\nGUIDELINES FROM SYSTEM:\n${promptData.prompt}`;
             } else {

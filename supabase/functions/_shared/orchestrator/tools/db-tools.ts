@@ -312,6 +312,5 @@ export const getPreflightTool: Tool = {
 
 export const dbTools: Tool[] = [
     queryDbTool,
-    saveAuditResultsTool,
-    getPreflightTool
+    saveAuditResultsTool
 ];
