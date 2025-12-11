@@ -1,3 +1,6 @@
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<unknown>): void;
+};
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
 import { createClient } from '@supabase/supabase-js'
@@ -79,10 +82,50 @@ serve(withPerformanceMonitoring(async (req) => {
       correlationId
     })
 
-    // Update audit status to processing
-    // For now, skip audit status creation to avoid foreign key issues
-    // TODO: Fix user_id foreign key constraint for testing
-    const statusError = null; // Temporarily disable audit status
+    // Fetch preflight to get the real user_id
+    const { data: preflight, error: preflightError } = await supabase
+      .from('preflights')
+      .select('user_id')
+      .eq('id', preflightId)
+      .single()
+
+    if (preflightError || !preflight) {
+      const errorMsg = 'Failed to fetch preflight record'
+      LoggerService.error(errorMsg, undefined, {
+        component: 'AuditOrchestrator',
+        preflightId,
+        error: preflightError
+      })
+
+      tracer.end(false, { error: errorMsg })
+      return new Response(
+        JSON.stringify({ error: errorMsg }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const realUserId = preflight.user_id
+
+    LoggerService.info('Fetched preflight user_id', {
+      component: 'AuditOrchestrator',
+      preflightId,
+      correlationId
+    })
+
+    // Update audit status to processing with the real user_id and tier
+    const { error: statusError } = await supabase
+      .from('audit_status')
+      .insert({
+        preflight_id: preflightId,
+        user_id: realUserId,
+        tier: tier,
+        status: 'processing',
+        progress: 0,
+        logs: ['Audit orchestration started']
+      })
 
     if (statusError) {
       const errorMsg = 'Failed to initialize audit status'
@@ -383,7 +426,8 @@ async function orchestrateAudit(
             preflightId,
             workerResults,
             tier: canonicalTier,
-            plannerUsage
+            plannerUsage,
+            userId
           }
         })
       ),

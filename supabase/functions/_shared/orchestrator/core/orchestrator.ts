@@ -407,7 +407,7 @@ export class Orchestrator {
     ): Promise<void> {
         // We don't have a direct update method, but the tool output is captured
         // in the next step's context. For full tracking, you'd update the DB here.
-        console.log(`[Orchestrator] Tool ${step.toolCalled} result:`, {
+        console.log(`[Orchestrator] Tool ${step.toolCalled || 'unknown'} result:`, {
             success: toolResult.success,
             hasData: !!toolResult.data
         });

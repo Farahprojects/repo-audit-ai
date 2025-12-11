@@ -9,7 +9,7 @@ import { useGitHubAuth } from '../../../hooks/useGitHubAuth';
 
 interface PreflightModalProps {
   repoUrl: string;
-  onConfirm: (tier: 'shape' | 'conventions' | 'security', stats: AuditStats, fileMap: FileMapItem[], preflightId?: string) => void;
+  onConfirm: (tier: 'shape' | 'conventions' | 'performance' | 'security' | 'supabase_deep_dive', stats: AuditStats, fileMap: FileMapItem[], preflightId?: string) => void;
   onCancel: () => void;
 }
 

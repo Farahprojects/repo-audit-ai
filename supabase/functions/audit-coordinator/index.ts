@@ -38,10 +38,12 @@ serve(async (req) => {
         }
 
         const supabase = createSupabaseClient(ENV);
-        const userId = await getOptionalUserId(req, supabase);
 
         const body = await validateRequestBody(req);
-        const { preflightId, workerResults, tier, plannerUsage } = body;
+        const { preflightId, workerResults, tier, plannerUsage, userId: bodyUserId } = body;
+
+        // Use explicit userId from body (for internal calls) or fall back to JWT
+        const userId = bodyUserId || await getOptionalUserId(req, supabase);
 
         if (!preflightId || !workerResults || !Array.isArray(workerResults)) {
             return createErrorResponse('Missing required parameters: preflightId, workerResults', 400);

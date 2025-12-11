@@ -50,7 +50,7 @@ export class RequestValidationService {
     }
 
     // Validate tier is one of the allowed values
-    const validTiers = ['shape', 'conventions', 'performance', 'security'];
+    const validTiers = ['shape', 'conventions', 'performance', 'security', 'supabase_deep_dive'];
     if (!validTiers.includes(body.tier)) {
       return { isValid: false, error: `tier must be one of: ${validTiers.join(', ')}` };
     }
