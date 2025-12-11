@@ -10,8 +10,9 @@ verify_jwt = true
 [functions.audit-dispatcher]
 verify_jwt = true
 
+# Internal orchestration functions - DISABLE JWT (only called by other edge functions)
 [functions.audit-orchestrator]
-verify_jwt = true
+verify_jwt = false
 
 [functions.github-oauth-start]
 verify_jwt = true
