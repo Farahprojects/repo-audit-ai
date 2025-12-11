@@ -8,13 +8,18 @@
 -- We're moving to a simpler queue-based system.
 -- Since user confirmed "go hard, no rollback", we'll drop these immediately.
 
--- 1. Remove from realtime publication first
+-- 1. Remove from realtime publication first (if it exists)
 DO $$
 BEGIN
-    ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS reasoning_sessions;
-EXCEPTION WHEN OTHERS THEN
-    -- Ignore if not in publication
-    NULL;
+    -- Try to drop from publication - will fail silently if not in publication
+    EXECUTE 'ALTER PUBLICATION supabase_realtime DROP TABLE reasoning_sessions';
+EXCEPTION 
+    WHEN undefined_table THEN
+        -- Table doesn't exist, ignore
+        NULL;
+    WHEN OTHERS THEN
+        -- Table not in publication or other error, ignore
+        NULL;
 END;
 $$;
 

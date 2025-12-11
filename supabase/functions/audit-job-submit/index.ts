@@ -206,6 +206,29 @@ serve(withPerformanceMonitoring(async (req) => {
             duration
         });
 
+        // Trigger immediate processing (non-blocking)
+        // This uses the environment variables already configured in Supabase secrets
+        fetch(`${supabaseUrl}/functions/v1/audit-job-processor`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                trigger: 'immediate',
+                job_id: job.id,
+                preflight_id: preflightId,
+                tier
+            })
+        }).catch((err) => {
+            // Don't fail the request if trigger fails - job will be picked up by cron fallback
+            LoggerService.warn('Failed to trigger immediate processing', {
+                component: 'AuditJobSubmit',
+                jobId: job.id,
+                error: err.message
+            });
+        });
+
         // Return immediately with job ID
         return new Response(
             JSON.stringify({
@@ -214,7 +237,7 @@ serve(withPerformanceMonitoring(async (req) => {
                 preflightId,
                 tier,
                 status: 'queued',
-                message: 'Audit job queued successfully. Subscribe to audit_status for real-time updates.',
+                message: 'Audit job queued successfully. Processing started immediately.',
                 repoInfo: {
                     owner: preflight.owner,
                     repo: preflight.repo,

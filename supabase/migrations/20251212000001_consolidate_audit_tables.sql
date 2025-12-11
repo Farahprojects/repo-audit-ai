@@ -88,7 +88,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    v_cancelled BOOLEAN := FALSE;
+    v_row_count INTEGER;
 BEGIN
     UPDATE audit_jobs
     SET 
@@ -99,9 +99,9 @@ BEGIN
       AND user_id = p_user_id
       AND status IN ('pending', 'processing');
     
-    GET DIAGNOSTICS v_cancelled = ROW_COUNT > 0;
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
     
-    IF v_cancelled THEN
+    IF v_row_count > 0 THEN
         UPDATE audit_status
         SET 
             status = 'cancelled',
@@ -109,7 +109,7 @@ BEGIN
         WHERE job_id = p_job_id;
     END IF;
     
-    RETURN v_cancelled;
+    RETURN v_row_count > 0;
 END;
 $$;
 

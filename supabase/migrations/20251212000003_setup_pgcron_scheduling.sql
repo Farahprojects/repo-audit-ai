@@ -1,182 +1,234 @@
 -- ============================================================================
--- Migration: Setup pg_cron Scheduling
+-- Migration: Setup Instant Processing + Fallback Cron
 -- Created: 2025-12-12
--- Description: Schedule automated job processing and maintenance
+-- Description: Instant trigger-based processing with cron as fallback only
 -- ============================================================================
-
--- Enable pg_cron extension if not already enabled
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- 
+-- ARCHITECTURE:
+-- 1. Job INSERT → Trigger fires IMMEDIATELY → pg_net calls processor
+-- 2. Processor runs instantly (zero wait)
+-- 3. Cron only handles: stale jobs, retries, cleanup (fallback)
+--
+-- This gives instant UX while maintaining reliability.
+-- ============================================================================
 
 -- Enable pg_net for HTTP calls from within Postgres
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
 -- ============================================================================
--- JOB PROCESSING TRIGGER
+-- OPTIONAL INSTANT TRIGGER: Fires on every INSERT to audit_jobs
 -- ============================================================================
--- This function will be called by pg_cron to process pending jobs
+-- This trigger is OPTIONAL - the audit-job-submit function already triggers
+-- processing directly using environment variables. This serves as a backup.
+-- The pg_net.http_post is asynchronous, so it doesn't block the INSERT.
 
-CREATE OR REPLACE FUNCTION trigger_audit_job_processing()
+CREATE OR REPLACE FUNCTION trigger_instant_job_processing()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_supabase_url TEXT;
+    v_service_key TEXT;
+    v_request_id BIGINT;
+BEGIN
+    -- Get config from database settings
+    v_supabase_url := current_setting('app.supabase_url', true);
+    v_service_key := current_setting('app.service_role_key', true);
+    
+    -- If settings are configured, trigger immediate processing
+    IF v_supabase_url IS NOT NULL AND v_service_key IS NOT NULL THEN
+        SELECT net.http_post(
+            url := v_supabase_url || '/functions/v1/audit-job-processor',
+            headers := jsonb_build_object(
+                'Authorization', 'Bearer ' || v_service_key,
+                'Content-Type', 'application/json'
+            ),
+            body := jsonb_build_object(
+                'trigger', 'instant',
+                'job_id', NEW.id,
+                'preflight_id', NEW.preflight_id,
+                'tier', NEW.tier
+            )
+        ) INTO v_request_id;
+        
+        -- Log for debugging (optional)
+        RAISE LOG 'Triggered instant processing for job %, request_id: %', NEW.id, v_request_id;
+    ELSE
+        -- Settings not configured, job will be picked up by cron fallback
+        RAISE WARNING 'app.supabase_url or app.service_role_key not configured. Job % will be picked up by cron.', NEW.id;
+    END IF;
+    
+    RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+    -- Never fail the INSERT - job will be picked up by cron fallback
+    RAISE WARNING 'Instant trigger failed for job %: %. Will be picked up by cron.', NEW.id, SQLERRM;
+    RETURN NEW;
+END;
+$$;
+
+-- Drop existing trigger if exists
+DROP TRIGGER IF EXISTS trigger_instant_processing ON audit_jobs;
+
+-- Create the trigger (fires AFTER INSERT so job is already committed)
+CREATE TRIGGER trigger_instant_processing
+    AFTER INSERT ON audit_jobs
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_instant_job_processing();
+
+COMMENT ON FUNCTION trigger_instant_job_processing IS 'Instantly triggers job processing via pg_net HTTP call on every INSERT';
+
+-- ============================================================================
+-- OPTIONAL: Retry trigger for failed jobs that get reset to pending
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION trigger_retry_job_processing()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_supabase_url TEXT;
+    v_service_key TEXT;
+BEGIN
+    -- Only trigger on status change TO 'pending' (retry scenario)
+    IF OLD.status != 'pending' AND NEW.status = 'pending' THEN
+        v_supabase_url := current_setting('app.supabase_url', true);
+        v_service_key := current_setting('app.service_role_key', true);
+        
+        IF v_supabase_url IS NOT NULL AND v_service_key IS NOT NULL THEN
+            PERFORM net.http_post(
+                url := v_supabase_url || '/functions/v1/audit-job-processor',
+                headers := jsonb_build_object(
+                    'Authorization', 'Bearer ' || v_service_key,
+                    'Content-Type', 'application/json'
+                ),
+                body := jsonb_build_object(
+                    'trigger', 'retry',
+                    'job_id', NEW.id
+                )
+            );
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trigger_retry_processing ON audit_jobs;
+
+CREATE TRIGGER trigger_retry_processing
+    AFTER UPDATE ON audit_jobs
+    FOR EACH ROW
+    WHEN (OLD.status IS DISTINCT FROM NEW.status)
+    EXECUTE FUNCTION trigger_retry_job_processing();
+
+-- ============================================================================
+-- FALLBACK CRON: Only for stuck jobs and cleanup
+-- ============================================================================
+-- These run less frequently since instant processing handles most cases
+
+-- Enable pg_cron extension
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+-- Function that processes any pending jobs (fallback)
+CREATE OR REPLACE FUNCTION process_pending_jobs_fallback()
 RETURNS INTEGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    pending_count INTEGER;
-    request_id BIGINT;
+    v_pending_count INTEGER;
+    v_supabase_url TEXT;
+    v_service_key TEXT;
 BEGIN
-    -- Check if there are pending jobs
-    SELECT COUNT(*) INTO pending_count
+    -- Count pending jobs that haven't been picked up
+    SELECT COUNT(*) INTO v_pending_count
     FROM audit_jobs
     WHERE status = 'pending'
       AND scheduled_at <= NOW()
-      AND attempts < max_attempts;
+      AND attempts < max_attempts
+      -- Only process jobs that have been pending for more than 30 seconds
+      -- (gives instant trigger time to process)
+      AND created_at < NOW() - INTERVAL '30 seconds';
     
-    IF pending_count > 0 THEN
-        -- Trigger the job processor via HTTP
-        -- This uses pg_net to make an async HTTP call
-        SELECT net.http_post(
-            url := current_setting('app.supabase_url') || '/functions/v1/audit-job-processor',
-            headers := jsonb_build_object(
-                'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
-                'Content-Type', 'application/json'
-            ),
-            body := jsonb_build_object('trigger', 'pg_cron', 'pending_count', pending_count)
-        ) INTO request_id;
+    IF v_pending_count > 0 THEN
+        v_supabase_url := current_setting('app.supabase_url', true);
+        v_service_key := current_setting('app.service_role_key', true);
         
-        RETURN pending_count;
+        IF v_supabase_url IS NOT NULL AND v_service_key IS NOT NULL THEN
+            PERFORM net.http_post(
+                url := v_supabase_url || '/functions/v1/audit-job-processor',
+                headers := jsonb_build_object(
+                    'Authorization', 'Bearer ' || v_service_key,
+                    'Content-Type', 'application/json'
+                ),
+                body := jsonb_build_object(
+                    'trigger', 'cron_fallback',
+                    'batch_size', LEAST(v_pending_count, 5)
+                )
+            );
+        END IF;
     END IF;
     
-    RETURN 0;
+    RETURN v_pending_count;
 END;
 $$;
 
--- ============================================================================
--- PG_CRON SCHEDULES
--- ============================================================================
+-- Schedule fallback cron jobs (less frequent since instant handles most)
 
--- Note: These schedules require pg_cron to be enabled.
--- The cron jobs run in UTC timezone.
-
--- 1. Process jobs every 10 seconds (for low latency)
--- Note: pg_cron minimum resolution is 1 minute, so we use a workaround
--- We'll rely on pg_notify for immediate processing instead
-
--- Schedule job processing every minute as a fallback
+-- Fallback processor: Every 2 minutes (catches any jobs missed by instant trigger)
 SELECT cron.schedule(
-    'process-audit-jobs-fallback',
-    '* * * * *',  -- Every minute
-    $$SELECT trigger_audit_job_processing();$$
+    'fallback-process-pending-jobs',
+    '*/2 * * * *',
+    $$SELECT process_pending_jobs_fallback();$$
 );
 
--- 2. Recover stale jobs every 5 minutes
+-- Recover stale jobs: Every 5 minutes
 SELECT cron.schedule(
     'recover-stale-audit-jobs',
-    '*/5 * * * *',  -- Every 5 minutes
+    '*/5 * * * *',
     $$SELECT recover_stale_audit_jobs();$$
 );
 
--- 3. Cleanup old completed jobs daily at 3 AM UTC
+-- Daily cleanup: 3 AM UTC
 SELECT cron.schedule(
     'cleanup-old-audit-jobs',
-    '0 3 * * *',  -- 3 AM UTC daily
+    '0 3 * * *',
     $$SELECT cleanup_old_audit_jobs(30);$$
 );
 
--- 4. Cleanup old audit status records daily at 3:30 AM UTC
+-- Daily cleanup audit_status: 3:30 AM UTC
 SELECT cron.schedule(
     'cleanup-old-audit-status',
-    '30 3 * * *',  -- 3:30 AM UTC daily
+    '30 3 * * *',
     $$SELECT cleanup_old_audit_status();$$
 );
 
--- 5. Cleanup expired preflights daily at 4 AM UTC
+-- Daily cleanup expired preflights: 4 AM UTC
 SELECT cron.schedule(
     'cleanup-expired-preflights',
-    '0 4 * * *',  -- 4 AM UTC daily
+    '0 4 * * *',
     $$SELECT cleanup_expired_preflights();$$
 );
 
 -- ============================================================================
--- IMMEDIATE PROCESSING VIA TRIGGER
+-- CONFIGURATION: Optional database trigger for instant processing
 -- ============================================================================
--- This trigger fires immediately when a new job is inserted,
--- providing near-instant processing without waiting for pg_cron
+-- NOTE: The audit-job-submit function now triggers processing directly using
+-- environment variables (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY) from Supabase secrets.
+-- This database trigger is OPTIONAL and serves as a backup.
+--
+-- If you want to enable the database trigger (for redundancy), set these:
+-- ALTER DATABASE postgres SET app.supabase_url = 'https://zlrivxntdtewfagrbtry.supabase.co';
+-- ALTER DATABASE postgres SET app.service_role_key = '<your-service-role-key>';
+--
+-- Otherwise, instant processing works via the submit function's direct HTTP call.
 
-CREATE OR REPLACE FUNCTION notify_new_audit_job()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-    -- Notify listeners that a new job is available
-    PERFORM pg_notify('new_audit_job', json_build_object(
-        'job_id', NEW.id,
-        'preflight_id', NEW.preflight_id,
-        'tier', NEW.tier,
-        'priority', NEW.priority
-    )::text);
-    
-    -- Also trigger immediate processing via pg_net
-    PERFORM net.http_post(
-        url := current_setting('app.supabase_url', true) || '/functions/v1/audit-job-processor',
-        headers := jsonb_build_object(
-            'Authorization', 'Bearer ' || current_setting('app.service_role_key', true),
-            'Content-Type', 'application/json'
-        ),
-        body := jsonb_build_object('trigger', 'insert', 'job_id', NEW.id)
-    );
-    
-    RETURN NEW;
-EXCEPTION WHEN OTHERS THEN
-    -- Don't fail the insert if notification fails
-    RAISE WARNING 'Failed to notify new audit job: %', SQLERRM;
-    RETURN NEW;
-END;
-$$;
-
--- Create the trigger
-DROP TRIGGER IF EXISTS trigger_notify_new_audit_job ON audit_jobs;
-CREATE TRIGGER trigger_notify_new_audit_job
-    AFTER INSERT ON audit_jobs
-    FOR EACH ROW
-    EXECUTE FUNCTION notify_new_audit_job();
-
--- ============================================================================
--- CONFIGURATION
--- ============================================================================
--- These settings need to be configured in Supabase Dashboard or via SQL
-
--- Store URLs as custom settings (these need to be set manually)
--- ALTER DATABASE postgres SET app.supabase_url = 'https://your-project.supabase.co';
--- ALTER DATABASE postgres SET app.service_role_key = 'your-service-role-key';
-
-DO $$
-BEGIN
-    RAISE NOTICE '
-    ==========================================
-    PG_CRON SETUP COMPLETE
-    ==========================================
-    
-    Scheduled jobs:
-    - process-audit-jobs-fallback: Every minute
-    - recover-stale-audit-jobs: Every 5 minutes
-    - cleanup-old-audit-jobs: Daily at 3 AM UTC
-    - cleanup-old-audit-status: Daily at 3:30 AM UTC
-    - cleanup-expired-preflights: Daily at 4 AM UTC
-    
-    IMPORTANT: You need to set these database settings:
-    
-    ALTER DATABASE postgres SET app.supabase_url = ''https://your-project.supabase.co'';
-    ALTER DATABASE postgres SET app.service_role_key = ''your-service-role-key'';
-    
-    You can verify schedules with:
-    SELECT * FROM cron.job;
-    ==========================================
-    ';
-END;
-$$;
-
-COMMENT ON FUNCTION trigger_audit_job_processing IS 'Triggers the audit-job-processor edge function via HTTP';
-COMMENT ON FUNCTION notify_new_audit_job IS 'Immediately triggers job processing when a new job is inserted';
+COMMENT ON FUNCTION process_pending_jobs_fallback IS 'Fallback processor for jobs missed by instant trigger (runs every 2 min)';
+COMMENT ON TRIGGER trigger_instant_processing ON audit_jobs IS 'Fires immediately on INSERT, calls processor via pg_net';
