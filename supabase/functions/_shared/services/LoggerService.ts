@@ -36,6 +36,13 @@ export interface LogContext {
   issueCount?: number | undefined;
   totalTokens?: number | undefined;
   processingTime?: number | undefined;
+
+  // NEW: Job processing metrics
+  attempt?: number | undefined;
+  attempts?: number | undefined;
+  status?: number | string | undefined;
+  action?: string | undefined;
+  result?: any | undefined;
 }
 
 

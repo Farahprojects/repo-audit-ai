@@ -26,7 +26,9 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
   onSelectAudit
 }) => {
   // Get repoUrl from first related audit, fallback to constructed URL
-  const repoUrl = relatedAudits[0]?.repo_url || `https://github.com/${data.repoName}`;
+  const rawRepoUrl = relatedAudits[0]?.repo_url || `https://github.com/${data.repoName}`;
+  // Ensure repoUrl is always valid by normalizing it
+  const repoUrl = rawRepoUrl.startsWith('https://') ? rawRepoUrl : `https://github.com/${rawRepoUrl}`;
   const reportState = useReportState({ data, relatedAudits, onRunTier, onSelectAudit });
 
   useDropdownPositioning({

@@ -88,6 +88,14 @@ const AppContent: React.FC = () => {
 
   // Extracted inline functions to prevent recreation on every render
   const handleRunTier = useCallback(async (tier: string, url: string, config?: any) => {
+    console.log('[handleRunTier] Called with:', { tier, url, config });
+
+    // Validate URL before proceeding
+    if (!url || !url.includes('github.com')) {
+      console.error('[handleRunTier] Invalid URL:', url);
+      return;
+    }
+
     setRepoUrl(url);
 
     // When coming from report page, try to reuse existing preflight instead of always going through modal
