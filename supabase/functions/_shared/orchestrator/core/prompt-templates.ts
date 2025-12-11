@@ -67,8 +67,6 @@ OR if the task is complete:
 {"result": "your final output or summary"}
 </complete>
 
-DO NOT wrap your XML output in markdown code blocks (like \`\`\`xml). Output the raw XML tags directly.
-
 ## Current Task
 ${task.description}
 
@@ -94,7 +92,11 @@ export function buildContinuationPrompt(
     previousStep: ReasoningStep,
     toolOutput: unknown
 ): string {
-    const toolSection = previousStep.toolCalled ? `
+    return `## Previous Step
+<thinking>
+${previousStep.reasoning}
+</thinking>
+
 <tool_call>
 {"name": "${previousStep.toolCalled}", "input": ${JSON.stringify(previousStep.toolInput)}}
 </tool_call>
@@ -103,24 +105,12 @@ export function buildContinuationPrompt(
 \`\`\`json
 ${JSON.stringify(toolOutput, null, 2)}
 \`\`\`
-` : `
-(No tool was called in the previous step)
 
-CRITICAL: You must now either CALL A TOOL to make progress or MARK COMPLETE if you are done. Do not output only thinking.
-`;
-
-    return `## Previous Step
-<thinking>
-${previousStep.reasoning.trim()}
-</thinking>
-
-${toolSection}
-
-Now analyze the situation and decide the next step toward completing the task:
+Now analyze this output and decide the next step toward completing the task:
 "${task.description}"
 
 Remember to:
-1. Summarize what you learned (or why you didn't call a tool)
+1. Summarize what you learned
 2. Explain how this affects your approach
 3. Decide and execute the next step (or mark complete if done)`;
 }
@@ -267,50 +257,26 @@ export interface ParsedResponse {
 }
 
 export function parseOrchestratorResponse(response: string): ParsedResponse {
-    console.log('[Orchestrator] Parsing response length:', response?.length);
-
     const result: ParsedResponse = {
         thinking: '',
         isComplete: false
     };
 
-    // 1. Extract thinking
+    // Extract thinking
     const thinkingMatch = response.match(/<thinking>([\s\S]*?)<\/thinking>/);
     if (thinkingMatch) {
         result.thinking = thinkingMatch[1].trim();
-    } else {
-        // Fallback: Treat text outside of known tags as thinking
-        let residue = response;
-        residue = residue.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
-        residue = residue.replace(/<batch_call>[\s\S]*?<\/batch_call>/g, '');
-        residue = residue.replace(/<complete>[\s\S]*?<\/complete>/g, '');
-        residue = residue.replace(/<human_needed>[\s\S]*?<\/human_needed>/g, '');
-        residue = residue.replace(/<failed>[\s\S]*?<\/failed>/g, '');
-
-        // Strip out code block markers if they wrapped the whole response
-        residue = residue.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/i, '');
-
-        if (residue.trim()) {
-            result.thinking = residue.trim();
-        }
     }
 
     // Extract tool call
     const toolCallMatch = response.match(/<tool_call>([\s\S]*?)<\/tool_call>/);
     if (toolCallMatch) {
-        let cleanJson = toolCallMatch[1].trim();
-        // Remove markdown code blocks if present inside the tag
-        cleanJson = cleanJson.replace(/```(?:json)?/g, '').replace(/```/g, '').trim();
-
         try {
-            result.toolCall = JSON.parse(cleanJson);
+            result.toolCall = JSON.parse(toolCallMatch[1].trim());
         } catch (e) {
-            console.warn('[Orchestrator] Failed to parse tool_call JSON:', cleanJson, e);
-            result.thinking += `\n[SYSTEM NOTE: The model attempted to call a tool but the JSON was invalid. Raw content: ${cleanJson}]`;
+            console.warn('[Orchestrator] Failed to parse tool_call:', e);
         }
     }
-
-
 
     // Extract batch call
     const batchCallMatch = response.match(/<batch_call>([\s\S]*?)<\/batch_call>/);
@@ -353,12 +319,6 @@ export function parseOrchestratorResponse(response: string): ParsedResponse {
         } catch (e) {
             result.failureReason = failedMatch[1].trim();
         }
-    }
-
-    // FINAL FALLBACK: If we still have no thinking, no tool call, and no completion,
-    // explicitly capture the raw response as 'thinking' so the model sees what it did wrong.
-    if (!result.thinking && !result.toolCall && !result.isComplete && !result.batchCall && !result.isFailed) {
-        result.thinking = `[SYSTEM NOTE: The previous response was unparseable. It contained no <thinking> tags and no valid tool calls. Raw response length: ${response.length}. First 100 chars: ${response.slice(0, 100)}...]`;
     }
 
     return result;

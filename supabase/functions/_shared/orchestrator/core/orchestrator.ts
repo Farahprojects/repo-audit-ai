@@ -155,10 +155,6 @@ export class Orchestrator {
                 const parsed = parseOrchestratorResponse(response.text);
 
                 // OUTPUT: Stream/save reasoning step
-                if (!parsed.thinking && !parsed.toolCall && !parsed.isComplete && !parsed.batchCall) {
-                    throw new Error('Orchestrator received empty reasoning and no actions from LLM. Terminating loop.');
-                }
-
                 const step = await this.saveAndStreamStep(
                     parsed,
                     response.tokenUsage
@@ -192,7 +188,8 @@ export class Orchestrator {
                 if (parsed.toolCall) {
                     const toolResult = await this.executeTool(
                         parsed.toolCall.name,
-                        parsed.toolCall.input
+                        parsed.toolCall.input,
+                        task
                     );
 
                     lastToolOutput = toolResult;
@@ -201,7 +198,7 @@ export class Orchestrator {
                     await this.updateStepWithToolOutput(step, toolResult);
                 } else if (parsed.batchCall) {
                     // PARALLEL EXECUTION
-                    const batchResults = await this.executeBatch(parsed.batchCall);
+                    const batchResults = await this.executeBatch(parsed.batchCall, task);
                     lastToolOutput = Object.fromEntries(batchResults);
                 } else {
                     // No tool call and not complete - something is wrong
@@ -279,14 +276,12 @@ export class Orchestrator {
                     ],
                     generationConfig: {
                         temperature: 0.3,
-                        maxOutputTokens: 8192
-                    },
-                    safetySettings: [
-                        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-                    ]
+                        maxOutputTokens: 16384,
+                        thinkingConfig: {
+                            includeThoughts: true,
+                            thinkingBudget: thinkingBudget
+                        }
+                    }
                 })
             }
         );
@@ -297,24 +292,8 @@ export class Orchestrator {
         }
 
         const data = await response.json();
-        const candidate = data.candidates?.[0];
-        const text = candidate?.content?.parts?.[0]?.text || '';
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const usage = data.usageMetadata || {};
-
-        if (!text) {
-            console.warn('[Orchestrator] Empty response from Gemini. Full data:', JSON.stringify(data));
-
-            const finishReason = candidate?.finishReason;
-            const safetyRatings = candidate?.safetyRatings;
-
-            if (finishReason && finishReason !== 'STOP') {
-                throw new Error(`Gemini stopped unexpectedly. Reason: ${finishReason} Safety: ${JSON.stringify(safetyRatings)}`);
-            }
-
-            throw new Error('Gemini returned empty response with no error reason.');
-        }
-
-        console.log('[Orchestrator] Raw Gemini Response Text:', text.slice(0, 500) + (text.length > 500 ? '...' : ''));
 
         return {
             text,
@@ -359,7 +338,7 @@ export class Orchestrator {
     /**
      * Execute a tool
      */
-    private async executeTool(name: string, input: unknown): Promise<ToolResult> {
+    private async executeTool(name: string, input: unknown, task: Task): Promise<ToolResult> {
         console.log(`[Orchestrator] Executing tool: ${name}`);
 
         const context: ToolContext = {
@@ -367,8 +346,7 @@ export class Orchestrator {
             userId: this.config.userId,
             permissions: this.config.permissions || [PermissionLevel.READ],
             supabase: this.config.supabase,
-            apiKey: this.config.apiKey,
-            githubToken: this.config.githubToken
+            preflight: task.context?.preflight
         };
 
         const result = await this.toolRegistry.execute(name, input, context);
@@ -389,7 +367,8 @@ export class Orchestrator {
      * Execute batch of tools (parallel mode)
      */
     private async executeBatch(
-        batchCall: ParsedResponse['batchCall']
+        batchCall: ParsedResponse['batchCall'],
+        task: Task
     ): Promise<Map<string, ToolResult>> {
         if (!batchCall) return new Map();
 
@@ -400,8 +379,7 @@ export class Orchestrator {
             userId: this.config.userId,
             permissions: this.config.permissions || [PermissionLevel.READ],
             supabase: this.config.supabase,
-            apiKey: this.config.apiKey,
-            githubToken: this.config.githubToken
+            preflight: task.context?.preflight
         };
 
         return this.toolRegistry.executeParallel(batchCall.tools, context);

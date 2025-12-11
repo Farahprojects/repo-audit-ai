@@ -13,6 +13,98 @@ import {
 } from '../core/types.ts';
 
 // ============================================================================
+// Token Helpers
+// ============================================================================
+
+async function getGitHubToken(supabase: any, userId?: string, preflight?: any): Promise<string | undefined> {
+    // 1. Prefer preflight's github_account_id if available (more specific)
+    if (preflight?.github_account_id) {
+        try {
+            const { data } = await supabase
+                .from('github_accounts')
+                .select('access_token_encrypted')
+                .eq('id', preflight.github_account_id)
+                .maybeSingle();
+
+            if (data?.access_token_encrypted) {
+                const decrypted = await decryptToken(data.access_token_encrypted);
+                if (decrypted) return decrypted;
+            }
+        } catch (error) {
+            console.warn('Failed to fetch/decrypt GitHub token from preflight:', error);
+        }
+    }
+
+    // 2. Fallback to userId lookup
+    if (!userId) return undefined;
+
+    try {
+        const { data } = await supabase
+            .from('github_accounts')
+            .select('access_token_encrypted')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (!data?.access_token_encrypted) return undefined;
+
+        const decrypted = await decryptToken(data.access_token_encrypted);
+        return decrypted || undefined;
+    } catch (error) {
+        console.warn('Failed to fetch/decrypt GitHub token from user:', error);
+        return undefined;
+    }
+}
+
+async function decryptToken(encryptedToken: string): Promise<string | null> {
+    const secret = Deno.env.get('TOKEN_ENCRYPTION_KEY');
+    if (!secret) {
+        console.error('TOKEN_ENCRYPTION_KEY not set');
+        return null;
+    }
+
+    try {
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        const combined = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
+        const salt = combined.slice(0, 16);
+        const iv = combined.slice(16, 28);
+        const encrypted = combined.slice(28);
+
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            encoder.encode(secret),
+            'PBKDF2',
+            false,
+            ['deriveBits', 'deriveKey']
+        );
+
+        const key = await crypto.subtle.deriveKey(
+            {
+                name: 'PBKDF2',
+                salt: salt,
+                iterations: 100000,
+                hash: 'SHA-256'
+            },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['decrypt']
+        );
+
+        const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: iv },
+            key,
+            encrypted
+        );
+
+        return decoder.decode(decrypted);
+    } catch (decryptError) {
+        console.error('Failed to decrypt GitHub token:', decryptError);
+        return null;
+    }
+}
+
+// ============================================================================
 // Fetch GitHub File Tool
 // ============================================================================
 
@@ -46,8 +138,9 @@ export const fetchGitHubFileTool: Tool = {
                 'User-Agent': 'SCAI-Orchestrator'
             };
 
-            if (context.githubToken) {
-                headers['Authorization'] = `Bearer ${context.githubToken}`;
+            const token = await getGitHubToken(context.supabase, context.userId, context.preflight);
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
             }
 
             const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
@@ -138,8 +231,9 @@ export const listRepoFilesTool: Tool = {
                 'User-Agent': 'SCAI-Orchestrator'
             };
 
-            if (context.githubToken) {
-                headers['Authorization'] = `Bearer ${context.githubToken}`;
+            const token = await getGitHubToken(context.supabase, context.userId, context.preflight);
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
             }
 
             const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
@@ -215,8 +309,9 @@ export const getRepoInfoTool: Tool = {
                 'User-Agent': 'SCAI-Orchestrator'
             };
 
-            if (context.githubToken) {
-                headers['Authorization'] = `Bearer ${context.githubToken}`;
+            const token = await getGitHubToken(context.supabase, context.userId, context.preflight);
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
             }
 
             // Get repo info

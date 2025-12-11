@@ -49,7 +49,6 @@ export interface ToolContext {
     userId?: string;
     permissions: PermissionLevel[];
     supabase: unknown; // SupabaseClient - imported separately to avoid circular deps
-    githubToken?: string;
     preflight?: unknown; // PreflightData
 }
 
@@ -150,7 +149,6 @@ export interface OrchestratorConfig {
     userId?: string;
     permissions?: PermissionLevel[];
     parallelBatch?: ParallelBatchConfig;
-    githubToken?: string;
 }
 
 // ============================================================================

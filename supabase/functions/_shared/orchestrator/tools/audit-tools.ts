@@ -56,10 +56,11 @@ export const analyzeCodeFilesTool: Tool = {
             };
         }
 
-        if (!context.apiKey) {
+        const apiKey = Deno.env.get('GEMINI_API_KEY');
+        if (!apiKey) {
             return {
                 success: false,
-                error: 'Gemini API key not available'
+                error: 'GEMINI_API_KEY not configured'
             };
         }
 
@@ -112,7 +113,7 @@ Focus on identifying real issues and providing actionable insights.`;
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-goog-api-key': context.apiKey
+                        'x-goog-api-key': apiKey
                     },
                     body: JSON.stringify({
                         contents: [
@@ -364,10 +365,11 @@ export const deepAIAnalysisTool: Tool = {
             analysisType?: string;
         };
 
-        if (!context.apiKey) {
+        const apiKey = Deno.env.get('GEMINI_API_KEY');
+        if (!apiKey) {
             return {
                 success: false,
-                error: 'Gemini API key not available'
+                error: 'GEMINI_API_KEY not configured'
             };
         }
 
@@ -393,7 +395,7 @@ ${analysisContext ? `Context: ${JSON.stringify(analysisContext, null, 2)}` : ''}
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-goog-api-key': context.apiKey
+                        'x-goog-api-key': apiKey
                     },
                     body: JSON.stringify({
                         contents: [

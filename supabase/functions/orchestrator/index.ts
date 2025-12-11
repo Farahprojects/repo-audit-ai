@@ -103,24 +103,7 @@ serve(async (req) => {
                 throw new Error(`Preflight not found: ${preflightError?.message}`);
             }
 
-            // 2. Resolve GitHub token for private repos
-            let githubToken: string | null = null;
-            if (preflight.github_account_id && preflight.is_private) {
-                try {
-                    // Import the GitHubAuthenticator to get the token
-                    const { GitHubAuthenticator } = await import('../_shared/github/GitHubAuthenticator.ts');
-                    const authenticator = GitHubAuthenticator.getInstance();
-                    githubToken = await authenticator.getTokenByAccountId(preflight.github_account_id);
-
-                    if (!githubToken) {
-                        console.warn(`[Orchestrator] Failed to resolve GitHub token for private repo`);
-                    }
-                } catch (tokenError) {
-                    console.warn(`[Orchestrator] Error resolving GitHub token:`, tokenError);
-                }
-            }
-
-            // 3. Fetch system prompt for the tier
+            // 2. Fetch system prompt for the tier
             // Note: 'shape' and 'free' might not have prompts in the table if they were handled by logic
             // But for 'security', 'performance', etc., they should be there.
             const { data: promptData, error: promptError } = await supabase
@@ -146,7 +129,7 @@ serve(async (req) => {
                     preflightId: body.preflightId,
                     tier: body.tier,
                     isPrivate: preflight.is_private,
-                    githubToken: githubToken
+                    preflight: preflight
                 },
                 thinkingBudget: body.thinkingBudget || 'audit',
                 maxIterations: body.maxIterations || 50,
@@ -186,14 +169,11 @@ serve(async (req) => {
         console.log(`[Orchestrator] Starting task: ${task.description}`);
         console.log(`[Orchestrator] Tools available: ${toolRegistry.getToolNames().join(', ')}`);
 
-        // Extract githubToken from task context for tool usage
-        const githubToken = task.context?.githubToken as string | undefined;
-
         // Handle streaming vs non-streaming
         if (body.stream) {
-            return handleStreamingRequest(task, supabase, geminiApiKey, userId, toolRegistry, githubToken);
+            return handleStreamingRequest(task, supabase, geminiApiKey, userId, toolRegistry);
         } else {
-            return handleSyncRequest(task, supabase, geminiApiKey, userId, toolRegistry, githubToken);
+            return handleSyncRequest(task, supabase, geminiApiKey, userId, toolRegistry);
         }
 
     } catch (error) {
@@ -222,8 +202,7 @@ async function handleSyncRequest(
     supabase: any,
     apiKey: string,
     userId: string | undefined,
-    toolRegistry: any,
-    githubToken?: string
+    toolRegistry: any
 ): Promise<Response> {
     const orchestrator = createOrchestrator({
         apiKey,
@@ -231,7 +210,6 @@ async function handleSyncRequest(
         thinkingBudget: task.thinkingBudget || 'audit',
         supabase,
         userId,
-        githubToken,
         permissions: [PermissionLevel.READ, PermissionLevel.WRITE]
     }, toolRegistry);
 
@@ -255,8 +233,7 @@ async function handleStreamingRequest(
     supabase: any,
     apiKey: string,
     userId: string | undefined,
-    toolRegistry: any,
-    githubToken?: string
+    toolRegistry: any
 ): Promise<Response> {
     // Create a readable stream for SSE
     const encoder = new TextEncoder();
@@ -285,7 +262,6 @@ async function handleStreamingRequest(
                     thinkingBudget: task.thinkingBudget || 'audit',
                     supabase,
                     userId,
-                    githubToken,
                     permissions: [PermissionLevel.READ, PermissionLevel.WRITE],
                     streamCallback
                 }, toolRegistry);
