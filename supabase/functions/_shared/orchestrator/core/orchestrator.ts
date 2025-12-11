@@ -155,6 +155,10 @@ export class Orchestrator {
                 const parsed = parseOrchestratorResponse(response.text);
 
                 // OUTPUT: Stream/save reasoning step
+                if (!parsed.thinking && !parsed.toolCall && !parsed.isComplete && !parsed.batchCall) {
+                    throw new Error('Orchestrator received empty reasoning and no actions from LLM. Terminating loop.');
+                }
+
                 const step = await this.saveAndStreamStep(
                     parsed,
                     response.tokenUsage
@@ -275,12 +279,14 @@ export class Orchestrator {
                     ],
                     generationConfig: {
                         temperature: 0.3,
-                        maxOutputTokens: 16384,
-                        thinkingConfig: {
-                            includeThoughts: true,
-                            thinkingBudget: thinkingBudget
-                        }
-                    }
+                        maxOutputTokens: 8192
+                    },
+                    safetySettings: [
+                        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                    ]
                 })
             }
         );
@@ -291,8 +297,24 @@ export class Orchestrator {
         }
 
         const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const candidate = data.candidates?.[0];
+        const text = candidate?.content?.parts?.[0]?.text || '';
         const usage = data.usageMetadata || {};
+
+        if (!text) {
+            console.warn('[Orchestrator] Empty response from Gemini. Full data:', JSON.stringify(data));
+
+            const finishReason = candidate?.finishReason;
+            const safetyRatings = candidate?.safetyRatings;
+
+            if (finishReason && finishReason !== 'STOP') {
+                throw new Error(`Gemini stopped unexpectedly. Reason: ${finishReason} Safety: ${JSON.stringify(safetyRatings)}`);
+            }
+
+            throw new Error('Gemini returned empty response with no error reason.');
+        }
+
+        console.log('[Orchestrator] Raw Gemini Response Text:', text.slice(0, 500) + (text.length > 500 ? '...' : ''));
 
         return {
             text,
