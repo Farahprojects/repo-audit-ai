@@ -19,6 +19,12 @@ import { createClient } from '@supabase/supabase-js';
 import { LoggerService } from '../_shared/services/LoggerService.ts';
 import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/services/RuntimeMonitoringService.ts';
 
+// Declare EdgeRuntime global for Deno/Supabase Edge Functions
+declare const EdgeRuntime: {
+    waitUntil: (promise: Promise<any>) => void;
+};
+
+
 // Trigger job processing with retry and busy handling
 async function triggerJobProcessing(supabaseUrl: string, supabaseKey: string, jobId: string, preflightId: string, tier: string) {
     // Small delay to batch rapid submissions (prevents overwhelming the system)
@@ -287,8 +293,15 @@ serve(withPerformanceMonitoring(async (req) => {
             duration
         });
 
-        // Trigger immediate processing with retry and fallback
-        triggerJobProcessing(supabaseUrl, supabaseKey, job.id, preflightId, tier);
+        // Trigger immediate processing with retry and fallback (using waitUntil to ensure it runs)
+        if (typeof EdgeRuntime !== 'undefined') {
+            EdgeRuntime.waitUntil(
+                triggerJobProcessing(supabaseUrl, supabaseKey, job.id, preflightId, tier)
+            );
+        } else {
+            // Fallback for local testing/non-edge environments
+            triggerJobProcessing(supabaseUrl, supabaseKey, job.id, preflightId, tier);
+        }
 
         // Return immediately with job ID
         return new Response(

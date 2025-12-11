@@ -43,6 +43,7 @@ export interface LogContext {
   status?: number | string | undefined;
   action?: string | undefined;
   result?: any | undefined;
+  concurrency?: number | undefined;
 }
 
 
