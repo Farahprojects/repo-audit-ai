@@ -358,125 +358,134 @@ async function processJob(
             // BUT we will update the code to STORE findings this time so NEXT retry works.
         }
 
-        const tasksActual = plan.tasks; // processing all for correctness until storage improves, or filters if we add storage support now.
+        const tasksActual = tasksToRun; // Use the filtered list from resumability step
 
         // Let's implement storage support now in the updateProgress call below.
 
-        // Run workers in batches to manage concurrency and potential rate limits
+        // Limit concurrency using a sliding window (pMap pattern)
         const WORKER_CONCURRENCY = 5;
-        const workerResults = [];
-        const taskChunks = [];
 
-        // Chunk tasks
-        for (let i = 0; i < plan.tasks.length; i += WORKER_CONCURRENCY) {
-            taskChunks.push(plan.tasks.slice(i, i + WORKER_CONCURRENCY));
-        }
-
-        LoggerService.info(`Executing ${plan.tasks.length} tasks in ${taskChunks.length} batches`, {
+        LoggerService.info(`Executing ${tasksActual.length} tasks with concurrency ${WORKER_CONCURRENCY}`, {
             component: 'AuditJobProcessor',
             jobId: job.job_id,
             concurrency: WORKER_CONCURRENCY
         });
 
-        for (let i = 0; i < taskChunks.length; i++) {
-            const chunk = taskChunks[i];
-            const batchIndex = i + 1;
+        // Helper: Throttled Progress Updater
+        // Only update DB when:
+        // 1. A significant number of tasks completed (e.g., every 5)
+        // 2. Or we are finished
+        let completedCount = 0;
+        const totalToRun = tasksActual.length;
 
-            await updateProgress(
-                25 + Math.floor((i / taskChunks.length) * 60),
-                `Processing batch ${batchIndex}/${taskChunks.length} (${chunk.length} workers)...`
-            );
+        const throttledUpdateProgress = async () => {
+            const progressPercent = 25 + (completedCount / totalToRun) * 55;
+            // Only update DB every 5 tasks to reduce blocking
+            if (completedCount % 5 === 0 || completedCount === totalToRun) {
+                await updateProgress(
+                    Math.round(progressPercent),
+                    `Processing workers: ${completedCount}/${totalToRun} completed`,
+                    { worker_progress: workerProgress }
+                );
+            }
+        };
 
-            const chunkPromises = chunk.map(async (task: any) => {
-                const globalIndex = plan.tasks.indexOf(task);
-                const taskStartTime = Date.now();
-                const taskProgress = {
+        // Helper: pMap implementation for sliding window concurrency
+        async function pMap<T, R>(
+            items: T[],
+            concurrency: number,
+            fn: (item: T) => Promise<R>
+        ): Promise<R[]> {
+            const results: R[] = [];
+            const executing = new Set<Promise<void>>();
+
+            for (const item of items) {
+                const p = Promise.resolve().then(() => fn(item));
+                results.push(p as unknown as R); // We'll await all at the end
+
+                const e = p.then(() => { executing.delete(e); });
+                executing.add(e);
+
+                if (executing.size >= concurrency) {
+                    await Promise.race(executing);
+                }
+            }
+            return Promise.all(results);
+        }
+
+        // Execute workers
+        const newResults = await pMap(tasksActual, WORKER_CONCURRENCY, async (task: any) => {
+            const taskStartTime = Date.now();
+            const taskProgress = {
+                taskId: task.id,
+                role: task.role,
+                status: 'running',
+                startedAt: new Date().toISOString(),
+                completedAt: null as string | null,
+                issueCount: 0,
+                tokenUsage: 0,
+                error: null as string | null
+            };
+            workerProgress.push(taskProgress);
+
+            try {
+                // Create worker task
+                const workerTask: WorkerTask = {
+                    id: task.id,
+                    role: task.role,
+                    instruction: task.instruction,
+                    targetFiles: task.targetFiles
+                };
+
+                // Run worker inline (Blocker: This is the expensive LLM call)
+                const { result, usage } = await runWorker(context, workerTask, GEMINI_API_KEY);
+
+                taskProgress.status = 'completed';
+                taskProgress.completedAt = new Date().toISOString();
+                taskProgress.issueCount = result.findings?.issues?.length || 0;
+                taskProgress.tokenUsage = usage?.totalTokens || 0;
+                (taskProgress as any).cachedFindings = result.findings; // Save for resumability
+
+                completedCount++;
+                await throttledUpdateProgress(); // This is now throttled
+
+                return {
                     taskId: task.id,
                     role: task.role,
-                    status: 'running',
-                    startedAt: new Date().toISOString(),
-                    completedAt: null as string | null,
-                    issueCount: 0,
-                    tokenUsage: 0,
-                    error: null as string | null
+                    findings: result.findings || {},
+                    tokenUsage: usage?.totalTokens || 0,
+                    issues: result.findings?.issues || [],
+                    duration: Date.now() - taskStartTime
                 };
-                workerProgress.push(taskProgress);
 
-                try {
-                    // Check if we have a valid cached result in worker_progress from db load?
-                    // (Skipping complex cache hydration for this iteration to ensure safety)
+            } catch (err) {
+                taskProgress.status = 'failed';
+                taskProgress.completedAt = new Date().toISOString();
+                taskProgress.error = err instanceof Error ? err.message : String(err);
 
-                    // Create worker task
-                    const workerTask: WorkerTask = {
-                        id: task.id,
-                        role: task.role,
-                        instruction: task.instruction,
-                        targetFiles: task.targetFiles
-                    };
+                completedCount++;
+                await throttledUpdateProgress();
 
-                    // Run worker inline
-                    const { result, usage } = await runWorker(context, workerTask, GEMINI_API_KEY);
+                LoggerService.warn(`Worker failed: ${task.role}`, {
+                    component: 'AuditJobProcessor',
+                    jobId: job.job_id,
+                    taskId: task.id,
+                    error: taskProgress.error
+                });
 
-                    taskProgress.status = 'completed';
-                    taskProgress.completedAt = new Date().toISOString();
-                    taskProgress.issueCount = result.findings?.issues?.length || 0;
-                    taskProgress.tokenUsage = usage?.totalTokens || 0;
-
-                    // SAVE FINDINGS in progress to enable future resumability
-                    // We attach a simplified version of findings to the progress entry
-                    (taskProgress as any).cachedFindings = result.findings;
-
-                    // Update progress periodically (optimization: only update DB every few tasks, but here we do per batch mostly)
-                    if (globalIndex % 2 === 0 || globalIndex === totalTasks - 1) {
-                        const progressPercent = 25 + ((globalIndex + 1) / totalTasks) * 55;
-                        await updateProgress(
-                            Math.round(progressPercent),
-                            `Worker ${globalIndex + 1}/${totalTasks}: ${task.role} - found ${taskProgress.issueCount} issues`,
-                            { worker_progress: workerProgress }
-                        );
-                    }
-
-                    return {
-                        taskId: task.id,
-                        role: task.role,
-                        findings: result.findings || {},
-                        tokenUsage: usage?.totalTokens || 0,
-                        issues: result.findings?.issues || [],
-                        duration: Date.now() - taskStartTime
-                    };
-
-                } catch (err) {
-                    taskProgress.status = 'failed';
-                    taskProgress.completedAt = new Date().toISOString();
-                    taskProgress.error = err instanceof Error ? err.message : String(err);
-
-                    LoggerService.warn(`Worker failed: ${task.role}`, {
-                        component: 'AuditJobProcessor',
-                        jobId: job.job_id,
-                        taskId: task.id,
-                        error: taskProgress.error
-                    });
-
-                    return {
-                        taskId: task.id,
-                        role: task.role,
-                        findings: { error: taskProgress.error },
-                        tokenUsage: 0,
-                        issues: [],
-                        duration: Date.now() - taskStartTime
-                    };
-                }
-            });
-
-            // Wait for this batch to complete
-            const batchResults = await Promise.all(chunkPromises);
-            workerResults.push(...batchResults);
-
-            // Small delay between batches to be nice to rate limits
-            if (i < taskChunks.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                return {
+                    taskId: task.id,
+                    role: task.role,
+                    findings: { error: taskProgress.error },
+                    tokenUsage: 0,
+                    issues: [],
+                    duration: Date.now() - taskStartTime
+                };
             }
-        }
+        });
+
+        // Merge cached results with new results
+        const workerResults = [...cachedResults, ...newResults];
         const workerTokens = workerResults.reduce((sum, r) => sum + (r.tokenUsage || 0), 0);
         totalTokensUsed += workerTokens;
 
