@@ -187,9 +187,9 @@ export class PreflightService {
     static requiresGitHubAuth(response: PreflightResponse): boolean {
         if (response.success) return false;
 
-        return response.requiresAuth === true ||
+        return Boolean(response.requiresAuth) ||
             response.errorCode === 'PRIVATE_REPO' ||
-            response.error?.includes('PRIVATE_REPO');
+            Boolean(response.error?.includes('PRIVATE_REPO'));
     }
 
     /**
@@ -293,7 +293,7 @@ export async function findExistingPreflight(repoUrl: string): Promise<PreflightR
         ErrorLogger.info('Found existing preflight', { repoUrl, preflightId: data.id });
         return data as unknown as PreflightRecord;
     } catch (error) {
-        ErrorLogger.error('Failed to find existing preflight', error, { repoUrl });
+        ErrorLogger.error('Failed to find existing preflight', error instanceof Error ? error : new Error('Unknown error'), { repoUrl });
         return null;
     }
 }

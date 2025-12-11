@@ -162,7 +162,7 @@ export const useAuditOrchestrator = ({
       console.error('Orchestration Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addLog(`[Error] Failed to start audit: ${errorMessage}`);
-      ErrorLogger.error('Audit Orchestration Start Failed', error, { url, tier, preflightId });
+      ErrorLogger.error('Audit Orchestration Start Failed', error instanceof Error ? error : new Error('Unknown error'), { url, tier, preflightId });
 
       setTimeout(() => navigate('preflight'), 4000);
     }
