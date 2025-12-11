@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_jobs: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string | null
+          error_stack: string | null
+          id: string
+          input_data: Json | null
+          last_error: string | null
+          locked_until: string | null
+          max_attempts: number
+          output_data: Json | null
+          preflight_id: string
+          priority: number
+          scheduled_at: string | null
+          started_at: string | null
+          status: string
+          tier: string
+          updated_at: string | null
+          user_id: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string | null
+          error_stack?: string | null
+          id?: string
+          input_data?: Json | null
+          last_error?: string | null
+          locked_until?: string | null
+          max_attempts?: number
+          output_data?: Json | null
+          preflight_id: string
+          priority?: number
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string
+          tier: string
+          updated_at?: string | null
+          user_id: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string | null
+          error_stack?: string | null
+          id?: string
+          input_data?: Json | null
+          last_error?: string | null
+          locked_until?: string | null
+          max_attempts?: number
+          output_data?: Json | null
+          preflight_id?: string
+          priority?: number
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string
+          tier?: string
+          updated_at?: string | null
+          user_id?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_jobs_preflight_id_fkey"
+            columns: ["preflight_id"]
+            isOneToOne: true
+            referencedRelation: "preflights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_results_chunks: {
         Row: {
           audit_id: string
@@ -57,6 +131,13 @@ export type Database = {
             foreignKeyName: "audit_results_chunks_audit_id_fkey"
             columns: ["audit_id"]
             isOneToOne: false
+            referencedRelation: "audit_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_results_chunks_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
             referencedRelation: "audits"
             referencedColumns: ["id"]
           },
@@ -73,15 +154,19 @@ export type Database = {
           estimated_duration_seconds: number | null
           failed_at: string | null
           id: string
+          job_id: string | null
           logs: Json
+          plan_data: Json | null
           preflight_id: string
           progress: number
           report_data: Json | null
           started_at: string | null
           status: string
           tier: string
+          token_usage: Json | null
           updated_at: string | null
           user_id: string
+          worker_progress: Json | null
         }
         Insert: {
           actual_duration_seconds?: number | null
@@ -93,15 +178,19 @@ export type Database = {
           estimated_duration_seconds?: number | null
           failed_at?: string | null
           id?: string
+          job_id?: string | null
           logs?: Json
+          plan_data?: Json | null
           preflight_id: string
           progress?: number
           report_data?: Json | null
           started_at?: string | null
           status?: string
           tier: string
+          token_usage?: Json | null
           updated_at?: string | null
           user_id: string
+          worker_progress?: Json | null
         }
         Update: {
           actual_duration_seconds?: number | null
@@ -113,17 +202,28 @@ export type Database = {
           estimated_duration_seconds?: number | null
           failed_at?: string | null
           id?: string
+          job_id?: string | null
           logs?: Json
+          plan_data?: Json | null
           preflight_id?: string
           progress?: number
           report_data?: Json | null
           started_at?: string | null
           status?: string
           tier?: string
+          token_usage?: Json | null
           updated_at?: string | null
           user_id?: string
+          worker_progress?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "audit_status_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "audit_jobs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "audit_status_preflight_id_fkey"
             columns: ["preflight_id"]
@@ -533,124 +633,6 @@ export type Database = {
         }
         Relationships: []
       }
-      reasoning_checkpoints: {
-        Row: {
-          context_snapshot: string | null
-          created_at: string | null
-          id: string
-          last_successful_tool: string | null
-          recovery_strategies: string[] | null
-          session_id: string
-          step_number: number
-        }
-        Insert: {
-          context_snapshot?: string | null
-          created_at?: string | null
-          id?: string
-          last_successful_tool?: string | null
-          recovery_strategies?: string[] | null
-          session_id: string
-          step_number: number
-        }
-        Update: {
-          context_snapshot?: string | null
-          created_at?: string | null
-          id?: string
-          last_successful_tool?: string | null
-          recovery_strategies?: string[] | null
-          session_id?: string
-          step_number?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reasoning_checkpoints_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "reasoning_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reasoning_sessions: {
-        Row: {
-          created_at: string | null
-          id: string
-          metadata: Json | null
-          status: string | null
-          task_description: string
-          total_steps: number | null
-          total_tokens: number | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id: string
-          metadata?: Json | null
-          status?: string | null
-          task_description: string
-          total_steps?: number | null
-          total_tokens?: number | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          metadata?: Json | null
-          status?: string | null
-          task_description?: string
-          total_steps?: number | null
-          total_tokens?: number | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      reasoning_steps: {
-        Row: {
-          created_at: string | null
-          id: string
-          reasoning: string | null
-          session_id: string
-          step_number: number
-          token_usage: number | null
-          tool_called: string | null
-          tool_input: Json | null
-          tool_output: Json | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          reasoning?: string | null
-          session_id: string
-          step_number: number
-          token_usage?: number | null
-          tool_called?: string | null
-          tool_input?: Json | null
-          tool_output?: Json | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          reasoning?: string | null
-          session_id?: string
-          step_number?: number
-          token_usage?: number | null
-          tool_called?: string | null
-          tool_input?: Json | null
-          tool_output?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reasoning_steps_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "reasoning_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       system_prompts: {
         Row: {
           created_at: string
@@ -775,20 +757,109 @@ export type Database = {
           },
         ]
       }
+      audit_history: {
+        Row: {
+          created_at: string | null
+          current_progress: number | null
+          extra_data: Json | null
+          fingerprint: Json | null
+          health_score: number | null
+          id: string | null
+          issues: Json | null
+          job_attempts: number | null
+          job_last_error: string | null
+          job_status: string | null
+          owner: string | null
+          progress_logs: Json | null
+          repo: string | null
+          repo_url: string | null
+          stats: Json | null
+          summary: string | null
+          tier: string | null
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      acquire_audit_job: {
+        Args: { p_lock_duration?: unknown; p_worker_id: string }
+        Returns: {
+          input_data: Json
+          job_id: string
+          preflight_id: string
+          tier: string
+          user_id: string
+        }[]
+      }
+      acquire_audit_jobs_batch: {
+        Args: {
+          p_batch_size?: number
+          p_lock_duration?: unknown
+          p_worker_id: string
+        }
+        Returns: {
+          input_data: Json
+          job_id: string
+          preflight_id: string
+          tier: string
+          user_id: string
+        }[]
+      }
+      cancel_audit_job: {
+        Args: { p_job_id: string; p_user_id: string }
+        Returns: boolean
+      }
       chunk_audit_results: {
         Args: { p_audit_id: string; p_extra_data?: Json; p_issues?: Json }
         Returns: number
       }
       cleanup_expired_oauth_csrf_states: { Args: never; Returns: number }
       cleanup_expired_preflights: { Args: never; Returns: number }
-      cleanup_old_reasoning_sessions: {
-        Args: { days_old?: number }
-        Returns: number
+      cleanup_old_audit_jobs: { Args: { days_old?: number }; Returns: number }
+      complete_audit_job: {
+        Args: { p_job_id: string; p_output_data: Json }
+        Returns: undefined
+      }
+      fail_audit_job: {
+        Args: { p_error: string; p_error_stack?: string; p_job_id: string }
+        Returns: undefined
+      }
+      get_audit_queue_stats: {
+        Args: never
+        Returns: {
+          avg_processing_seconds: number
+          completed_today: number
+          failed_today: number
+          oldest_pending_minutes: number
+          pending_count: number
+          processing_count: number
+        }[]
       }
       get_complete_audit_data: { Args: { p_audit_id: string }; Returns: Json }
+      get_user_active_audits: {
+        Args: { p_user_id: string }
+        Returns: {
+          created_at: string
+          preflight_id: string
+          progress: number
+          repo_url: string
+          status: string
+          tier: string
+        }[]
+      }
       reconstruct_audit_results: { Args: { p_audit_id: string }; Returns: Json }
+      recover_stale_audit_jobs: { Args: never; Returns: number }
+      trigger_audit_job_processing: { Args: never; Returns: number }
     }
     Enums: {
       [_ in never]: never
