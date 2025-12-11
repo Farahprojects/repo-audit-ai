@@ -19,6 +19,87 @@ import { createClient } from '@supabase/supabase-js';
 import { LoggerService } from '../_shared/services/LoggerService.ts';
 import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/services/RuntimeMonitoringService.ts';
 
+// Trigger job processing with retry and busy handling
+async function triggerJobProcessing(supabaseUrl: string, supabaseKey: string, jobId: string, preflightId: string, tier: string) {
+    // Small delay to batch rapid submissions (prevents overwhelming the system)
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const maxRetries = 3;
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+        try {
+            const response = await fetch(`${supabaseUrl}/functions/v1/audit-job-processor`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    trigger: 'immediate',
+                    job_id: jobId,
+                    preflight_id: preflightId,
+                    tier,
+                    attempt: attempt + 1
+                })
+            });
+
+            if (response.ok) {
+                LoggerService.info('Job processing triggered successfully', {
+                    component: 'AuditJobSubmit',
+                    jobId,
+                    attempt: attempt + 1
+                });
+                return;
+            }
+
+            // If busy (429) or server error (5xx), retry with backoff
+            if (response.status === 429 || response.status >= 500) {
+                attempt++;
+                if (attempt < maxRetries) {
+                    const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
+                    LoggerService.warn(`Trigger attempt ${attempt} failed, retrying in ${delay}ms`, {
+                        component: 'AuditJobSubmit',
+                        jobId,
+                        status: response.status
+                    });
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                }
+            }
+
+            // Other errors - log and give up
+            LoggerService.warn('Failed to trigger job processing', {
+                component: 'AuditJobSubmit',
+                jobId,
+                status: response.status,
+                attempt: attempt + 1
+            });
+            break;
+
+        } catch (error) {
+            attempt++;
+            if (attempt < maxRetries) {
+                const delay = Math.pow(2, attempt) * 1000;
+                LoggerService.warn(`Trigger attempt ${attempt} failed with exception, retrying in ${delay}ms`, {
+                    component: 'AuditJobSubmit',
+                    jobId,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+
+            LoggerService.error('All trigger attempts failed', error as Error, {
+                component: 'AuditJobSubmit',
+                jobId,
+                attempts: attempt
+            });
+            break;
+        }
+    }
+}
+
 interface AuditJobRequest {
     preflightId: string;
     tier: string;
@@ -206,28 +287,8 @@ serve(withPerformanceMonitoring(async (req) => {
             duration
         });
 
-        // Trigger immediate processing (non-blocking)
-        // This uses the environment variables already configured in Supabase secrets
-        fetch(`${supabaseUrl}/functions/v1/audit-job-processor`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${supabaseKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                trigger: 'immediate',
-                job_id: job.id,
-                preflight_id: preflightId,
-                tier
-            })
-        }).catch((err) => {
-            // Don't fail the request if trigger fails - job will be picked up by cron fallback
-            LoggerService.warn('Failed to trigger immediate processing', {
-                component: 'AuditJobSubmit',
-                jobId: job.id,
-                error: err.message
-            });
-        });
+        // Trigger immediate processing with retry and fallback
+        triggerJobProcessing(supabaseUrl, supabaseKey, job.id, preflightId, tier);
 
         // Return immediately with job ID
         return new Response(

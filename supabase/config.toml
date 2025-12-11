@@ -13,6 +13,9 @@ verify_jwt = true
 [functions.audit-job-processor]
 verify_jwt = false
 
+[functions.job-recovery]
+verify_jwt = true
+
 [functions.github-oauth-start]
 verify_jwt = true
 
