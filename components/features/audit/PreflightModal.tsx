@@ -6,6 +6,7 @@ import { PreflightService, PreflightRecord, fetchPreflight } from '../../../serv
 import { CostEstimator, AuditTier } from '../../../services/costEstimator';
 import GitHubConnectModal from '../auth/GitHubConnectModal';
 import { useGitHubAuth } from '../../../hooks/useGitHubAuth';
+import { getPreflightErrorMessage, isPrivateRepoError } from '../../../utils/preflightErrorHandler';
 
 interface PreflightModalProps {
   repoUrl: string;
@@ -102,19 +103,17 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
       }
 
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      if (message.includes('PRIVATE_REPO:')) {
+      if (isPrivateRepoError(err)) {
         // Private repo detected - show GitHub connect modal, NO error message
         setStep('github-connect');
         setError(null);
         setLoading(false); // Stop loading immediately to show modal
         setIsLoading(false);
         return; // Exit early, skip finally block
-      } else if (message.includes('Repository owner does not exist')) {
-        // Owner doesn't exist - URL is definitely wrong
-        setError(message);
       } else {
-        setError(message);
+        // Handle other errors with user-friendly messages
+        const errorMessage = getPreflightErrorMessage(err);
+        setError(errorMessage);
       }
     } finally {
       setLoading(false);

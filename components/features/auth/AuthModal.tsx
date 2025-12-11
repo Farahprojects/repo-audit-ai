@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { X, Github, Mail, ArrowRight, Loader2, Apple, Linkedin } from 'lucide-react';
 import { supabase } from '../../../src/integrations/supabase/client';
+import { getAuthErrorMessage } from '../../../utils/authErrorHandler';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -42,18 +43,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         onClose();
       }
     } catch (err: any) {
-      const message = err.message || 'An error occurred';
-      if (message.includes('Invalid login credentials')) {
-        setError('Invalid email or password.');
-      } else if (message.includes('User already registered')) {
-        setError('Email already registered.');
-      } else if (message.includes('Email not confirmed')) {
-        setError('Please verify your email first.');
-      } else if (message.includes('Password should be')) {
-        setError('Password must be 6+ characters.');
-      } else {
-        setError(message);
-      }
+      const errorMessage = getAuthErrorMessage(err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
