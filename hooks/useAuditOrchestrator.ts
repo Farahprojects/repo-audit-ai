@@ -66,7 +66,7 @@ export const useAuditOrchestrator = ({
     }
   }, [user, handleAnalyze]);
 
-  // Server-side Orchestration with Real-time Updates
+  // Server-side Queue-based Orchestration with Real-time Updates
   const runOrchestratedAudit = useCallback(async (
     url: string,
     tier: string,
@@ -79,22 +79,25 @@ export const useAuditOrchestrator = ({
     setAuditStats(stats);
 
     try {
-      addLog(`[System] Starting server-side audit orchestration for ${tier}...`);
+      addLog(`[System] Submitting audit job for ${tier}...`);
 
-      // Call the server-side orchestrator (via dispatcher)
-      const { data: orchestrationResponse, error: orchestrationError } = await supabase.functions.invoke('audit-dispatcher', {
+      // Submit job to the queue (returns immediately)
+      const { data: jobResponse, error: jobError } = await supabase.functions.invoke('audit-job-submit', {
         body: {
           preflightId,
-          tier,
-          userId: user?.id
+          tier
         }
       });
 
-      if (orchestrationError) {
-        throw orchestrationError;
+      if (jobError) {
+        throw jobError;
       }
 
-      addLog(`[System] Audit orchestration started on server.`);
+      if (!jobResponse?.success) {
+        throw new Error(jobResponse?.error || 'Failed to submit audit job');
+      }
+
+      addLog(`[System] Job queued: ${jobResponse.jobId}`);
       addLog(`[System] Tracking progress in real-time...`);
 
       // Set up real-time subscription for progress updates

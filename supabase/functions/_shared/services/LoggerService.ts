@@ -21,7 +21,24 @@ export interface LogContext {
   url?: string | undefined;
   endpoint?: string | undefined;
   metadata?: Record<string, any> | undefined;
+  // Queue-based architecture fields
+  jobId?: string | undefined;
+  workerId?: string | undefined;
+  jobIds?: string[] | undefined;
+  trigger?: string | undefined;
+  batchSize?: number | undefined;
+  // Processor metrics fields
+  taskId?: string | undefined;
+  plannerTokens?: number | undefined;
+  totalWorkers?: number | undefined;
+  totalWorkerTokens?: number | undefined;
+  healthScore?: number | undefined;
+  issueCount?: number | undefined;
+  totalTokens?: number | undefined;
+  processingTime?: number | undefined;
 }
+
+
 
 export interface LogEntry {
   timestamp: string;
