@@ -154,6 +154,21 @@ export class Orchestrator {
                 // Parse the response
                 const parsed = parseOrchestratorResponse(response.text);
 
+                // VALIDATE: Check for valid response format
+                const isValidResponse = parsed.thinking || parsed.toolCall || parsed.isComplete || parsed.batchCall || parsed.isFailed;
+                if (!isValidResponse) {
+                    console.error('[Orchestrator] CRITICAL: Invalid response format - AI did not follow required XML structure');
+                    console.error('[Orchestrator] Raw response (first 500 chars):', response.text.slice(0, 500));
+                    console.error('[Orchestrator] Parsed result:', {
+                        hasThinking: !!parsed.thinking,
+                        hasToolCall: !!parsed.toolCall,
+                        isComplete: parsed.isComplete,
+                        hasBatchCall: !!parsed.batchCall,
+                        isFailed: parsed.isFailed
+                    });
+                    // Continue loop to allow retry - the fallback parsing should have set thinking
+                }
+
                 // OUTPUT: Stream/save reasoning step
                 const step = await this.saveAndStreamStep(
                     parsed,
@@ -453,7 +468,7 @@ export class Orchestrator {
             return this.config.thinkingBudget;
         }
 
-        return THINKING_BUDGETS[this.config.thinkingBudget as ThinkingBudgetLevel] || THINKING_BUDGETS.audit;
+        return THINKING_BUDGETS[this.config.thinkingBudget as ThinkingBudgetLevel] || -1;
     }
 
     /**
