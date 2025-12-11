@@ -1,3 +1,6 @@
+// @ts-ignore - EdgeRuntime is available globally in Supabase Edge Functions
+declare const EdgeRuntime: any;
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
 import { createClient } from '@supabase/supabase-js'

@@ -202,8 +202,8 @@ export function createChunks(
     const chunks: Chunk[] = [];
     const smallFolders: Array<{ name: string; files: FileInfo[]; tokens: number }> = [];
 
-    for (const [folderName, folderFiles] of folders) {
-        const folderTokens = folderFiles.reduce((sum, f) => sum + f.tokens, 0);
+    for (const [folderName, folderFiles] of folders.entries()) {
+        const folderTokens = folderFiles.reduce((sum: number, f: FileInfo) => sum + f.tokens, 0);
 
         if (folderTokens > maxTokensPerChunk) {
             // Large folder: split it

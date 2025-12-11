@@ -346,7 +346,7 @@ async function routeToLegacyOrchestrator(
     if (error) {
       LoggerService.warn('Audit orchestrator invoke failed, providing fallback response', {
         component: 'AuditDispatcher',
-        error: error.message,
+        metadata: { invokeError: error.message },
         preflightId,
         tier
       });
@@ -392,7 +392,7 @@ async function routeToLegacyOrchestrator(
   } catch (invokeError) {
     LoggerService.warn('Audit orchestrator invoke threw exception, providing fallback response', {
       component: 'AuditDispatcher',
-      error: invokeError instanceof Error ? invokeError.message : String(invokeError),
+      metadata: { invokeError: invokeError instanceof Error ? invokeError.message : String(invokeError) },
       preflightId,
       tier
     });

@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 // @ts-ignore - Deno environment provides global Deno object
+// @ts-ignore - deno.ns types may not be available in strict mode
 declare const Deno: any;
 
 // Real-time Runtime Monitoring and Performance Tracking
