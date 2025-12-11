@@ -34,7 +34,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     setTimeout(() => setPromptCopied(false), 2000);
   }, [issue.title, issue.description, issue.filePath, issue.lineNumber, issue.badCode]);
 
-  const getSeverityIcon = () => {
+  const SeverityIcon: React.FC = () => {
     switch (issue.severity) {
       case 'Critical': return <AlertOctagon className="w-4 h-4 text-red-600" />;
       case 'Warning': return <AlertTriangle className="w-4 h-4 text-amber-500" />;
@@ -59,7 +59,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
         onClick={() => setExpanded(!expanded)}
       >
         <div className="mt-0.5 text-slate-400 group-hover:text-slate-600 transition-colors">
-          {getSeverityIcon()}
+          <SeverityIcon />
         </div>
 
         <div className="flex-1 min-w-0">

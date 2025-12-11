@@ -149,15 +149,15 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
     onConfirm(tier, stats!, fileMap, preflightId || undefined);
   }, [onConfirm, stats, fileMap, preflightId]);
 
-  // Helper to get formatted estimate or fallback
-  const getEstimateDisplay = (tier: keyof TierEstimates, fallback: string) => {
+  // Helper component to display formatted estimate or fallback
+  const EstimateDisplay: React.FC<{ tier: keyof TierEstimates; fallback: string }> = ({ tier, fallback }) => {
     if (estimatesLoading) {
       return <Loader2 className="w-3 h-3 animate-spin inline" />;
     }
     if (tierEstimates?.[tier]) {
-      return `~${tierEstimates[tier].formatted} tokens`;
+      return <span>~{tierEstimates[tier].formatted} tokens</span>;
     }
-    return fallback;
+    return <span>{fallback}</span>;
   };
 
   // IMPORTANT: Check for github-connect step FIRST, before loading check
@@ -233,7 +233,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                 {/* Tier 1: Shape Check (Free) */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-slate-300 transition-all flex flex-col items-center text-center">
                   <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mb-4">
-                    {getEstimateDisplay('shape', 'FREE')}
+                    <EstimateDisplay tier="shape" fallback="FREE" />
                   </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Shape Check</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">Repo structure, folder hygiene, missing files.</p>
@@ -251,7 +251,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                     POPULAR
                   </div>
                   <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full mb-4">
-                    {getEstimateDisplay('conventions', 'POPULAR')}
+                    <EstimateDisplay tier="conventions" fallback="POPULAR" />
                   </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2 mt-2">Senior Check</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">Craftsmanship, types, tests, docs.</p>
@@ -266,7 +266,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                 {/* Tier 3: Performance Check */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-orange-200 transition-all flex flex-col items-center text-center group">
                   <span className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full mb-4 group-hover:bg-orange-100 transition-colors">
-                    {getEstimateDisplay('performance', 'PRO')}
+                    <EstimateDisplay tier="performance" fallback="PRO" />
                   </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Perf Audit</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">N+1, leaks, re-renders, AI sins.</p>
@@ -281,7 +281,7 @@ const PreflightModal: React.FC<PreflightModalProps> = ({ repoUrl, onConfirm, onC
                 {/* Tier 4: Security Audit */}
                 <div className="border border-slate-200 rounded-3xl p-5 hover:border-red-200 transition-all flex flex-col items-center text-center group">
                   <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full mb-4 group-hover:bg-red-100 transition-colors">
-                    {getEstimateDisplay('security', 'PREMIUM')}
+                    <EstimateDisplay tier="security" fallback="PREMIUM" />
                   </span>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">Security</h4>
                   <p className="text-sm text-slate-500 mb-6 flex-1">RLS, secrets, auth, vulnerabilities.</p>
