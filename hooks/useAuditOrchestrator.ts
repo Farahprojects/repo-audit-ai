@@ -28,8 +28,19 @@ export const useAuditOrchestrator = ({
   // Real-time Scanner State
   const [scannerLogs, setScannerLogs] = useState<string[]>([]);
   const [scannerProgress, setScannerProgress] = useState(0);
+  const [activeChannel, setActiveChannel] = useState<any>(null);
 
   const addLog = useCallback((msg: string) => setScannerLogs(prev => [...prev, msg]), []);
+
+  // Clean up real-time subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+        setActiveChannel(null);
+      }
+    };
+  }, [activeChannel]);
 
   // Clear all audit state (used on logout)
   const clearAuditState = useCallback(() => {
@@ -42,7 +53,13 @@ export const useAuditOrchestrator = ({
     setActiveAuditId(null);
     setScannerLogs([]);
     setScannerProgress(0);
-  }, []);
+
+    // Clean up any active real-time subscriptions
+    if (activeChannel) {
+      supabase.removeChannel(activeChannel);
+      setActiveChannel(null);
+    }
+  }, [activeChannel]);
 
   // Restore pending repo URL from localStorage on app load
   useEffect(() => {
@@ -139,6 +156,7 @@ export const useAuditOrchestrator = ({
 
               // Clean up subscription
               supabase.removeChannel(channel);
+              setActiveChannel(null);
             }
 
             // Handle failure
@@ -151,11 +169,15 @@ export const useAuditOrchestrator = ({
 
               // Clean up subscription
               supabase.removeChannel(channel);
+              setActiveChannel(null);
               setTimeout(() => navigate('preflight'), 4000);
             }
           }
         )
         .subscribe();
+
+      // Store channel reference for cleanup
+      setActiveChannel(channel);
 
       // Fallback timeout in case real-time updates fail
       setTimeout(() => {
