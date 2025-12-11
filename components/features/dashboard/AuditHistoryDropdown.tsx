@@ -13,7 +13,7 @@ interface AuditHistoryDropdownProps {
   onSelectAudit: (audit: AuditRecord) => void;
   onCloseDropdown: () => void;
   onRunTier?: (tier: string, repoUrl: string) => void;
-  repoName: string;
+  repoUrl: string;
 }
 
 export const AuditHistoryDropdown: React.FC<AuditHistoryDropdownProps> = ({
@@ -25,7 +25,7 @@ export const AuditHistoryDropdown: React.FC<AuditHistoryDropdownProps> = ({
   onSelectAudit,
   onCloseDropdown,
   onRunTier,
-  repoName,
+  repoUrl,
 }) => {
   if (!historyDropdownOpen || !dropdownPosition || !auditsByTier[historyDropdownOpen]) {
     return null;
@@ -84,7 +84,7 @@ export const AuditHistoryDropdown: React.FC<AuditHistoryDropdownProps> = ({
             return (
               <button
                 onClick={() => {
-                  onRunTier(tier.id, `https://github.com/${repoName}`);
+                  onRunTier(tier.id, repoUrl);
                   onCloseDropdown();
                 }}
                 className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-emerald-50 transition-colors text-left group"

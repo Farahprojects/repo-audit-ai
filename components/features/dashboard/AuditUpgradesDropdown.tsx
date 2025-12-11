@@ -9,7 +9,7 @@ interface AuditUpgradesDropdownProps {
   completedTiers: string[];
   onRunTier: (tier: AuditTier, repoUrl: string) => void;
   onCloseDropdown: () => void;
-  repoName: string;
+  repoUrl: string;
 }
 
 export const AuditUpgradesDropdown: React.FC<AuditUpgradesDropdownProps> = ({
@@ -19,7 +19,7 @@ export const AuditUpgradesDropdown: React.FC<AuditUpgradesDropdownProps> = ({
   completedTiers,
   onRunTier,
   onCloseDropdown,
-  repoName,
+  repoUrl,
 }) => {
   if (!upgradesDropdownOpen || !dropdownPosition) {
     return null;
@@ -45,7 +45,7 @@ export const AuditUpgradesDropdown: React.FC<AuditUpgradesDropdownProps> = ({
             <button
               key={tier.id}
               onClick={() => {
-                onRunTier(tier.id as AuditTier, `https://github.com/${repoName}`);
+                onRunTier(tier.id as AuditTier, repoUrl);
                 onCloseDropdown();
               }}
               className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors text-left group"

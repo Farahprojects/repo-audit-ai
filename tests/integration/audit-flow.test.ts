@@ -161,6 +161,7 @@ Deno.test("Integration - Complete Audit Flow", async () => {
   });
 
   assert(plannerResponse.data, "Planner should return data");
+  assert(plannerResponse.data.plan, "Planner should return plan");
   assert(plannerResponse.data.plan.tasks.length > 0, "Should have tasks");
 
   // Step 5: Simulate worker execution
@@ -176,6 +177,7 @@ Deno.test("Integration - Complete Audit Flow", async () => {
   });
 
   assert(workerResponse.data, "Worker should return data");
+  assert(workerResponse.data.result, "Worker should return result");
   assert(workerResponse.data.result.issues.length > 0, "Should find issues");
 
   // Step 6: Simulate coordinator synthesis

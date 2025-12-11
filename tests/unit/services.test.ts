@@ -104,9 +104,9 @@ Deno.test("MonitoringService - Metrics Recording", () => {
   });
 
   const summary = MonitoringService.getMetricsSummary(24);
-  assert(summary.totalMetrics >= 2);
-  assert(summary.breakdowns["test.metric"]);
-  assert(summary.breakdowns["audit.duration"]);
+  assert(summary["totalMetrics"] >= 2);
+  assert(summary["breakdowns"]["test.metric"]);
+  assert(summary["breakdowns"]["audit.duration"]);
 });
 
 Deno.test("ExecutionPricing - Basic Pricing Calculation", () => {

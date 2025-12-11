@@ -130,8 +130,14 @@ Deno.test("Database Chunking - Chunk Reconstruction", () => {
   const reconstructed = [...chunk1, ...chunk2];
 
   assertEquals(reconstructed.length, originalIssues.length);
+  assert(reconstructed[0]);
+  assert(originalIssues[0]);
   assertEquals(reconstructed[0].id, originalIssues[0].id);
+  assert(reconstructed[1]);
+  assert(originalIssues[1]);
   assertEquals(reconstructed[1].id, originalIssues[1].id);
+  assert(reconstructed[2]);
+  assert(originalIssues[2]);
   assertEquals(reconstructed[2].id, originalIssues[2].id);
 });
 

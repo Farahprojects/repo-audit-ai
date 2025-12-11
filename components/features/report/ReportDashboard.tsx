@@ -25,6 +25,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
   onRunTier,
   onSelectAudit
 }) => {
+  // Get repoUrl from first related audit, fallback to constructed URL
+  const repoUrl = relatedAudits[0]?.repo_url || `https://github.com/${data.repoName}`;
   const reportState = useReportState({ data, relatedAudits, onRunTier, onSelectAudit });
 
   useDropdownPositioning({
@@ -85,7 +87,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
         onSelectAudit={onSelectAudit}
         onCloseDropdown={() => reportState.setHistoryDropdownOpen(null)}
         onRunTier={onRunTier}
-        repoName={data.repoName}
+        repoUrl={repoUrl}
       />
 
       <AuditUpgradesDropdown
@@ -95,7 +97,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
         completedTiers={reportState.completedTiers}
         onRunTier={onRunTier}
         onCloseDropdown={() => reportState.setUpgradesDropdownOpen(false)}
-        repoName={data.repoName}
+        repoUrl={repoUrl}
       />
 
       <UniversalConnectModal

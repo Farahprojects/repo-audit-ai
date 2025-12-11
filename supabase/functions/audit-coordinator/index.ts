@@ -186,6 +186,7 @@ serve(async (req) => {
 
         // 6. Return Final Report
         return createSuccessResponse({
+            repoName: `${preflightRecord.owner}/${preflightRecord.repo}`,
             healthScore: healthScore,
             summary: summary,
             issues: dbIssues,
