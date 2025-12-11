@@ -150,7 +150,7 @@ export const saveAuditResultsTool: Tool = {
                 required: false
             }
         },
-        required: ['repoUrl', 'healthScore', 'summary', 'issues', 'tier']
+        required: ['healthScore', 'summary', 'issues']
     },
 
     async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
@@ -163,14 +163,25 @@ export const saveAuditResultsTool: Tool = {
             totalTokens = 0,
             extraData = {}
         } = input as {
-            repoUrl: string;
+            repoUrl?: string;
             healthScore: number;
             summary: string;
             issues: unknown[];
-            tier: string;
+            tier?: string;
             totalTokens?: number;
             extraData?: Record<string, unknown>;
         };
+
+        const finalRepoUrl = repoUrl || (context.preflight as any)?.repo_url;
+        // Tier might not be in preflight, but let's try or require it
+        const finalTier = tier || (context.preflight as any)?.tier || 'custom';
+
+        if (!finalRepoUrl) {
+            return {
+                success: false,
+                error: 'repoUrl is required and not found in context'
+            };
+        }
 
         try {
             const supabase = context.supabase as any;
@@ -179,11 +190,11 @@ export const saveAuditResultsTool: Tool = {
                 .from('audits')
                 .insert({
                     user_id: context.userId,
-                    repo_url: repoUrl,
+                    repo_url: finalRepoUrl,
                     health_score: healthScore,
                     summary,
                     issues,
-                    tier,
+                    tier: finalTier,
                     total_tokens: totalTokens,
                     extra_data: extraData,
                     created_at: new Date().toISOString()
@@ -227,13 +238,25 @@ export const getPreflightTool: Tool = {
     inputSchema: {
         type: 'object',
         properties: {
-            preflightId: { type: 'string', description: 'Preflight record ID' }
+            preflightId: { type: 'string', description: 'Preflight record ID (optional if in context)' }
         },
-        required: ['preflightId']
+        required: []
     },
 
     async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
-        const { preflightId } = input as { preflightId: string };
+        let { preflightId } = input as { preflightId?: string };
+
+        // Fallback to context if not provided
+        if (!preflightId && context.preflight) {
+            preflightId = (context.preflight as any).id;
+        }
+
+        if (!preflightId) {
+            return {
+                success: false,
+                error: 'No preflightId provided and none found in context'
+            };
+        }
 
         try {
             const supabase = context.supabase as any;

@@ -45,27 +45,41 @@ After receiving tool output, you MUST:
 2. EXPLAIN how this affects your understanding
 3. DECIDE the logical next step
 
-## Output Format
+## CRITICAL: Exact Output Format Required
 
-Always structure your response as:
+⚠️ FAILURE TO USE XML TAGS WILL RESULT IN NO ACTION TAKEN ⚠️
+
+Your response MUST follow this exact structure with XML tags:
 
 <thinking>
-[Your step-by-step reasoning here. Be explicit about your thought process.]
+[Your detailed reasoning here - minimum 50 words explaining what you're doing and why]
 </thinking>
 
 <tool_call>
 {"name": "tool_name", "input": {...}}
 </tool_call>
 
-OR if the task is complete:
+OR for completion:
 
 <thinking>
-[Your final reasoning about why the task is complete]
+[Detailed explanation of why the task is complete]
 </thinking>
 
 <complete>
-{"result": "your final output or summary"}
+{"result": "your final output"}
 </complete>
+
+OR for parallel execution:
+
+<thinking>
+[Explain why these tools can run in parallel]
+</thinking>
+
+<batch_call>
+{"tools": [{"name": "tool1", "input": {...}, "priority": 1}], "executionMode": "parallel"}
+</batch_call>
+
+IMPORTANT: Do NOT wrap your XML output in markdown code blocks (like \`\`\`xml). Output the raw XML tags directly.
 
 ## Current Task
 ${task.description}
@@ -73,12 +87,14 @@ ${task.description}
 ## Available Tools
 ${toolList}
 ${contextSection}
-## Important Rules
-1. NEVER skip the <thinking> section - it's required for every response
-2. Call only ONE tool per response (unless in parallel batch mode)
-3. If a tool fails, reason about alternatives before giving up
-4. Be concise in your reasoning but complete in your logic
-5. If you don't have enough information, use a tool to get it - don't guess
+## CRITICAL Rules (Violation = No Action Taken)
+1. ⚠️ ALWAYS use <thinking> tags - required for every response
+2. ⚠️ ALWAYS use <tool_call> or <complete> tags - raw JSON will be ignored
+3. Call only ONE tool per response (unless using <batch_call>)
+4. If a tool fails, reason about alternatives before giving up
+5. Be detailed in your reasoning (minimum 50 words) but complete in your logic
+6. If you don't have enough information, use a tool to get it - don't guess
+7. 📝 Do NOT use markdown code blocks around XML tags
 
 Begin by reasoning about the first step needed to complete the task.`;
 }
@@ -318,6 +334,29 @@ export function parseOrchestratorResponse(response: string): ParsedResponse {
             result.failureReason = failData.reason;
         } catch (e) {
             result.failureReason = failedMatch[1].trim();
+        }
+    }
+
+    // FINAL FALLBACK: If we still have no thinking, no tool call, and no completion,
+    // explicitly capture the raw response as 'thinking' so the model sees what it did wrong.
+    if (!result.thinking && !result.toolCall && !result.isComplete && !result.batchCall && !result.isFailed) {
+        // Try to extract JSON tool calls from raw text
+        const jsonMatch = response.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+            try {
+                const potentialToolCall = JSON.parse(jsonMatch[0]);
+                if (potentialToolCall.name && potentialToolCall.input) {
+                    result.toolCall = potentialToolCall;
+                    result.thinking = response.replace(jsonMatch[0], '').trim() || '[EXTRACTED]: Tool call found in raw response';
+                }
+            } catch (e) {
+                // Not valid JSON, continue to fallback
+            }
+        }
+
+        // If still no thinking, use entire response
+        if (!result.thinking) {
+            result.thinking = `[SYSTEM NOTE: The previous response was unparseable. It contained no <thinking> tags and no valid tool calls. Raw response length: ${response.length}. First 100 chars: ${response.slice(0, 100)}...]`;
         }
     }
 
