@@ -115,7 +115,13 @@ serve(withPerformanceMonitoring(async (req) => {
       correlationId
     })
 
-    // Update audit status to processing with the real user_id and tier
+    // Clean up any existing audit status and start fresh
+    await supabase
+      .from('audit_status')
+      .delete()
+      .eq('preflight_id', preflightId)
+
+    // Create fresh audit status record
     const { error: statusError } = await supabase
       .from('audit_status')
       .insert({
