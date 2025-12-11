@@ -231,11 +231,14 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
         });
 
         // Only include path, size, and type - NO file content or GitHub API URLs
-        const fileMap = filteredTree.map((item: any) => ({
+        const rawFileMap = filteredTree.map((item: any) => ({
             path: item.path,
             size: item.size || 0,
             type: 'file'
         }));
+
+        // Compress the file map if there are too many files of the same type
+        const fileMap = compressFileMap(rawFileMap);
 
 
         // 8. Return combined response
@@ -456,4 +459,49 @@ function handleError(error: any, owner?: string, repo?: string) {
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+}
+
+/**
+ * Compresses the file map by grouping files with the same extension 
+ * if they exceed the threshold.
+ */
+function compressFileMap(files: any[], threshold = 50) {
+    const extMap = new Map<string, any[]>();
+    const otherFiles: any[] = [];
+
+    // Group by extension
+    for (const file of files) {
+        // Simple extension extraction
+        const match = file.path.match(/\.([a-zA-Z0-9]+)$/);
+        const ext = match ? '.' + match[1].toLowerCase() : '';
+
+        if (ext) {
+            if (!extMap.has(ext)) {
+                extMap.set(ext, []);
+            }
+            extMap.get(ext)!.push(file);
+        } else {
+            otherFiles.push(file);
+        }
+    }
+
+    const compressedFiles: any[] = [...otherFiles];
+
+    for (const [ext, group] of extMap) {
+        if (group.length > threshold) {
+            const totalSize = group.reduce((sum: number, f: any) => sum + f.size, 0);
+            compressedFiles.push({
+                path: `[summary] *${ext} (${group.length} files in this category - consolidated for brevity)`,
+                size: totalSize,
+                type: 'summary',
+                count: group.length,
+                extension: ext
+            });
+        } else {
+            compressedFiles.push(...group);
+        }
+    }
+
+    // Sort for consistent output
+    return compressedFiles.sort((a, b) => a.path.localeCompare(b.path));
 }
