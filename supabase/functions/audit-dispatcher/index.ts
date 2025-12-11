@@ -191,7 +191,7 @@ async function makeRoutingDecision(
   params: {
     preflightId: string;
     tier: string;
-    userId?: string;
+    userId?: string | undefined;
     options: any;
   }
 ): Promise<RoutingDecision> {
@@ -257,7 +257,7 @@ async function routeToOrchestrator(
   params: {
     preflightId: string;
     tier: string;
-    userId?: string;
+    userId?: string | undefined;
     options: any;
     routingDecision: RoutingDecision;
     correlationId: string;
@@ -322,7 +322,7 @@ async function routeToLegacyOrchestrator(
   params: {
     preflightId: string;
     tier: string;
-    userId?: string;
+    userId?: string | undefined;
     options: any;
     routingDecision: RoutingDecision;
     correlationId: string;

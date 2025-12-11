@@ -94,7 +94,7 @@ serve(withPerformanceMonitoring(async (req) => {
       LoggerService.error(errorMsg, undefined, {
         component: 'AuditOrchestrator',
         preflightId,
-        error: preflightError
+        error: preflightError?.message
       })
 
       tracer.end(false, { error: errorMsg })

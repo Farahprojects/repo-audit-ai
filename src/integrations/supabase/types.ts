@@ -439,6 +439,7 @@ export type Database = {
           expires_at: string | null
           fetch_strategy: string
           file_count: number | null
+          file_groups: string[] | null
           fingerprint: Json | null
           github_account_id: string | null
           id: string
@@ -458,6 +459,7 @@ export type Database = {
           expires_at?: string | null
           fetch_strategy?: string
           file_count?: number | null
+          file_groups?: string[] | null
           fingerprint?: Json | null
           github_account_id?: string | null
           id?: string
@@ -477,6 +479,7 @@ export type Database = {
           expires_at?: string | null
           fetch_strategy?: string
           file_count?: number | null
+          file_groups?: string[] | null
           fingerprint?: Json | null
           github_account_id?: string | null
           id?: string
@@ -530,6 +533,124 @@ export type Database = {
         }
         Relationships: []
       }
+      reasoning_checkpoints: {
+        Row: {
+          context_snapshot: string | null
+          created_at: string | null
+          id: string
+          last_successful_tool: string | null
+          recovery_strategies: string[] | null
+          session_id: string
+          step_number: number
+        }
+        Insert: {
+          context_snapshot?: string | null
+          created_at?: string | null
+          id?: string
+          last_successful_tool?: string | null
+          recovery_strategies?: string[] | null
+          session_id: string
+          step_number: number
+        }
+        Update: {
+          context_snapshot?: string | null
+          created_at?: string | null
+          id?: string
+          last_successful_tool?: string | null
+          recovery_strategies?: string[] | null
+          session_id?: string
+          step_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reasoning_checkpoints_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "reasoning_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reasoning_sessions: {
+        Row: {
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          status: string | null
+          task_description: string
+          total_steps: number | null
+          total_tokens: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id: string
+          metadata?: Json | null
+          status?: string | null
+          task_description: string
+          total_steps?: number | null
+          total_tokens?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string | null
+          task_description?: string
+          total_steps?: number | null
+          total_tokens?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      reasoning_steps: {
+        Row: {
+          created_at: string | null
+          id: string
+          reasoning: string | null
+          session_id: string
+          step_number: number
+          token_usage: number | null
+          tool_called: string | null
+          tool_input: Json | null
+          tool_output: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          reasoning?: string | null
+          session_id: string
+          step_number: number
+          token_usage?: number | null
+          tool_called?: string | null
+          tool_input?: Json | null
+          tool_output?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          reasoning?: string | null
+          session_id?: string
+          step_number?: number
+          token_usage?: number | null
+          tool_called?: string | null
+          tool_input?: Json | null
+          tool_output?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reasoning_steps_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "reasoning_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_prompts: {
         Row: {
           created_at: string
@@ -563,6 +684,36 @@ export type Database = {
           prompt?: string
           tier?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      verification_codes: {
+        Row: {
+          code: string
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -632,6 +783,10 @@ export type Database = {
       }
       cleanup_expired_oauth_csrf_states: { Args: never; Returns: number }
       cleanup_expired_preflights: { Args: never; Returns: number }
+      cleanup_old_reasoning_sessions: {
+        Args: { days_old?: number }
+        Returns: number
+      }
       get_complete_audit_data: { Args: { p_audit_id: string }; Returns: Json }
       reconstruct_audit_results: { Args: { p_audit_id: string }; Returns: Json }
     }

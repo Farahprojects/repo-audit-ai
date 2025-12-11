@@ -2,25 +2,25 @@
 // Provides structured logging, error tracking, and observability
 
 export interface LogContext {
-  userId?: string;
-  requestId?: string;
-  sessionId?: string;
-  auditId?: string;
-  preflightId?: string;
-  tier?: string;
-  component?: string;
-  function?: string;
-  duration?: number;
-  memoryUsage?: number;
-  error?: Error;
-  correlationId?: string;
-  errorType?: string;
-  checkpoint?: string;
-  method?: string;
-  taskCount?: number;
-  url?: string;
-  endpoint?: string;
-  metadata?: Record<string, any>;
+  userId?: string | undefined;
+  requestId?: string | undefined;
+  sessionId?: string | undefined;
+  auditId?: string | undefined;
+  preflightId?: string | undefined;
+  tier?: string | undefined;
+  component?: string | undefined;
+  function?: string | undefined;
+  duration?: number | undefined;
+  memoryUsage?: number | undefined;
+  error?: Error | string | undefined;
+  correlationId?: string | undefined;
+  errorType?: string | undefined;
+  checkpoint?: string | undefined;
+  method?: string | undefined;
+  taskCount?: number | undefined;
+  url?: string | undefined;
+  endpoint?: string | undefined;
+  metadata?: Record<string, any> | undefined;
 }
 
 export interface LogEntry {

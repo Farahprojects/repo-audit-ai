@@ -165,17 +165,17 @@ export class ContextBuilder {
             const obj = output as Record<string, unknown>;
 
             // Handle common patterns
-            if ('success' in obj) {
-                const success = obj.success ? '✓' : '✗';
-                if ('error' in obj) {
-                    return `${success} Error: ${obj.error}`;
-                }
-                if ('data' in obj && typeof obj.data === 'object' && obj.data !== null) {
-                    const data = obj.data as Record<string, unknown>;
-                    const keys = Object.keys(data).slice(0, 3).join(', ');
-                    return `${success} Data with keys: ${keys}`;
-                }
-                return `${success}`;
+        if ('success' in obj) {
+            const success = obj['success'] ? '✓' : '✗';
+            if ('error' in obj) {
+                return `${success} Error: ${obj['error']}`;
+            }
+            if ('data' in obj && typeof obj['data'] === 'object' && obj['data'] !== null) {
+                const data = obj['data'] as Record<string, unknown>;
+                const keys = Object.keys(data).slice(0, 3).join(', ');
+                return `${success} Data with keys: ${keys}`;
+            }
+            return `${success}`;
             }
 
             // Generic object summary

@@ -359,7 +359,7 @@ export class Orchestrator {
             userId: this.config.userId,
             permissions: this.config.permissions || [PermissionLevel.READ],
             supabase: this.config.supabase,
-            preflight: task.context?.preflight
+            preflight: task.context?.['preflight']
         };
 
         const result = await this.toolRegistry.execute(name, input, context);
@@ -392,7 +392,7 @@ export class Orchestrator {
             userId: this.config.userId,
             permissions: this.config.permissions || [PermissionLevel.READ],
             supabase: this.config.supabase,
-            preflight: task.context?.preflight
+            preflight: task.context?.['preflight']
         };
 
         return this.toolRegistry.executeParallel(batchCall.tools, context);

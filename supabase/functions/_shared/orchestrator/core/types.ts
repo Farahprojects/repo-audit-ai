@@ -46,7 +46,7 @@ export interface ToolInputSchema {
 
 export interface ToolContext {
     sessionId: string;
-    userId?: string;
+    userId?: string | undefined;
     permissions: PermissionLevel[];
     supabase: unknown; // SupabaseClient - imported separately to avoid circular deps
     preflight?: unknown; // PreflightData
@@ -84,7 +84,7 @@ export interface ReasoningStep {
     sessionId: string;
     stepNumber: number;
     reasoning: string;          // <thinking> content
-    toolCalled?: string;        // tool name if any
+    toolCalled?: string | undefined;        // tool name if any
     toolInput?: unknown;        // tool parameters
     toolOutput?: unknown;       // tool results
     tokenUsage: number;
@@ -108,7 +108,7 @@ export interface ReasoningSession {
     id: string;
     taskDescription: string;
     status: SessionStatus;
-    userId?: string;
+    userId?: string | undefined;
     createdAt: string;
     updatedAt: string;
     totalSteps: number;
@@ -124,7 +124,7 @@ export interface Task {
     id: string;
     description: string;
     type: 'audit' | 'fix' | 'analyze' | 'custom';
-    context?: Record<string, unknown>;
+    context?: Record<string, unknown> | undefined;
     requiredPermissions?: PermissionLevel[];
     thinkingBudget?: ThinkingBudgetLevel | number;
     maxIterations?: number;
@@ -146,7 +146,7 @@ export interface OrchestratorConfig {
     thinkingBudget: ThinkingBudgetLevel | number;
     streamCallback?: (step: ReasoningStep) => void | Promise<void>;
     supabase: unknown; // SupabaseClient
-    userId?: string;
+    userId?: string | undefined;
     permissions?: PermissionLevel[];
     parallelBatch?: ParallelBatchConfig;
 }
