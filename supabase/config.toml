@@ -10,6 +10,9 @@ verify_jwt = true
 [functions.audit-dispatcher]
 verify_jwt = true
 
+[functions.audit-orchestrator]
+verify_jwt = true
+
 [functions.github-oauth-start]
 verify_jwt = true
 
