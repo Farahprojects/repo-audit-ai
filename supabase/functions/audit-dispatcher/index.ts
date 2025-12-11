@@ -2,10 +2,10 @@
  * Audit Dispatcher - Central Orchestration Layer
  *
  * This is the single entry point for all audit requests from the UI.
- * Routes ALL requests to the Universal Reasoning Layer (orchestrator).
- * NO FALLBACKS - Forces us to fix issues and move forward aggressively.
+ * Currently routes ALL requests to LEGACY audit-orchestrator system.
+ * Temporarily switched back to legacy for stability.
  *
- * Legacy system only accessible via explicit admin override.
+ * Universal orchestrator accessible via forceOrchestrator: true override.
  */
 
 // @ts-ignore - Deno environment provides global Deno object
@@ -239,11 +239,11 @@ async function makeRoutingDecision(
     }
   }
 
-  // 4. DEFAULT: Use NEW orchestrator system
-  // No more conservative defaults - we move forward!
+  // 4. DEFAULT: Use LEGACY audit-orchestrator system
+  // Temporarily switched back to legacy for stability
   return {
-    useNewSystem: true,
-    reason: 'DEFAULT: Using Universal Reasoning Layer (orchestrator)',
+    useNewSystem: false,
+    reason: 'DEFAULT: Using Legacy Audit Orchestrator system',
     confidence: 0.9
   };
 }
