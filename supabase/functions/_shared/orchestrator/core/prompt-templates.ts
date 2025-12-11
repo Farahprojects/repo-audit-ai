@@ -280,13 +280,13 @@ export function parseOrchestratorResponse(response: string): ParsedResponse {
 
     // Extract thinking
     const thinkingMatch = response.match(/<thinking>([\s\S]*?)<\/thinking>/);
-    if (thinkingMatch) {
+    if (thinkingMatch && thinkingMatch[1]) {
         result.thinking = thinkingMatch[1].trim();
     }
 
     // Extract tool call
     const toolCallMatch = response.match(/<tool_call>([\s\S]*?)<\/tool_call>/);
-    if (toolCallMatch) {
+    if (toolCallMatch && toolCallMatch[1]) {
         try {
             result.toolCall = JSON.parse(toolCallMatch[1].trim());
         } catch (e) {
@@ -296,7 +296,7 @@ export function parseOrchestratorResponse(response: string): ParsedResponse {
 
     // Extract batch call
     const batchCallMatch = response.match(/<batch_call>([\s\S]*?)<\/batch_call>/);
-    if (batchCallMatch) {
+    if (batchCallMatch && batchCallMatch[1]) {
         try {
             result.batchCall = JSON.parse(batchCallMatch[1].trim());
         } catch (e) {
@@ -306,7 +306,7 @@ export function parseOrchestratorResponse(response: string): ParsedResponse {
 
     // Extract completion
     const completeMatch = response.match(/<complete>([\s\S]*?)<\/complete>/);
-    if (completeMatch) {
+    if (completeMatch && completeMatch[1]) {
         result.isComplete = true;
         try {
             result.finalOutput = JSON.parse(completeMatch[1].trim());
@@ -317,7 +317,7 @@ export function parseOrchestratorResponse(response: string): ParsedResponse {
 
     // Extract human intervention request
     const humanMatch = response.match(/<human_needed>([\s\S]*?)<\/human_needed>/);
-    if (humanMatch) {
+    if (humanMatch && humanMatch[1]) {
         try {
             result.humanNeeded = JSON.parse(humanMatch[1].trim());
         } catch (e) {
@@ -327,7 +327,7 @@ export function parseOrchestratorResponse(response: string): ParsedResponse {
 
     // Extract failure
     const failedMatch = response.match(/<failed>([\s\S]*?)<\/failed>/);
-    if (failedMatch) {
+    if (failedMatch && failedMatch[1]) {
         result.isFailed = true;
         try {
             const failData = JSON.parse(failedMatch[1].trim());
