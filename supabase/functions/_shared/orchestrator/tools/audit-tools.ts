@@ -124,10 +124,7 @@ Focus on identifying real issues and providing actionable insights.`;
                         ],
                         generationConfig: {
                             temperature: 0.3,
-                            maxOutputTokens: 8192,
-                            thinkingConfig: {
-                                thinkingBudget: 4096
-                            }
+                            maxOutputTokens: 8192
                         }
                     })
                 }
@@ -406,10 +403,7 @@ ${analysisContext ? `Context: ${JSON.stringify(analysisContext, null, 2)}` : ''}
                         ],
                         generationConfig: {
                             temperature: 0.3,
-                            maxOutputTokens: 8192,
-                            thinkingConfig: {
-                                thinkingBudget: 6144
-                            }
+                            maxOutputTokens: 8192
                         }
                     })
                 }

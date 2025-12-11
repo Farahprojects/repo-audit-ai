@@ -291,11 +291,9 @@ export class Orchestrator {
                     ],
                     generationConfig: {
                         temperature: 0.3,
-                        maxOutputTokens: 16384,
-                        thinkingConfig: {
-                            includeThoughts: true,
-                            thinkingBudget: thinkingBudget
-                        }
+                        maxOutputTokens: 16384
+                        // Removed thinkingConfig to rely 100% on prompt-based reasoning
+                        // This ensures universal compatibility across different models
                     }
                 })
             }

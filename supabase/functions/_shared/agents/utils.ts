@@ -102,12 +102,8 @@ export async function callGemini(
                         generationConfig: {
                             temperature: temperature,
                             maxOutputTokens: 16384,  // Increased for complex planner output
-                            responseMimeType: "application/json",
-                            // Role-based thinking budget configuration
-                            thinkingConfig: {
-                                includeThoughts: false,
-                                thinkingBudget: thinkingBudget
-                            }
+                            responseMimeType: "application/json"
+                            // Removed thinkingConfig for universal architecture consistency
                         }
                     })
                 }
