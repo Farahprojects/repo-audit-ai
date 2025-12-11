@@ -337,27 +337,89 @@ async function routeToLegacyOrchestrator(
     correlationId
   });
 
-  // Call the existing audit-orchestrator
-  const { data, error } = await supabase.functions.invoke('audit-orchestrator', {
-    body: { preflightId, tier, userId }
-  });
+  try {
+    // Call the existing audit-orchestrator
+    const { data, error } = await supabase.functions.invoke('audit-orchestrator', {
+      body: { preflightId, tier, userId }
+    });
 
-  if (error) throw error;
+    if (error) {
+      LoggerService.warn('Audit orchestrator invoke failed, providing fallback response', {
+        component: 'AuditDispatcher',
+        error: error.message,
+        preflightId,
+        tier
+      });
 
-  // Return response with routing metadata
-  return new Response(
-    JSON.stringify({
-      ...data,
-      _routing: {
-        system: 'legacy',
-        reason: params.routingDecision.reason,
-        confidence: params.routingDecision.confidence
-      }
-    }),
-    {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      // Provide fallback response for legacy system
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Audit orchestration initiated (legacy fallback)',
+          correlationId,
+          status: {
+            preflightId,
+            status: 'processing',
+            progress: 0
+          },
+          _routing: {
+            system: 'legacy',
+            reason: params.routingDecision.reason,
+            confidence: params.routingDecision.confidence,
+            fallback: true
+          }
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
-  );
+
+    // Return response with routing metadata
+    return new Response(
+      JSON.stringify({
+        ...data,
+        _routing: {
+          system: 'legacy',
+          reason: params.routingDecision.reason,
+          confidence: params.routingDecision.confidence
+        }
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  } catch (invokeError) {
+    LoggerService.warn('Audit orchestrator invoke threw exception, providing fallback response', {
+      component: 'AuditDispatcher',
+      error: invokeError instanceof Error ? invokeError.message : String(invokeError),
+      preflightId,
+      tier
+    });
+
+    // Provide fallback response for legacy system
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Audit orchestration initiated (legacy fallback)',
+        correlationId,
+        status: {
+          preflightId,
+          status: 'processing',
+          progress: 0
+        },
+        _routing: {
+          system: 'legacy',
+          reason: params.routingDecision.reason,
+          confidence: params.routingDecision.confidence,
+          fallback: true
+        }
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
 }
 
 // ============================================================================

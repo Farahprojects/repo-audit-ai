@@ -45,8 +45,8 @@ export class RequestValidationService {
       return { isValid: false, error: 'tier is required and must be a string' };
     }
 
-    if (!body.userId || typeof body.userId !== 'string') {
-      return { isValid: false, error: 'userId is required and must be a string' };
+    if (body.userId !== undefined && typeof body.userId !== 'string') {
+      return { isValid: false, error: 'userId must be a string if provided' };
     }
 
     // Validate tier is one of the allowed values

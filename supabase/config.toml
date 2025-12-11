@@ -1,22 +1,17 @@
 project_id = "zlrivxntdtewfagrbtry"
 
+# Frontend-facing functions - KEEP JWT verification
 [functions.github-proxy]
 verify_jwt = true
 
 [functions.audit-runner]
 verify_jwt = true
 
-[functions.audit-worker]
-verify_jwt = true
-
-[functions.audit-coordinator]
+[functions.audit-dispatcher]
 verify_jwt = true
 
 [functions.github-oauth-start]
 verify_jwt = true
-
-[functions.github-oauth-callback]
-verify_jwt = false
 
 [functions.decrypt-github-token]
 verify_jwt = true
@@ -24,14 +19,25 @@ verify_jwt = true
 [functions.send-email]
 verify_jwt = true
 
-[functions.verify-email]
+# Internal orchestration functions - DISABLE JWT (only called by other edge functions)
+[functions.audit-planner]
 verify_jwt = false
 
-[functions.cost-estimator]
+[functions.audit-worker]
+verify_jwt = false
+
+[functions.audit-coordinator]
 verify_jwt = false
 
 [functions.orchestrator]
 verify_jwt = false
 
-[functions.audit-dispatcher]
-verify_jwt = true
+[functions.cost-estimator]
+verify_jwt = false
+
+# Public callbacks
+[functions.github-oauth-callback]
+verify_jwt = false
+
+[functions.verify-email]
+verify_jwt = false
