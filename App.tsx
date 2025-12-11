@@ -27,6 +27,7 @@ const AppContent: React.FC = () => {
     reportData,
     historicalReportData,
     relatedAudits,
+    activeAuditId,
     handleAnalyze,
     handleConfirmAudit,
     handleStartAuditWithPreflight,
@@ -152,6 +153,7 @@ const AppContent: React.FC = () => {
             reportData={reportData}
             historicalReportData={historicalReportData}
             relatedAudits={relatedAudits}
+            activeAuditId={activeAuditId}
             onConfirmAudit={handleConfirmAudit}
             onCancelPreflight={handleCancelPreflight}
             onRestart={handleRestart}

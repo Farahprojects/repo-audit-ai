@@ -14,6 +14,7 @@ interface AuditFlowProps {
   reportData: RepoReport | null;
   historicalReportData: RepoReport | null;
   relatedAudits: AuditRecord[];
+  activeAuditId: string | null;
   onConfirmAudit: (tier: string, stats: AuditStats, fileMap: FileMapItem[], preflightId?: string) => void;
   onCancelPreflight: () => void;
   onRestart: () => void;
@@ -30,6 +31,7 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
   reportData,
   historicalReportData,
   relatedAudits,
+  activeAuditId,
   onConfirmAudit,
   onCancelPreflight,
   onRestart,
@@ -48,7 +50,20 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
     case 'scanning':
       return <Scanner logs={scannerLogs} progress={scannerProgress} />;
     case 'report':
-      const displayData = reportData || historicalReportData;
+      // Use activeAuditId to determine which data to show
+      const displayData = (() => {
+        // If we have an explicit selection, use it
+        if (activeAuditId) {
+          if (historicalReportData?.auditId === activeAuditId) {
+            return historicalReportData;
+          }
+          if (reportData?.auditId === activeAuditId) {
+            return reportData;
+          }
+        }
+        // Fallback: prefer fresh data
+        return reportData || historicalReportData;
+      })();
       return displayData ? (
         <ReportDashboard
           data={displayData}

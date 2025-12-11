@@ -72,6 +72,7 @@ interface AuditContextType {
   relatedAudits: AuditRecord[];
   pendingRepoUrl: string | null;
   setPendingRepoUrl: (url: string | null) => void;
+  activeAuditId: string | null;
   handleAnalyze: (url: string) => void;
   handleConfirmAudit: (tier: string, stats: AuditStats) => Promise<void>;
   handleRestart: () => void;
@@ -167,6 +168,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     relatedAudits: auditOrchestrator.relatedAudits,
     pendingRepoUrl: auditOrchestrator.pendingRepoUrl,
     setPendingRepoUrl: auditOrchestrator.setPendingRepoUrl,
+    activeAuditId: auditOrchestrator.activeAuditId,
     handleAnalyze: auditOrchestrator.handleAnalyze,
     handleConfirmAudit: auditOrchestrator.handleConfirmAudit,
     handleRestart: auditOrchestrator.handleRestart,
@@ -182,6 +184,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     auditOrchestrator.relatedAudits,
     auditOrchestrator.pendingRepoUrl,
     auditOrchestrator.setPendingRepoUrl,
+    auditOrchestrator.activeAuditId,
     auditOrchestrator.handleAnalyze,
     auditOrchestrator.handleConfirmAudit,
     auditOrchestrator.handleRestart,

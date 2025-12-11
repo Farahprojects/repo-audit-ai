@@ -23,6 +23,7 @@ export const useAuditOrchestrator = ({
   const [historicalReportData, setHistoricalReportData] = useState<RepoReport | null>(null);
   const [relatedAudits, setRelatedAudits] = useState<AuditRecord[]>([]);
   const [pendingRepoUrl, setPendingRepoUrl] = useState<string | null>(null);
+  const [activeAuditId, setActiveAuditId] = useState<string | null>(null);
 
   // Real-time Scanner State
   const [scannerLogs, setScannerLogs] = useState<string[]>([]);
@@ -38,6 +39,7 @@ export const useAuditOrchestrator = ({
     setHistoricalReportData(null);
     setRelatedAudits([]);
     setPendingRepoUrl(null);
+    setActiveAuditId(null);
     setScannerLogs([]);
     setScannerProgress(0);
   }, []);
@@ -130,6 +132,7 @@ export const useAuditOrchestrator = ({
                 .order('created_at', { ascending: false })
                 .then(({ data: related }) => {
                   setReportData(status.report_data);
+                  setActiveAuditId(status.report_data.auditId);  // Fresh audit is now active
                   setRelatedAudits((related || []) as unknown as AuditRecord[]);
                   setTimeout(() => navigate('report'), 1000);
                 });
@@ -213,6 +216,7 @@ export const useAuditOrchestrator = ({
   const handleSelectAudit = useCallback((audit: AuditRecord) => {
     const report = AuditService.processSelectedAudit(audit);
     setHistoricalReportData(report);
+    setActiveAuditId(audit.id);  // Track explicit selection
   }, []);
 
   return {
@@ -225,6 +229,7 @@ export const useAuditOrchestrator = ({
     relatedAudits,
     pendingRepoUrl,
     setPendingRepoUrl,
+    activeAuditId,
     scannerLogs,
     scannerProgress,
 
