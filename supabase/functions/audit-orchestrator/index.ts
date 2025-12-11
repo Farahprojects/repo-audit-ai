@@ -111,26 +111,29 @@ serve(withPerformanceMonitoring(async (req) => {
 
     tracer.checkpoint('audit-status-initialized')
 
-    // Start orchestration asynchronously (don't wait for completion)
-    orchestrateAudit(supabase, preflightId, tier, userId, correlationId)
-      .catch(error => {
-        LoggerService.critical('Audit orchestration failed', error, {
-          component: 'AuditOrchestrator',
-          preflightId,
-          tier,
-          userId,
-          correlationId
-        })
+    // Wrap the background task with EdgeRuntime.waitUntil()
+    // This keeps the function alive until orchestration completes
+    EdgeRuntime.waitUntil(
+      orchestrateAudit(supabase, preflightId, tier, userId, correlationId)
+        .catch(error => {
+          LoggerService.critical('Audit orchestration failed', error, {
+            component: 'AuditOrchestrator',
+            preflightId,
+            tier,
+            userId,
+            correlationId
+          })
 
-        ErrorTrackingService.captureError(error, {
-          component: 'AuditOrchestrator',
-          function: 'orchestrateAudit',
-          preflightId,
-          tier,
-          userId,
-          correlationId
-        }, 'high')
-      })
+          ErrorTrackingService.captureError(error, {
+            component: 'AuditOrchestrator',
+            function: 'orchestrateAudit',
+            preflightId,
+            tier,
+            userId,
+            correlationId
+          }, 'high')
+        })
+    )
 
     LoggerService.info('Audit orchestration initiated successfully', {
       component: 'AuditOrchestrator',
