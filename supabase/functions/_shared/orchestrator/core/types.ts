@@ -150,6 +150,7 @@ export interface OrchestratorConfig {
     userId?: string;
     permissions?: PermissionLevel[];
     parallelBatch?: ParallelBatchConfig;
+    githubToken?: string;
 }
 
 // ============================================================================

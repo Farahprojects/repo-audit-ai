@@ -56,75 +56,138 @@ export const analyzeCodeFilesTool: Tool = {
             };
         }
 
-        // This is a placeholder - in production, you'd call the worker logic
-        // For now, return a structured response that the orchestrator can use
-        const issues: any[] = [];
-        const strengths: string[] = [];
-        const weaknesses: string[] = [];
+        if (!context.apiKey) {
+            return {
+                success: false,
+                error: 'Gemini API key not available'
+            };
+        }
 
-        // Simple heuristic analysis for demonstration
-        for (const file of files) {
-            const content = file.content || '';
+        try {
+            // Prepare the analysis prompt
+            const fileContents = files.map(f =>
+                `--- ${f.path} ---\n${f.content || 'File content not available'}`
+            ).join('\n\n');
 
-            // Check for common issues
-            if (content.includes('console.log') && focusAreas.includes('quality')) {
-                issues.push({
-                    id: `console-${file.path}`,
-                    severity: 'info',
-                    category: 'Code Quality',
-                    title: 'Console.log statement found',
-                    description: 'Debug logging should be removed in production code',
-                    filePath: file.path
-                });
-            }
+            const focusAreaText = focusAreas.join(', ');
+            const systemPrompt = `You are an expert code auditor. Analyze the provided code files for the following focus areas: ${focusAreaText}.
 
-            if (content.includes('TODO') || content.includes('FIXME')) {
-                issues.push({
-                    id: `todo-${file.path}`,
-                    severity: 'info',
-                    category: 'Maintenance',
-                    title: 'TODO comment found',
-                    description: 'Outstanding work items in codebase',
-                    filePath: file.path
-                });
-            }
+Return your analysis in this exact JSON format:
+{
+  "issues": [
+    {
+      "id": "unique_id",
+      "severity": "critical|high|warning|info",
+      "category": "Security|Performance|Quality|Maintenance|Architecture",
+      "title": "Brief, clear title",
+      "description": "Detailed explanation of the issue",
+      "filePath": "filename.ext",
+      "line": 42,
+      "badCode": "problematic code snippet (optional)",
+      "remediation": "suggested fix (optional)"
+    }
+  ],
+  "strengths": ["key strength 1", "key strength 2"],
+  "weaknesses": ["key weakness 1", "key weakness 2"],
+  "appMap": {
+    "languages": ["js", "ts"],
+    "frameworks": ["react", "node"],
+    "patterns": ["modular", "functional"],
+    "complexity": "low|medium|high"
+  }
+}`;
 
-            if (focusAreas.includes('security')) {
-                if (content.includes('eval(')) {
-                    issues.push({
-                        id: `eval-${file.path}`,
-                        severity: 'critical',
-                        category: 'Security',
-                        title: 'Use of eval() detected',
-                        description: 'eval() is a security risk - consider alternatives',
-                        filePath: file.path
-                    });
+            const userPrompt = `Please analyze these ${files.length} files for ${focusAreaText} issues:
+
+${fileContents}
+
+${analysisContext ? `\nAdditional Context: ${analysisContext}` : ''}
+
+Focus on identifying real issues and providing actionable insights.`;
+
+            // Call Gemini API
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro/generateContent`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': context.apiKey
+                    },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                role: 'user',
+                                parts: [{ text: systemPrompt + '\n\n' + userPrompt }]
+                            }
+                        ],
+                        generationConfig: {
+                            temperature: 0.3,
+                            maxOutputTokens: 8192,
+                            thinkingConfig: {
+                                thinkingBudget: 4096
+                            }
+                        }
+                    })
                 }
+            );
+
+            if (!response.ok) {
+                return {
+                    success: false,
+                    error: `Gemini API error: ${response.status}`,
+                    metadata: { statusCode: response.status }
+                };
             }
-        }
 
-        // Identify strengths based on patterns
-        const hasTypeScript = files.some(f => f.path.endsWith('.ts') || f.path.endsWith('.tsx'));
-        if (hasTypeScript) {
-            strengths.push('TypeScript usage for type safety');
-        }
+            const result = await response.json();
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        const hasTests = files.some(f => f.path.includes('test') || f.path.includes('spec'));
-        if (hasTests) {
-            strengths.push('Test files present');
-        }
+            if (!text) {
+                return {
+                    success: false,
+                    error: 'No response from Gemini API'
+                };
+            }
 
-        return {
-            success: true,
-            data: {
-                issues,
-                strengths,
-                weaknesses,
-                filesAnalyzed: files.length,
-                focusAreas
-            },
-            tokenUsage: 0 // Heuristic analysis uses no tokens
-        };
+            // Extract JSON from response (Gemini might add markdown formatting)
+            let jsonText = text;
+            if (text.includes('```json')) {
+                const match = text.match(/```json\s*([\s\S]*?)\s*```/);
+                if (match) jsonText = match[1];
+            }
+
+            try {
+                const analysis = JSON.parse(jsonText);
+
+                return {
+                    success: true,
+                    data: {
+                        issues: analysis.issues || [],
+                        strengths: analysis.strengths || [],
+                        weaknesses: analysis.weaknesses || [],
+                        appMap: analysis.appMap || {},
+                        filesAnalyzed: files.length,
+                        focusAreas
+                    },
+                    tokenUsage: result.usageMetadata?.totalTokenCount || 0
+                };
+            } catch (parseError) {
+                // If JSON parsing fails, return the raw text for debugging
+                return {
+                    success: false,
+                    error: 'Failed to parse Gemini response as JSON',
+                    data: { rawResponse: text },
+                    metadata: { parseError: parseError instanceof Error ? parseError.message : String(parseError) }
+                };
+            }
+
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
     }
 };
 
@@ -264,11 +327,136 @@ export const generateSummaryTool: Tool = {
 };
 
 // ============================================================================
+// Deep AI Analysis Tool
+// ============================================================================
+
+export const deepAIAnalysisTool: Tool = {
+    name: 'deep_ai_analysis',
+    description: 'Performs deep AI-powered analysis on code, architecture, or specific issues. Use this for complex analysis that requires LLM reasoning.',
+    requiredPermission: PermissionLevel.READ,
+
+    inputSchema: {
+        type: 'object',
+        properties: {
+            query: {
+                type: 'string',
+                description: 'The analysis question or request'
+            },
+            context: {
+                type: 'object',
+                description: 'Additional context data (files, repo info, etc.)',
+                required: false
+            },
+            analysisType: {
+                type: 'string',
+                description: 'Type of analysis: architecture, security, performance, quality',
+                enum: ['architecture', 'security', 'performance', 'quality', 'general'],
+                required: false
+            }
+        },
+        required: ['query']
+    },
+
+    async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
+        const { query, context: analysisContext, analysisType = 'general' } = input as {
+            query: string;
+            context?: any;
+            analysisType?: string;
+        };
+
+        if (!context.apiKey) {
+            return {
+                success: false,
+                error: 'Gemini API key not available'
+            };
+        }
+
+        try {
+            const systemPrompt = `You are an expert software engineering consultant specializing in ${analysisType} analysis. Provide deep, insightful analysis based on the query and context provided.
+
+Focus on:
+- Technical accuracy
+- Actionable insights
+- Best practices
+- Potential issues and solutions
+
+Provide your analysis in a structured format.`;
+
+            const userPrompt = `Query: ${query}
+
+${analysisContext ? `Context: ${JSON.stringify(analysisContext, null, 2)}` : ''}`;
+
+            // Call Gemini API
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro/generateContent`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': context.apiKey
+                    },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                role: 'user',
+                                parts: [{ text: systemPrompt + '\n\n' + userPrompt }]
+                            }
+                        ],
+                        generationConfig: {
+                            temperature: 0.3,
+                            maxOutputTokens: 8192,
+                            thinkingConfig: {
+                                thinkingBudget: 6144
+                            }
+                        }
+                    })
+                }
+            );
+
+            if (!response.ok) {
+                return {
+                    success: false,
+                    error: `Gemini API error: ${response.status}`,
+                    metadata: { statusCode: response.status }
+                };
+            }
+
+            const result = await response.json();
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!text) {
+                return {
+                    success: false,
+                    error: 'No response from Gemini API'
+                };
+            }
+
+            return {
+                success: true,
+                data: {
+                    analysis: text,
+                    analysisType,
+                    query
+                },
+                tokenUsage: result.usageMetadata?.totalTokenCount || 0
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    }
+};
+
+// ============================================================================
 // Export all audit tools
 // ============================================================================
 
 export const auditTools: Tool[] = [
     analyzeCodeFilesTool,
     calculateHealthScoreTool,
-    generateSummaryTool
+    generateSummaryTool,
+    deepAIAnalysisTool
 ];

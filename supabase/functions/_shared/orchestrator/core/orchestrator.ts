@@ -367,7 +367,8 @@ export class Orchestrator {
             userId: this.config.userId,
             permissions: this.config.permissions || [PermissionLevel.READ],
             supabase: this.config.supabase,
-            // githubToken and preflight would come from task context
+            apiKey: this.config.apiKey,
+            githubToken: this.config.githubToken
         };
 
         const result = await this.toolRegistry.execute(name, input, context);
@@ -398,7 +399,9 @@ export class Orchestrator {
             sessionId: this.stateManager.getSessionId(),
             userId: this.config.userId,
             permissions: this.config.permissions || [PermissionLevel.READ],
-            supabase: this.config.supabase
+            supabase: this.config.supabase,
+            apiKey: this.config.apiKey,
+            githubToken: this.config.githubToken
         };
 
         return this.toolRegistry.executeParallel(batchCall.tools, context);
