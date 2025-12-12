@@ -84,7 +84,8 @@ export interface AuditContext {
         graphql: boolean;
         hasDockerfile: boolean;
     };
-    githubToken?: string;
+    githubToken?: string; // Legacy - kept for backward compatibility
+    githubClient?: any; // GitHubAPIClient or GitHubAppClient instance
     metadata?: any;
 }
 

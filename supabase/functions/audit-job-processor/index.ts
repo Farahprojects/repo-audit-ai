@@ -26,6 +26,8 @@ import { runWorker } from '../_shared/agents/worker.ts';
 import { AuditContext, WorkerTask } from '../_shared/agents/types.ts';
 import { detectCapabilities } from '../_shared/capabilities.ts';
 import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
+import { GitHubAppClient } from '../_shared/github/GitHubAppClient.ts';
+import { RateLimitScheduler } from '../_shared/github/RateLimitScheduler.ts';
 import { LoggerService } from '../_shared/services/LoggerService.ts';
 import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/services/RuntimeMonitoringService.ts';
 import { calculateHealthScore, generateEgoDrivenSummary } from '../_shared/scoringUtils.ts';
@@ -86,7 +88,7 @@ serve(withPerformanceMonitoring(async (req) => {
             );
         }
 
-        // Acquire jobs atomically
+        // Acquire jobs atomically (but only check rate limits for GitHub App jobs)
         const { data: jobs, error: acquireError } = await supabase
             .rpc('acquire_audit_jobs_batch', {
                 p_worker_id: WORKER_ID,
@@ -104,6 +106,67 @@ serve(withPerformanceMonitoring(async (req) => {
         if (!jobs || jobs.length === 0) {
             return new Response(
                 JSON.stringify({ message: 'No jobs available', workerId: WORKER_ID }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Filter jobs based on rate limits for GitHub App installations
+        const scheduler = new RateLimitScheduler();
+        const filteredJobs = [];
+
+        for (const job of jobs) {
+            // Check if this job has a GitHub App installation
+            const { data: preflight } = await supabase
+                .from('preflights')
+                .select('installation_id, file_count')
+                .eq('id', job.preflight_id)
+                .single();
+
+            if (!preflight?.installation_id) {
+                // No installation ID - this is an OAuth job, process normally
+                filteredJobs.push(job);
+                continue;
+            }
+
+            // Check rate limits for GitHub App jobs
+            const estimatedCalls = scheduler.estimateAPICalls(preflight.file_count || 0, {
+                includeLanguages: true,
+                includeTree: true,
+                includeCommits: false
+            });
+
+            const capacity = await scheduler.canProcessJob(preflight.installation_id, estimatedCalls);
+
+            if (capacity.canProcess) {
+                // Can process this job
+                filteredJobs.push(job);
+            } else {
+                // Cannot process now - reschedule for later
+                LoggerService.info(`Rescheduling job ${job.job_id} due to rate limits`, {
+                    component: 'AuditJobProcessor',
+                    workerId: WORKER_ID,
+                    installationId: preflight.installation_id,
+                    waitUntil: capacity.waitUntil?.toISOString()
+                });
+
+                await supabase
+                    .from('audit_jobs')
+                    .update({
+                        status: 'pending',
+                        scheduled_at: capacity.waitUntil?.toISOString(),
+                        worker_id: null,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', job.job_id);
+            }
+        }
+
+        if (filteredJobs.length === 0) {
+            return new Response(
+                JSON.stringify({
+                    message: 'No jobs can be processed due to rate limits',
+                    workerId: WORKER_ID
+                }),
                 { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
@@ -221,11 +284,39 @@ async function processJob(
         const fileMap = preflight.repo_map || [];
         const detectedStack = detectCapabilities(fileMap);
 
-        // Resolve GitHub token if needed
-        let effectiveGitHubToken: string | null = null;
-        if (preflight.is_private && preflight.github_account_id) {
+        // Resolve GitHub client (GitHub App preferred, OAuth fallback)
+        let githubClient: any = null;
+
+        if (preflight.installation_id) {
+            // Use GitHub App client
+            githubClient = new GitHubAppClient(preflight.installation_id);
+            LoggerService.info('Using GitHub App client for job', {
+                component: 'AuditJobProcessor',
+                jobId: job.job_id,
+                installationId: preflight.installation_id
+            });
+        } else if (preflight.is_private && preflight.github_account_id) {
+            // Fallback to OAuth token
             const authenticator = GitHubAuthenticator.getInstance();
-            effectiveGitHubToken = await authenticator.getTokenByAccountId(preflight.github_account_id);
+            const token = await authenticator.getTokenByAccountId(preflight.github_account_id);
+            if (token) {
+                // Import GitHubAPIClient dynamically to avoid circular imports
+                const { GitHubAPIClient } = await import('../_shared/github/GitHubAPIClient.ts');
+                githubClient = new GitHubAPIClient(token);
+                LoggerService.info('Using OAuth token for job (fallback)', {
+                    component: 'AuditJobProcessor',
+                    jobId: job.job_id,
+                    accountId: preflight.github_account_id
+                });
+            }
+        } else if (!preflight.is_private) {
+            // Public repo - no auth needed
+            const { GitHubAPIClient } = await import('../_shared/github/GitHubAPIClient.ts');
+            githubClient = new GitHubAPIClient(null);
+        }
+
+        if (!githubClient) {
+            throw new Error('No valid GitHub authentication method available for private repository');
         }
 
         const baseContext: AuditContext = {
@@ -254,9 +345,7 @@ async function processJob(
             detectedStack
         };
 
-        const context: AuditContext = effectiveGitHubToken
-            ? { ...baseContext, githubToken: effectiveGitHubToken }
-            : baseContext;
+        const context: AuditContext = { ...baseContext, githubClient };
 
         // ============================================================
         // PHASE 1: PLANNER (INLINE) - WITH RESUMABILITY

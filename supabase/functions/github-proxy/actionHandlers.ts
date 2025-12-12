@@ -1,13 +1,14 @@
 
 import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';
 import { ComplexityAnalyzer } from '../_shared/github/ComplexityAnalyzer.ts';
+import { FileCacheManager } from '../_shared/github/FileCacheManager.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-export async function handleStatsAction(client: GitHubAPIClient, owner: string, repo: string) {
+export async function handleStatsAction(client: GitHubAPIClient | any, owner: string, repo: string) {
 
     try {
         // First, check if the owner exists
@@ -78,7 +79,7 @@ export async function handleStatsAction(client: GitHubAPIClient, owner: string, 
     }
 }
 
-export async function handleFingerprintAction(client: GitHubAPIClient, owner: string, repo: string, branch?: string) {
+export async function handleFingerprintAction(client: GitHubAPIClient | any, owner: string, repo: string, branch?: string) {
 
     try {
         // First, check if the owner exists
@@ -135,7 +136,7 @@ export async function handleFingerprintAction(client: GitHubAPIClient, owner: st
  * Private repo → { errorCode: 'PRIVATE_REPO', requiresAuth: true }
  * Owner not found → { errorCode: 'OWNER_NOT_FOUND', requiresAuth: false }
  */
-export async function handlePreflightAction(client: GitHubAPIClient, owner: string, repo: string, branch?: string) {
+export async function handlePreflightAction(client: GitHubAPIClient | any, owner: string, repo: string, branch?: string) {
 
     try {
         // 1. Check if the owner exists (deterministic check)
@@ -256,7 +257,7 @@ export async function handlePreflightAction(client: GitHubAPIClient, owner: stri
 }
 
 
-export async function handleContentAction(client: GitHubAPIClient, owner: string, repo: string, filePath: string, branch?: string) {
+export async function handleContentAction(client: GitHubAPIClient | any, owner: string, repo: string, filePath: string, branch?: string) {
 
     try {
         // First, check if the owner exists
@@ -274,6 +275,31 @@ export async function handleContentAction(client: GitHubAPIClient, owner: string
         }
 
         const defaultBranch = branch || 'main';
+
+        // Try to get cached content first
+        const cacheManager = new FileCacheManager();
+        try {
+            const cacheResult = await cacheManager.fetchFileWithCache(
+                client, owner, repo, filePath, defaultBranch
+            );
+
+            return new Response(
+                JSON.stringify({
+                    content: cacheResult.content,
+                    encoding: 'utf-8',
+                    size: cacheResult.size || cacheResult.content.length,
+                    sha: 'cached', // Not accurate but sufficient for caching indicator
+                    fromCache: cacheResult.fromCache,
+                    etag: cacheResult.etag
+                }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        } catch (cacheError) {
+            console.warn('Cache fetch failed, falling back to direct API:', cacheError);
+            // Fall through to direct API call
+        }
+
+        // Fallback to direct API call
         const fileRes = await client.fetchFile(owner, repo, filePath, defaultBranch);
         const fileData = await fileRes.json();
 
@@ -291,7 +317,7 @@ export async function handleContentAction(client: GitHubAPIClient, owner: string
     }
 }
 
-export async function handleTreeAction(client: GitHubAPIClient, owner: string, repo: string, branch?: string) {
+export async function handleTreeAction(client: GitHubAPIClient | any, owner: string, repo: string, branch?: string) {
     try {
         // First, check if the owner exists
         const ownerExists = await checkOwnerExists(client, owner);

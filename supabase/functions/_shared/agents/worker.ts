@@ -1,7 +1,6 @@
 
 import { AuditContext, WorkerTask, WorkerResult } from './types.ts';
 import { callGemini, GeminiUsage } from './utils.ts';
-import { GitHubAPIClient } from '../github/GitHubAPIClient.ts';
 
 // Get the set of valid file paths from context (source of truth from preflight)
 function getValidFilePaths(context: AuditContext): Set<string> {
@@ -107,7 +106,8 @@ export async function runWorker(
     }
 
     // Fetch files by path using GitHub API (preflight provides owner/repo/branch)
-    const apiClient = new GitHubAPIClient(context.githubToken);
+    // Use the githubClient from context (could be GitHubAPIClient or GitHubAppClient)
+    const apiClient = context.githubClient;
     
     const fetchedContent = await Promise.all(filesToFetch.map(async f => {
 

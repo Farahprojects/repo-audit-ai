@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
 import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';
+import { GitHubAppClient } from '../_shared/github/GitHubAppClient.ts';
+import { FileCacheManager } from '../_shared/github/FileCacheManager.ts';
 import {
   validateRequestBody,
   validateGitHubOwner,
@@ -32,7 +34,7 @@ serve(async (req) => {
   try {
     // Validate request body
     const requestData = await validateRequestBody(req);
-    const { owner, repo, branch, filePath, action, userToken } = requestData;
+    const { owner, repo, branch, filePath, action, userToken, installationId } = requestData;
 
     // Validate required parameters
     if (!owner || !repo) {
@@ -83,17 +85,27 @@ serve(async (req) => {
       );
     }
 
-    // 1. Authenticate
-    const authenticator = GitHubAuthenticator.getInstance();
-    const token = await authenticator.getAuthenticatedToken(userToken, req.headers.get('authorization'), owner);
+    // 1. Initialize Client (dual-mode: GitHub App or OAuth)
+    let client: GitHubAPIClient | GitHubAppClient;
 
-    // Log authentication status
-    if (token) {
+    if (installationId) {
+        // Use GitHub App client
+        client = new GitHubAppClient(installationId);
+        console.log(`Using GitHub App client for installation ${installationId}`);
     } else {
-    }
+        // Use OAuth token (existing logic)
+        const authenticator = GitHubAuthenticator.getInstance();
+        const token = await authenticator.getAuthenticatedToken(userToken, req.headers.get('authorization'), owner);
 
-    // 2. Initialize Client
-    const client = new GitHubAPIClient(token);
+        // Log authentication status
+        if (token) {
+            console.log('Using OAuth token for authentication');
+        } else {
+            console.log('No authentication token available');
+        }
+
+        client = new GitHubAPIClient(token);
+    }
 
     // 3. Route Action
     switch (action) {

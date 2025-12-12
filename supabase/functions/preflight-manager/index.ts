@@ -44,6 +44,7 @@ interface PreflightRequest {
     repoUrl: string;
     forceRefresh?: boolean;
     userToken?: string; // GitHub token passed from frontend
+    installationId?: number; // GitHub App installation ID (optional)
 }
 
 interface PreflightResponse {
@@ -64,6 +65,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
  */
 // Import canonical parser from shared utils
 import { parseGitHubRepo } from '../_shared/utils.ts';
+import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';
+import { GitHubAppClient } from '../_shared/github/GitHubAppClient.ts';
+import { FileCacheManager } from '../_shared/github/FileCacheManager.ts';
 
 // Alias for backward compatibility
 function parseGitHubUrl(url: string) {
@@ -96,7 +100,8 @@ async function fetchFreshPreflightData(
     owner: string,
     repo: string,
     userToken?: string,
-    authHeader?: string | null
+    authHeader?: string | null,
+    installationId?: number
 ): Promise<{
     stats: any;
     fingerprint: any;
@@ -105,6 +110,15 @@ async function fetchFreshPreflightData(
     defaultBranch: string;
 } | { error: string; errorCode: string; requiresAuth: boolean }> {
 
+    // Determine which client to use
+    let clientType = 'oauth'; // Default
+    let effectiveToken = userToken;
+
+    if (installationId) {
+        // Use GitHub App client - pass installation ID to github-proxy
+        clientType = 'app';
+        effectiveToken = undefined; // Don't pass user token for app installations
+    }
 
     // Call github-proxy with preflight action
     const { data, error } = await supabase.functions.invoke('github-proxy', {
@@ -112,7 +126,9 @@ async function fetchFreshPreflightData(
             owner,
             repo,
             action: 'preflight',
-            userToken
+            userToken: effectiveToken,
+            installationId: installationId, // Pass installation ID
+            clientType // For future extension
         },
         headers: authHeader ? { authorization: authHeader } : undefined
     });
@@ -153,7 +169,8 @@ async function getOrCreatePreflight(
     userId: string | null,
     userToken?: string,
     authHeader?: string | null,
-    forceRefresh: boolean = false
+    forceRefresh: boolean = false,
+    installationId?: number
 ): Promise<PreflightResponse> {
 
     const parsed = parseGitHubUrl(repoUrl);
@@ -176,8 +193,15 @@ async function getOrCreatePreflight(
             .select('*')
             .eq('repo_url', normalizedUrl);
 
-        // For authenticated users, prefer their own preflight
-        if (userId) {
+        // Priority order:
+        // 1. GitHub App installation (if provided)
+        // 2. User's OAuth preflight
+        // 3. Public repo preflight
+        if (installationId) {
+            // Look for preflight with this installation
+            query = query.eq('installation_id', installationId);
+        } else if (userId) {
+            // For authenticated users, prefer their own preflight
             query = query.eq('user_id', userId);
         } else {
             // For anonymous users, only look for public repo preflights
@@ -203,7 +227,7 @@ async function getOrCreatePreflight(
     }
 
     // Step 2: Fetch fresh data from GitHub
-    const freshData = await fetchFreshPreflightData(supabase, owner, repo, userToken, authHeader);
+    const freshData = await fetchFreshPreflightData(supabase, owner, repo, userToken, authHeader, installationId);
 
     if ('error' in freshData) {
         return {
@@ -240,6 +264,7 @@ async function getOrCreatePreflight(
         is_private: freshData.isPrivate,
         fetch_strategy: freshData.isPrivate ? 'authenticated' : 'public',
         github_account_id: githubAccountId,
+        installation_id: installationId,
         token_valid: true,
         user_id: userId,
         file_count: freshData.fileMap.length,
@@ -248,8 +273,19 @@ async function getOrCreatePreflight(
 
     // Try to upsert (update if exists, insert if not)
     let upsertQuery;
-    if (userId) {
-        // For authenticated users, use repo_url + user_id as the conflict target
+
+    if (installationId) {
+        // For GitHub App installations, use repo_url + installation_id as conflict target
+        upsertQuery = supabase
+            .from('preflights')
+            .upsert(preflightData, {
+                onConflict: 'repo_url,installation_id',
+                ignoreDuplicates: false
+            })
+            .select()
+            .single();
+    } else if (userId) {
+        // For authenticated users with OAuth, use repo_url + user_id as the conflict target
         upsertQuery = supabase
             .from('preflights')
             .upsert(preflightData, {
@@ -265,7 +301,8 @@ async function getOrCreatePreflight(
             .from('preflights')
             .delete()
             .eq('repo_url', normalizedUrl)
-            .is('user_id', null);
+            .is('user_id', null)
+            .is('installation_id', null);
 
         upsertQuery = supabase
             .from('preflights')
@@ -354,7 +391,7 @@ serve(async (req) => {
         }
 
         const body: PreflightRequest = await req.json();
-        const { action, repoUrl, forceRefresh, userToken } = body;
+        const { action, repoUrl, forceRefresh, userToken, installationId } = body;
 
 
         if (!repoUrl) {
@@ -376,7 +413,8 @@ serve(async (req) => {
                     userId,
                     userToken,
                     authHeader,
-                    action === 'refresh' || forceRefresh
+                    action === 'refresh' || forceRefresh,
+                    installationId
                 );
                 break;
 
