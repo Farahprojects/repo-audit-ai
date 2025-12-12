@@ -329,32 +329,30 @@ async function getOrCreatePreflight(
         };
     }
 
-    // Step 5: Prefetch and store repository files (async, don't block response)
-    // This runs in the background to populate the repos table for agents
-    if (newPreflight && freshData.fileMap && freshData.fileMap.length > 0) {
-        // Fire and forget - don't await to avoid slowing down preflight response
+    // Step 5: Download and store entire repository as archive (ONE API CALL)
+    // This runs async to not block the preflight response
+    if (newPreflight) {
         (async () => {
             try {
-                console.log(`📦 [preflight-manager] Starting file prefetch for ${owner}/${repo}...`);
-
-                // Create a GitHub client for fetching file contents
-                const githubClient = userToken
-                    ? new GitHubAPIClient(userToken)
-                    : new GitHubAPIClient(); // Public access
+                console.log(`📦 [preflight-manager] Downloading repo archive for ${owner}/${repo}...`);
 
                 const storageService = new RepoStorageService(supabase);
-                const result = await storageService.prefetchAndStoreFiles(
+                const result = await storageService.downloadAndStoreRepo(
                     newPreflight.id,
-                    `${owner}/${repo}`,
-                    freshData.fileMap,
-                    githubClient,
-                    freshData.defaultBranch
+                    owner,
+                    repo,
+                    freshData.defaultBranch,
+                    userToken // Pass token for private repos
                 );
 
-                console.log(`✅ [preflight-manager] File prefetch complete: ${result.stored} stored, ${result.failed} failed, ${result.skipped} skipped`);
+                if (result.success) {
+                    console.log(`✅ [preflight-manager] Repo stored: ${result.fileCount} files, ${(result.archiveSize / 1024).toFixed(1)}KB`);
+                } else {
+                    console.error(`❌ [preflight-manager] Repo storage failed:`, result.error);
+                }
             } catch (err) {
-                console.error(`❌ [preflight-manager] File prefetch failed:`, err);
-                // Don't throw - preflight still succeeded, just without cached files
+                console.error(`❌ [preflight-manager] Repo download failed:`, err);
+                // Don't throw - preflight still succeeded
             }
         })();
     }

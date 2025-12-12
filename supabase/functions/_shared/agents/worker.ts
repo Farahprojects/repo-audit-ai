@@ -106,8 +106,8 @@ export async function runWorker(
     }
 
     // =========================================================================
-    // FETCH FILES FROM REPOS TABLE ONLY
-    // Agents have NO GitHub API access - all files come from the database
+    // LOAD FILES FROM REPO ARCHIVE
+    // Agents have NO GitHub API access - all files come from the stored archive
     // =========================================================================
     const supabase = context.supabase;
 
@@ -128,63 +128,70 @@ export async function runWorker(
         };
     }
 
-    const fetchedContent = await Promise.all(filesToFetch.map(async f => {
+    // Import fflate for unzip
+    const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
+
+    // Load the entire repo archive once
+    const { data: repoData, error: repoError } = await supabase
+        .from('repos')
+        .select('archive_blob, file_index')
+        .eq('repo_id', context.preflight!.id)
+        .single();
+
+    if (repoError || !repoData?.archive_blob) {
+        console.error(`🚨 Worker [${task.role}] could not load repo archive!`);
+        return {
+            result: {
+                taskId: task.id,
+                findings: {
+                    error: "REPO_NOT_FOUND",
+                    message: "Repository archive not found in database. Ensure preflight downloaded the repo.",
+                    analysis: null,
+                    issues: []
+                },
+                tokenUsage: 0
+            },
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        };
+    }
+
+    // Unzip the archive once
+    const archiveData = new Uint8Array(repoData.archive_blob);
+    const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
+
+    console.log(`📦 Worker [${task.role}] loaded repo archive, extracting ${filesToFetch.length} files...`);
+
+    // Extract each requested file
+    const fetchedContent: (string | null)[] = [];
+    for (const f of filesToFetch) {
         try {
-            // Query the repos table for this file
-            const { data: cached, error } = await supabase
-                .from('repos')
-                .select('compressed_content')
-                .eq('repo_id', context.preflight!.id)
-                .eq('file_path', f.path)
-                .single();
-
-            if (error || !cached?.compressed_content) {
-                console.warn(`⚠️ File not found in repos table: ${f.path}`);
-                return null;
+            if (!unzipped[f.path]) {
+                console.warn(`⚠️ File not in archive: ${f.path}`);
+                fetchedContent.push(null);
+                continue;
             }
 
-            // Decompress the content using built-in DecompressionStream
-            const compressed = new Uint8Array(cached.compressed_content);
-            const stream = new ReadableStream({
-                start(controller) {
-                    controller.enqueue(compressed);
-                    controller.close();
-                }
-            });
-
-            const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
-            const reader = decompressedStream.getReader();
-            const chunks: Uint8Array[] = [];
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-            }
-
-            const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-            const result = new Uint8Array(totalLength);
-            let offset = 0;
-            for (const chunk of chunks) {
-                result.set(chunk, offset);
-                offset += chunk.length;
-            }
-
-            const decoder = new TextDecoder();
-            const content = decoder.decode(result);
-
+            const content = strFromU8(unzipped[f.path]!);
             if (!content || content.trim().length === 0) {
-                console.warn(`⚠️ Empty content in repos table for ${f.path}`);
-                return null;
+                console.warn(`⚠️ Empty content for ${f.path}`);
+                fetchedContent.push(null);
+                continue;
             }
 
-            console.log(`📦 Loaded ${f.path} from repos table`);
-            return `--- ${f.path} ---\n${content}`;
+            console.log(`📄 Extracted ${f.path}`);
+            fetchedContent.push(`--- ${f.path} ---\n${content}`);
         } catch (err) {
-            console.error(`🚨 Failed to load ${f.path} from repos table:`, err);
-            return null;
+            console.error(`🚨 Failed to extract ${f.path}:`, err);
+            fetchedContent.push(null);
         }
-    }));
+    }
+
+    // Update last_accessed (fire and forget)
+    supabase
+        .from('repos')
+        .update({ last_accessed: new Date().toISOString() })
+        .eq('repo_id', context.preflight!.id)
+        .then(() => { });
 
     // Filter out failed fetches
     const successfulContent = fetchedContent.filter(Boolean) as string[];

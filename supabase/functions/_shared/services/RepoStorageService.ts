@@ -1,108 +1,49 @@
 /**
- * RepoStorageService - Handles compressed file storage in the repos table
+ * RepoStorageService - Archive-Based Repository Storage
  * 
- * This service manages the storage and retrieval of repository files,
- * enabling AI agents to read/write files without hitting GitHub rate limits.
+ * Downloads entire repos as zipball in ONE API call.
+ * Stores re-compressed archive with file index for fast lookup.
+ * Agents read files by extracting from stored archive.
  */
 
-export interface StoredFile {
-    filePath: string;
-    content: string;
-    contentHash: string;
-    version: number;
-    metadata?: Record<string, unknown>;
-    previewCache?: Record<string, unknown>;
+// Using fflate for zip handling (lightweight, works in Deno)
+import { unzipSync, zipSync, strToU8, strFromU8 } from 'https://esm.sh/fflate@0.8.2';
+
+export interface FileIndexEntry {
+    size: number;
+    hash: string;
+    type: string; // file extension or 'unknown'
 }
 
-export interface FileToStore {
-    path: string;
-    content: string;
-    metadata?: Record<string, unknown>;
-}
-
-/**
- * Compress content using gzip (Deno built-in CompressionStream)
- */
-async function compressContent(content: string): Promise<Uint8Array> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(content);
-
-    const stream = new ReadableStream({
-        start(controller) {
-            controller.enqueue(data);
-            controller.close();
-        }
-    });
-
-    const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
-    const reader = compressedStream.getReader();
-    const chunks: Uint8Array[] = [];
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-    }
-
-    // Combine all chunks into single Uint8Array
-    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-        result.set(chunk, offset);
-        offset += chunk.length;
-    }
-
-    return result;
+export interface RepoArchive {
+    repoId: string;
+    repoName: string;
+    branch: string;
+    archiveBlob: Uint8Array;
+    archiveHash: string;
+    archiveSize: number;
+    fileIndex: Record<string, FileIndexEntry>;
 }
 
 /**
- * Decompress gzip content (Deno built-in DecompressionStream)
+ * Generate simple hash for content
  */
-async function decompressContent(compressed: Uint8Array): Promise<string> {
-    const stream = new ReadableStream({
-        start(controller) {
-            controller.enqueue(compressed);
-            controller.close();
-        }
-    });
-
-    const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
-    const reader = decompressedStream.getReader();
-    const chunks: Uint8Array[] = [];
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-    }
-
-    // Combine all chunks
-    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-        result.set(chunk, offset);
-        offset += chunk.length;
-    }
-
-    const decoder = new TextDecoder();
-    return decoder.decode(result);
-}
-
-/**
- * Generate a simple hash for content change detection
- */
-function hashContent(content: string): string {
+function hashContent(content: Uint8Array): string {
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
-        const char = content.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
+        hash = ((hash << 5) - hash) + content[i]!;
+        hash = hash & hash;
     }
     return hash.toString(16);
 }
 
+/**
+ * Get file type from path
+ */
+function getFileType(path: string): string {
+    const ext = path.split('.').pop()?.toLowerCase();
+    return ext || 'unknown';
+}
 
 export class RepoStorageService {
     private supabase: any;
@@ -112,310 +53,332 @@ export class RepoStorageService {
     }
 
     /**
-     * Store multiple files for a repository (compressed)
+     * Download repo as zipball from GitHub and store in database
+     * This is the main entry point - ONE API call for entire repo
      */
-    async storeRepoFiles(
+    async downloadAndStoreRepo(
         repoId: string,
-        repoName: string,
-        files: FileToStore[]
-    ): Promise<{ stored: number; failed: number }> {
-        let stored = 0;
-        let failed = 0;
+        owner: string,
+        repo: string,
+        branch: string,
+        githubToken?: string
+    ): Promise<{ success: boolean; fileCount: number; archiveSize: number; error?: string }> {
+        const repoName = `${owner}/${repo}`;
+        console.log(`📦 Downloading zipball for ${repoName}@${branch}...`);
 
-        // Process in batches of 50 to avoid overwhelming the database
-        const batchSize = 50;
-        for (let i = 0; i < files.length; i += batchSize) {
-            const batch = files.slice(i, i + batchSize);
+        try {
+            // 1. Download zipball from GitHub (ONE API call)
+            const zipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${branch}`;
+            const headers: Record<string, string> = {
+                'Accept': 'application/vnd.github+json',
+                'User-Agent': 'RepoAudit'
+            };
+            if (githubToken) {
+                headers['Authorization'] = `Bearer ${githubToken}`;
+            }
 
-            const rows = await Promise.all(batch.map(async (file) => {
-                try {
-                    const compressed = await compressContent(file.content);
+            const response = await fetch(zipUrl, { headers });
 
-                    return {
-                        repo_id: repoId,
-                        repo_name: repoName,
-                        file_path: file.path,
-                        compressed_content: compressed,
-                        content_hash: hashContent(file.content),
-                        metadata: file.metadata || {},
-                        version: 1,
-                        last_accessed: new Date().toISOString(),
-                        last_updated: new Date().toISOString()
-                    };
-                } catch (err) {
-                    console.error(`Failed to compress file ${file.path}:`, err);
-                    return null;
-                }
-            }));
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ GitHub zipball download failed: ${response.status}`, errorText);
+                return {
+                    success: false,
+                    fileCount: 0,
+                    archiveSize: 0,
+                    error: `GitHub API error: ${response.status}`
+                };
+            }
 
-            const validRows = rows.filter(Boolean);
+            // 2. Get the zip data
+            const zipBuffer = await response.arrayBuffer();
+            const zipData = new Uint8Array(zipBuffer);
+            console.log(`📥 Downloaded ${(zipData.length / 1024).toFixed(1)}KB zipball`);
 
-            if (validRows.length > 0) {
-                const { error } = await this.supabase
-                    .from('repos')
-                    .upsert(validRows, {
-                        onConflict: 'repo_id,file_path',
-                        ignoreDuplicates: false
-                    });
+            // 3. Unzip and build file index
+            const unzipped = unzipSync(zipData);
+            const fileIndex: Record<string, FileIndexEntry> = {};
+            const cleanFiles: Record<string, Uint8Array> = {};
 
-                if (error) {
-                    console.error(`Failed to store batch:`, error);
-                    failed += validRows.length;
-                } else {
-                    stored += validRows.length;
+            // GitHub's zipball has a root folder like "owner-repo-sha/"
+            // We need to strip that prefix
+            let rootPrefix = '';
+            const unzippedTyped = unzipped as Record<string, Uint8Array>;
+
+            for (const path of Object.keys(unzippedTyped)) {
+                if (path.endsWith('/')) {
+                    rootPrefix = path;
+                    break;
                 }
             }
 
-            failed += batch.length - validRows.length;
-        }
+            let fileCount = 0;
+            for (const [rawPath, content] of Object.entries(unzippedTyped)) {
+                // Skip directories (empty entries)
+                if (rawPath.endsWith('/') || !content || content.length === 0) continue;
 
-        console.log(`📦 RepoStorage: Stored ${stored}/${files.length} files, ${failed} failed`);
-        return { stored, failed };
+                // Strip the root prefix
+                const cleanPath = rootPrefix ? rawPath.replace(rootPrefix, '') : rawPath;
+                if (!cleanPath) continue;
+
+                // Skip hidden files and common non-essential files
+                if (cleanPath.startsWith('.git/')) continue;
+                if (cleanPath.includes('node_modules/')) continue;
+
+                // Build index entry
+                fileIndex[cleanPath] = {
+                    size: content.length,
+                    hash: hashContent(content),
+                    type: getFileType(cleanPath)
+                };
+
+                cleanFiles[cleanPath] = content;
+                fileCount++;
+            }
+
+            console.log(`📋 Indexed ${fileCount} files`);
+
+            // 4. Re-compress into our own clean zip
+            const recompressed = zipSync(cleanFiles, { level: 6 });
+            const archiveHash = hashContent(recompressed);
+
+            console.log(`🗜️ Re-compressed: ${(recompressed.length / 1024).toFixed(1)}KB`);
+
+            // 5. Store in database (upsert - one row per repo)
+            const { error: dbError } = await this.supabase
+                .from('repos')
+                .upsert({
+                    repo_id: repoId,
+                    repo_name: repoName,
+                    branch: branch,
+                    archive_blob: recompressed,
+                    archive_hash: archiveHash,
+                    archive_size: recompressed.length,
+                    file_index: fileIndex,
+                    last_accessed: new Date().toISOString()
+                }, {
+                    onConflict: 'repo_id'
+                });
+
+            if (dbError) {
+                console.error(`❌ Database storage failed:`, dbError);
+                return {
+                    success: false,
+                    fileCount: 0,
+                    archiveSize: 0,
+                    error: dbError.message
+                };
+            }
+
+            console.log(`✅ Stored ${repoName}: ${fileCount} files, ${(recompressed.length / 1024).toFixed(1)}KB`);
+
+            return {
+                success: true,
+                fileCount,
+                archiveSize: recompressed.length
+            };
+
+        } catch (err) {
+            console.error(`❌ Error downloading/storing repo:`, err);
+            return {
+                success: false,
+                fileCount: 0,
+                archiveSize: 0,
+                error: err instanceof Error ? err.message : String(err)
+            };
+        }
     }
 
     /**
-     * Get a single file from the repos table (decompressed)
+     * Get a single file from stored archive
      */
     async getRepoFile(repoId: string, filePath: string): Promise<string | null> {
-        const { data, error } = await this.supabase
-            .from('repos')
-            .select('compressed_content')
-            .eq('repo_id', repoId)
-            .eq('file_path', filePath)
-            .single();
-
-        if (error || !data) {
-            return null;
-        }
-
         try {
-            // Update last_accessed
-            await this.supabase
+            // Get archive and index
+            const { data, error } = await this.supabase
+                .from('repos')
+                .select('archive_blob, file_index')
+                .eq('repo_id', repoId)
+                .single();
+
+            if (error || !data?.archive_blob) {
+                console.warn(`⚠️ Repo archive not found for ${repoId}`);
+                return null;
+            }
+
+            // Check if file exists in index
+            const index = data.file_index as Record<string, FileIndexEntry>;
+            if (!index[filePath]) {
+                console.warn(`⚠️ File not in index: ${filePath}`);
+                return null;
+            }
+
+            // Unzip and extract specific file
+            const archiveData = new Uint8Array(data.archive_blob);
+            const unzipped = unzipSync(archiveData);
+
+            if (!unzipped[filePath]) {
+                console.warn(`⚠️ File not in archive: ${filePath}`);
+                return null;
+            }
+
+            // Convert to string
+            const content = strFromU8(unzipped[filePath]);
+
+            // Update last_accessed (fire and forget)
+            this.supabase
                 .from('repos')
                 .update({ last_accessed: new Date().toISOString() })
                 .eq('repo_id', repoId)
-                .eq('file_path', filePath);
+                .then(() => { });
 
-            const decompressed = await decompressContent(new Uint8Array(data.compressed_content));
-            return decompressed;
+            return content;
+
         } catch (err) {
-            console.error(`Failed to decompress file ${filePath}:`, err);
+            console.error(`❌ Error extracting file ${filePath}:`, err);
             return null;
         }
     }
 
     /**
-     * Get multiple files from the repos table (batch)
+     * Get multiple files from stored archive (batch)
      */
     async getRepoFiles(repoId: string, filePaths: string[]): Promise<Map<string, string>> {
         const result = new Map<string, string>();
 
-        if (filePaths.length === 0) {
-            return result;
-        }
+        if (filePaths.length === 0) return result;
 
-        const { data, error } = await this.supabase
-            .from('repos')
-            .select('file_path, compressed_content')
-            .eq('repo_id', repoId)
-            .in('file_path', filePaths);
+        try {
+            const { data, error } = await this.supabase
+                .from('repos')
+                .select('archive_blob, file_index')
+                .eq('repo_id', repoId)
+                .single();
 
-        if (error || !data) {
-            console.error('Failed to fetch files:', error);
-            return result;
-        }
-
-        for (const row of data) {
-            try {
-                const decompressed = await decompressContent(new Uint8Array(row.compressed_content));
-                result.set(row.file_path, decompressed);
-            } catch (err) {
-                console.error(`Failed to decompress ${row.file_path}:`, err);
+            if (error || !data?.archive_blob) {
+                return result;
             }
-        }
 
-        // Update last_accessed for all fetched files
-        if (data.length > 0) {
-            await this.supabase
+            // Unzip once, extract multiple files
+            const archiveData = new Uint8Array(data.archive_blob);
+            const unzipped = unzipSync(archiveData);
+
+            for (const path of filePaths) {
+                if (unzipped[path]) {
+                    result.set(path, strFromU8(unzipped[path]));
+                }
+            }
+
+            // Update last_accessed
+            this.supabase
                 .from('repos')
                 .update({ last_accessed: new Date().toISOString() })
                 .eq('repo_id', repoId)
-                .in('file_path', filePaths);
-        }
+                .then(() => { });
 
-        return result;
+            return result;
+
+        } catch (err) {
+            console.error(`❌ Error extracting files:`, err);
+            return result;
+        }
     }
 
     /**
-     * Update a file (for AI edits) - increments version
+     * Get the file index (list of all files) for a repo
+     */
+    async getFileIndex(repoId: string): Promise<Record<string, FileIndexEntry> | null> {
+        const { data, error } = await this.supabase
+            .from('repos')
+            .select('file_index')
+            .eq('repo_id', repoId)
+            .single();
+
+        if (error || !data) return null;
+        return data.file_index;
+    }
+
+    /**
+     * Check if repo archive exists
+     */
+    async hasRepo(repoId: string): Promise<boolean> {
+        const { count, error } = await this.supabase
+            .from('repos')
+            .select('id', { count: 'exact', head: true })
+            .eq('repo_id', repoId);
+
+        return !error && (count || 0) > 0;
+    }
+
+    /**
+     * Delete repo archive
+     */
+    async deleteRepo(repoId: string): Promise<boolean> {
+        const { error } = await this.supabase
+            .from('repos')
+            .delete()
+            .eq('repo_id', repoId);
+
+        return !error;
+    }
+
+    /**
+     * Update a file in the archive (for AI fixes)
+     * Re-compresses the entire archive with the updated file
      */
     async updateRepoFile(
         repoId: string,
         filePath: string,
-        content: string,
-        previewCache?: Record<string, unknown>
+        newContent: string
     ): Promise<boolean> {
         try {
-            const compressed = await compressContent(content);
+            // Get current archive
+            const { data, error } = await this.supabase
+                .from('repos')
+                .select('archive_blob, file_index, repo_name, branch')
+                .eq('repo_id', repoId)
+                .single();
 
-            const updateData: Record<string, unknown> = {
-                compressed_content: compressed,
-                content_hash: hashContent(content),
-                last_updated: new Date().toISOString(),
-                last_accessed: new Date().toISOString()
+            if (error || !data?.archive_blob) {
+                return false;
+            }
+
+            // Unzip
+            const archiveData = new Uint8Array(data.archive_blob);
+            const unzipped = unzipSync(archiveData);
+
+            // Update the file
+            const contentBytes = strToU8(newContent);
+            unzipped[filePath] = contentBytes;
+
+            // Update index
+            const index = data.file_index as Record<string, FileIndexEntry>;
+            index[filePath] = {
+                size: contentBytes.length,
+                hash: hashContent(contentBytes),
+                type: getFileType(filePath)
             };
 
-            if (previewCache) {
-                updateData['preview_cache'] = previewCache;
-            }
+            // Re-compress
+            const recompressed = zipSync(unzipped, { level: 6 });
 
-            // Increment version using raw SQL
-            const { error } = await this.supabase.rpc('increment_repo_file_version', {
-                p_repo_id: repoId,
-                p_file_path: filePath,
-                p_compressed_content: compressed,
-                p_content_hash: hashContent(content),
-                p_preview_cache: previewCache || null
-            });
-
-            if (error) {
-                // Fallback to simple update without version increment
-                const { error: updateError } = await this.supabase
-                    .from('repos')
-                    .update(updateData)
-                    .eq('repo_id', repoId)
-                    .eq('file_path', filePath);
-
-                if (updateError) {
-                    console.error('Failed to update file:', updateError);
-                    return false;
-                }
-            }
-
-            return true;
-        } catch (err) {
-            console.error(`Failed to update file ${filePath}:`, err);
-            return false;
-        }
-    }
-
-    /**
-     * Delete all files for a repository
-     */
-    async deleteRepoFiles(repoId: string): Promise<number> {
-        const { data, error } = await this.supabase
-            .from('repos')
-            .delete()
-            .eq('repo_id', repoId)
-            .select('id');
-
-        if (error) {
-            console.error('Failed to delete repo files:', error);
-            return 0;
-        }
-
-        return data?.length || 0;
-    }
-
-    /**
-     * Check if files exist for a repository
-     */
-    async hasRepoFiles(repoId: string): Promise<boolean> {
-        const { count, error } = await this.supabase
-            .from('repos')
-            .select('id', { count: 'exact', head: true })
-            .eq('repo_id', repoId);
-
-        if (error) {
-            return false;
-        }
-
-        return (count || 0) > 0;
-    }
-
-    /**
-     * Get file count for a repository
-     */
-    async getFileCount(repoId: string): Promise<number> {
-        const { count, error } = await this.supabase
-            .from('repos')
-            .select('id', { count: 'exact', head: true })
-            .eq('repo_id', repoId);
-
-        if (error) {
-            return 0;
-        }
-
-        return count || 0;
-    }
-
-    /**
-     * Prefetch files from GitHub and store them
-     * This is the main entry point called during preflight
-     */
-    async prefetchAndStoreFiles(
-        repoId: string,
-        repoName: string,
-        fileMap: Array<{ path: string; size: number; type: string }>,
-        githubClient: any,
-        branch: string
-    ): Promise<{ stored: number; failed: number; skipped: number }> {
-        // Filter to only actual files (not summaries or directories)
-        const filesToFetch = fileMap.filter(f =>
-            f.type === 'file' &&
-            !f.path.startsWith('[summary]') &&
-            f.size < 500000 // Skip files larger than 500KB
-        );
-
-        console.log(`📥 Prefetching ${filesToFetch.length} files for ${repoName}...`);
-
-        const skipped = fileMap.length - filesToFetch.length;
-        const filesToStore: FileToStore[] = [];
-
-        // Fetch files in parallel batches (5 at a time to avoid rate limits during prefetch)
-        const batchSize = 5;
-        for (let i = 0; i < filesToFetch.length; i += batchSize) {
-            const batch = filesToFetch.slice(i, i + batchSize);
-
-            const results = await Promise.allSettled(
-                batch.map(async (file) => {
-                    try {
-                        const [owner, repo] = repoName.split('/');
-                        const response = await githubClient.fetchFile(owner, repo, file.path, branch);
-                        const data = await response.json();
-
-                        if (data.content) {
-                            // Decode base64 content from GitHub
-                            const content = atob(data.content.replace(/\n/g, ''));
-                            return { path: file.path, content };
-                        }
-                        return null;
-                    } catch (err) {
-                        console.warn(`Failed to fetch ${file.path}:`, err);
-                        return null;
-                    }
+            // Save
+            const { error: updateError } = await this.supabase
+                .from('repos')
+                .update({
+                    archive_blob: recompressed,
+                    archive_hash: hashContent(recompressed),
+                    archive_size: recompressed.length,
+                    file_index: index,
+                    last_accessed: new Date().toISOString()
                 })
-            );
+                .eq('repo_id', repoId);
 
-            for (const result of results) {
-                if (result.status === 'fulfilled' && result.value) {
-                    filesToStore.push(result.value);
-                }
-            }
+            return !updateError;
 
-            // Small delay between batches to be respectful to GitHub
-            if (i + batchSize < filesToFetch.length) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+        } catch (err) {
+            console.error(`❌ Error updating file ${filePath}:`, err);
+            return false;
         }
-
-        // Store all fetched files
-        const storeResult = await this.storeRepoFiles(repoId, repoName, filesToStore);
-
-        return {
-            stored: storeResult.stored,
-            failed: storeResult.failed + (filesToFetch.length - filesToStore.length),
-            skipped
-        };
     }
 }

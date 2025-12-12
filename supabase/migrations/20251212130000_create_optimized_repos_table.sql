@@ -1,59 +1,52 @@
 -- ============================================================================
--- Migration: Create Optimized Repos Table
+-- Migration: Create Repos Table (Archive-Based Storage)
 -- Created: 2025-12-12
--- Description: Optimized table for storing compressed repo files to avoid GitHub rate limits.
---              Replaces/Supersedes the 'files' table concept.
+-- Description: Stores entire repositories as compressed archives (zipball)
+--              Downloaded in ONE API call to avoid GitHub rate limits.
 -- ============================================================================
 
--- Drop the previous files table if it exists as we are replacing it with this optimized version
+-- Drop old per-file tables
 DROP TABLE IF EXISTS files;
+DROP TABLE IF EXISTS repos;
 
 -- ============================================================================
--- REPOS TABLE
+-- REPOS TABLE - One row per repository
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS repos (
+CREATE TABLE repos (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 
-    -- Repository identification
-    repo_id UUID REFERENCES preflights(id) ON DELETE CASCADE,
-    repo_name TEXT NOT NULL, -- e.g. "owner/repo", kept for easy identification
+    -- Link to preflight
+    repo_id UUID NOT NULL REFERENCES preflights(id) ON DELETE CASCADE,
+    repo_name TEXT NOT NULL, -- "owner/repo"
+    branch TEXT NOT NULL DEFAULT 'main',
 
-    -- File identification
-    file_path TEXT NOT NULL, -- Full path inside the repo
+    -- Archive storage (re-compressed zip)
+    archive_blob BYTEA NOT NULL, -- The complete repo archive
+    archive_hash TEXT NOT NULL,  -- Hash for change detection
+    archive_size INTEGER NOT NULL DEFAULT 0, -- Size in bytes
 
-    -- Content storage (Compressed)
-    compressed_content BYTEA, -- Gzipped content
-    content_hash TEXT, -- Hash of uncompressed content for change detection
+    -- File index for fast lookup
+    -- Structure: { "path/to/file.ts": { size, hash, type, offset } }
+    file_index JSONB NOT NULL DEFAULT '{}'::jsonb,
 
-    -- Versioning & Metadata
-    version INTEGER DEFAULT 1,
-    metadata JSONB DEFAULT '{}'::jsonb, -- distinct from preview_cache
-    preview_cache JSONB DEFAULT '{}'::jsonb, -- AI preview outputs
-
-    -- Timestamps for cleanup and tracking
-    last_updated TIMESTAMPTZ DEFAULT NOW(),
+    -- Timestamps
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     last_accessed TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+
+    -- Unique constraint: one archive per preflight
+    CONSTRAINT unique_repo_archive UNIQUE (repo_id)
 );
 
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
 
--- Unique index to prevent duplicate files in same repo version
--- (Assuming we want unique paths per repo)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_repos_repo_id_path 
-    ON repos(repo_id, file_path);
+CREATE INDEX idx_repos_repo_id ON repos(repo_id);
+CREATE INDEX idx_repos_last_accessed ON repos(last_accessed);
 
--- Index for lookup by repo
-CREATE INDEX IF NOT EXISTS idx_repos_repo_id ON repos(repo_id);
-
--- Index for lookup by path (useful for globbing)
-CREATE INDEX IF NOT EXISTS idx_repos_file_path ON repos(file_path);
-
--- Index for cleanup (finding old files)
-CREATE INDEX IF NOT EXISTS idx_repos_last_accessed ON repos(last_accessed);
+-- GIN index for querying file_index
+CREATE INDEX idx_repos_file_index ON repos USING GIN (file_index);
 
 -- ============================================================================
 -- ROW LEVEL SECURITY
@@ -61,8 +54,8 @@ CREATE INDEX IF NOT EXISTS idx_repos_last_accessed ON repos(last_accessed);
 
 ALTER TABLE repos ENABLE ROW LEVEL SECURITY;
 
--- Users can view files from accessible preflights
-CREATE POLICY "Users can view repos files" ON repos
+-- Users can view repos from accessible preflights
+CREATE POLICY "Users can view repos" ON repos
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM preflights p
@@ -75,11 +68,11 @@ CREATE POLICY "Users can view repos files" ON repos
     );
 
 -- Service role can do everything
-CREATE POLICY "Service role can manage repos" ON repos
+CREATE POLICY "Service role full access" ON repos
     FOR ALL USING (auth.role() = 'service_role');
 
--- Users can update files if they own the preflight
-CREATE POLICY "Users can update own repos files" ON repos
+-- Users can update repos they own
+CREATE POLICY "Users can update own repos" ON repos
     FOR UPDATE USING (
         EXISTS (
             SELECT 1 FROM preflights p
@@ -89,39 +82,22 @@ CREATE POLICY "Users can update own repos files" ON repos
     );
 
 -- ============================================================================
--- FUNCTIONS & TRIGGERS
+-- FUNCTIONS
 -- ============================================================================
 
--- Update last_updated timestamp on change
-CREATE OR REPLACE FUNCTION update_repos_last_updated()
-RETURNS TRIGGER
-SET search_path = public
-AS $$
-BEGIN
-    NEW.last_updated = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_repos_last_updated
-    BEFORE UPDATE ON repos
-    FOR EACH ROW
-    EXECUTE FUNCTION update_repos_last_updated();
-
--- Function to update last_accessed (to be called by application/agents when reading)
--- We don't use a trigger on SELECT (not possible efficiently), so this must be called explicitly or via RPC
-CREATE OR REPLACE FUNCTION touch_repo_file(file_id UUID)
+-- Touch last_accessed
+CREATE OR REPLACE FUNCTION touch_repo(p_repo_id UUID)
 RETURNS VOID
 SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-    UPDATE repos SET last_accessed = NOW() WHERE id = file_id;
+    UPDATE repos SET last_accessed = NOW() WHERE repo_id = p_repo_id;
 END;
 $$ LANGUAGE plpgsql;
 
--- Periodic cleanup function (can be scheduled via pg_cron)
-CREATE OR REPLACE FUNCTION cleanup_stale_repo_files(days_retention INTEGER DEFAULT 7)
+-- Cleanup stale repos
+CREATE OR REPLACE FUNCTION cleanup_stale_repos(days_retention INTEGER DEFAULT 7)
 RETURNS INTEGER
 SECURITY DEFINER
 SET search_path = public
@@ -141,6 +117,6 @@ $$ LANGUAGE plpgsql;
 -- COMMENTS
 -- ============================================================================
 
-COMMENT ON TABLE repos IS 'Storage for compressed repository files to avoid GitHub rate limits.';
-COMMENT ON COLUMN repos.compressed_content IS 'Gzipped file content (BYTEA)';
-COMMENT ON COLUMN repos.preview_cache IS 'Temporary AI preview outputs';
+COMMENT ON TABLE repos IS 'Stores entire repositories as compressed archives. One row per repo.';
+COMMENT ON COLUMN repos.archive_blob IS 'Complete repo archive (re-compressed zip)';
+COMMENT ON COLUMN repos.file_index IS 'JSONB index of files: {path: {size, hash, type, offset}}';

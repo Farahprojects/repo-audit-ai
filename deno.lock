@@ -48,7 +48,8 @@
     "https://deno.land/std@0.208.0/assert/unreachable.ts": "4600dc0baf7d9c15a7f7d234f00c23bca8f3eba8b140286aaca7aa998cf9a536",
     "https://deno.land/std@0.208.0/fmt/colors.ts": "34b3f77432925eb72cf0bfb351616949746768620b8e5ead66da532f93d10ba2",
     "https://esm.sh/@supabase/supabase-js@2.7.1": "be4ce96f1e7e5c9fc4b2b77a7feb75ac03796dd2c6988e99b229c0cefc28309b",
-    "https://esm.sh/@supabase/supabase-js@2.87.1": "103ac54a7a223047234abf729ea8474d1e107b63435db8f8e3d13b3d929859af"
+    "https://esm.sh/@supabase/supabase-js@2.87.1": "103ac54a7a223047234abf729ea8474d1e107b63435db8f8e3d13b3d929859af",
+    "https://esm.sh/fflate@0.8.2": "e0cdd268850b4eac9ef9f188a3b4c5c9dd3ebd0f66c4006a13911b2a0c0512bb"
   },
   "workspace": {
     "packageJson": {

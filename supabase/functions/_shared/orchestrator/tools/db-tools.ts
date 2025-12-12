@@ -307,12 +307,12 @@ export const getPreflightTool: Tool = {
 };
 
 // ============================================================================
-// Get Repo File Tool - Read file from repos table (cached, no GitHub API)
+// Get Repo File Tool - Extract file from stored repo archive
 // ============================================================================
 
 export const getRepoFileTool: Tool = {
     name: 'get_repo_file',
-    description: 'Read file content from the local repo cache. Use this instead of fetching from GitHub to avoid rate limits. Files are automatically cached during preflight.',
+    description: 'Read file content from the stored repo archive. Use this to read files - no GitHub API calls needed.',
     requiredPermission: PermissionLevel.READ,
 
     inputSchema: {
@@ -333,7 +333,6 @@ export const getRepoFileTool: Tool = {
     async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
         const { filePath, repoId: inputRepoId } = input as { filePath: string; repoId?: string };
 
-        // Get repo ID from input or context
         const repoId = inputRepoId || (context.preflight as any)?.id;
 
         if (!repoId) {
@@ -353,74 +352,62 @@ export const getRepoFileTool: Tool = {
         try {
             const supabase = context.supabase as any;
 
+            // Get the archive and file index
             const { data, error } = await supabase
                 .from('repos')
-                .select('compressed_content, version, metadata')
+                .select('archive_blob, file_index')
                 .eq('repo_id', repoId)
-                .eq('file_path', filePath)
                 .single();
 
-            if (error || !data) {
+            if (error || !data?.archive_blob) {
                 return {
                     success: false,
-                    error: `File not found in cache: ${filePath}`,
-                    metadata: { repoId, filePath }
+                    error: `Repository archive not found`,
+                    metadata: { repoId }
                 };
             }
 
-            // Decompress the content
-            try {
-                const compressed = new Uint8Array(data.compressed_content);
-                const stream = new ReadableStream({
-                    start(controller) {
-                        controller.enqueue(compressed);
-                        controller.close();
-                    }
-                });
-
-                const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
-                const reader = decompressedStream.getReader();
-                const chunks: Uint8Array[] = [];
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                }
-
-                const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-                const result = new Uint8Array(totalLength);
-                let offset = 0;
-                for (const chunk of chunks) {
-                    result.set(chunk, offset);
-                    offset += chunk.length;
-                }
-
-                const decoder = new TextDecoder();
-                const content = decoder.decode(result);
-
-                // Update last_accessed
-                await supabase
-                    .from('repos')
-                    .update({ last_accessed: new Date().toISOString() })
-                    .eq('repo_id', repoId)
-                    .eq('file_path', filePath);
-
-                return {
-                    success: true,
-                    data: {
-                        filePath,
-                        content,
-                        version: data.version,
-                        metadata: data.metadata
-                    }
-                };
-            } catch (decompressError) {
+            // Check file exists in index
+            const fileIndex = data.file_index as Record<string, { size: number; hash: string; type: string }>;
+            if (!fileIndex[filePath]) {
                 return {
                     success: false,
-                    error: `Failed to decompress file: ${decompressError instanceof Error ? decompressError.message : 'Unknown error'}`
+                    error: `File not found in repository: ${filePath}`,
+                    metadata: { repoId, availableFiles: Object.keys(fileIndex).slice(0, 10) }
                 };
             }
+
+            // Import fflate and extract file
+            const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
+
+            const archiveData = new Uint8Array(data.archive_blob);
+            const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
+
+            if (!unzipped[filePath]) {
+                return {
+                    success: false,
+                    error: `File not in archive: ${filePath}`
+                };
+            }
+
+            const content = strFromU8(unzipped[filePath]);
+
+            // Update last_accessed (fire and forget)
+            supabase
+                .from('repos')
+                .update({ last_accessed: new Date().toISOString() })
+                .eq('repo_id', repoId)
+                .then(() => { });
+
+            return {
+                success: true,
+                data: {
+                    filePath,
+                    content,
+                    size: fileIndex[filePath].size,
+                    type: fileIndex[filePath].type
+                }
+            };
         } catch (error) {
             return {
                 success: false,
@@ -431,12 +418,12 @@ export const getRepoFileTool: Tool = {
 };
 
 // ============================================================================
-// Update Repo File Tool - Write file changes to repos table
+// Update Repo File Tool - Modify file within stored repo archive
 // ============================================================================
 
 export const updateRepoFileTool: Tool = {
     name: 'update_repo_file',
-    description: 'Update or create a file in the repo cache. Use this to save AI-generated fixes or modifications. Changes are stored in preview_cache until confirmed.',
+    description: 'Update a file in the repo archive. The archive is re-compressed with the modified file.',
     requiredPermission: PermissionLevel.WRITE,
 
     inputSchema: {
@@ -453,166 +440,106 @@ export const updateRepoFileTool: Tool = {
             repoId: {
                 type: 'string',
                 description: 'Repository ID (preflight.id). Optional if preflight is in context.'
-            },
-            previewOnly: {
-                type: 'boolean',
-                description: 'If true, only update preview_cache without modifying the actual content. Default: false'
-            },
-            previewData: {
-                type: 'object',
-                description: 'Additional data to store in preview_cache (e.g., diff, reasoning)'
             }
         },
         required: ['filePath', 'content']
     },
 
     async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
-        const {
-            filePath,
-            content,
-            repoId: inputRepoId,
-            previewOnly = false,
-            previewData = {}
-        } = input as {
+        const { filePath, content, repoId: inputRepoId } = input as {
             filePath: string;
             content: string;
             repoId?: string;
-            previewOnly?: boolean;
-            previewData?: Record<string, unknown>;
         };
 
         const repoId = inputRepoId || (context.preflight as any)?.id;
 
         if (!repoId) {
-            return {
-                success: false,
-                error: 'No repoId provided and none found in context'
-            };
+            return { success: false, error: 'No repoId provided and none found in context' };
         }
 
         if (!filePath || !content) {
-            return {
-                success: false,
-                error: 'filePath and content are required'
-            };
+            return { success: false, error: 'filePath and content are required' };
         }
 
         try {
             const supabase = context.supabase as any;
 
-            // Generate hash for change detection
+            // Get current archive
+            const { data, error } = await supabase
+                .from('repos')
+                .select('archive_blob, file_index')
+                .eq('repo_id', repoId)
+                .single();
+
+            if (error || !data?.archive_blob) {
+                return { success: false, error: 'Repository archive not found' };
+            }
+
+            // Import fflate
+            const { unzipSync, zipSync, strToU8 } = await import('https://esm.sh/fflate@0.8.2');
+
+            // Unzip current archive
+            const archiveData = new Uint8Array(data.archive_blob);
+            const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
+
+            // Update the file
+            const contentBytes = strToU8(content);
+            unzipped[filePath] = contentBytes;
+
+            // Generate hash
             let hash = 0;
-            for (let i = 0; i < content.length; i++) {
-                const char = content.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
+            for (let i = 0; i < contentBytes.length; i++) {
+                hash = ((hash << 5) - hash) + contentBytes[i]!;
                 hash = hash & hash;
             }
             const contentHash = hash.toString(16);
 
-            // Compress content
-            const encoder = new TextEncoder();
-            const data = encoder.encode(content);
+            // Update file index
+            const fileIndex = data.file_index as Record<string, { size: number; hash: string; type: string }>;
+            const ext = filePath.split('.').pop()?.toLowerCase() || 'unknown';
+            fileIndex[filePath] = {
+                size: contentBytes.length,
+                hash: contentHash,
+                type: ext
+            };
 
-            const stream = new ReadableStream({
-                start(controller) {
-                    controller.enqueue(data);
-                    controller.close();
-                }
-            });
+            // Re-compress
+            const recompressed = zipSync(unzipped, { level: 6 });
 
-            const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
-            const reader = compressedStream.getReader();
-            const chunks: Uint8Array[] = [];
+            // Generate archive hash
+            let archiveHashNum = 0;
+            for (let i = 0; i < recompressed.length; i++) {
+                archiveHashNum = ((archiveHashNum << 5) - archiveHashNum) + recompressed[i]!;
+                archiveHashNum = archiveHashNum & archiveHashNum;
+            }
+            const archiveHash = archiveHashNum.toString(16);
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
+            // Save
+            const { error: updateError } = await supabase
+                .from('repos')
+                .update({
+                    archive_blob: recompressed,
+                    archive_hash: archiveHash,
+                    archive_size: recompressed.length,
+                    file_index: fileIndex,
+                    last_accessed: new Date().toISOString()
+                })
+                .eq('repo_id', repoId);
+
+            if (updateError) {
+                return { success: false, error: updateError.message };
             }
 
-            const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-            const compressed = new Uint8Array(totalLength);
-            let offset = 0;
-            for (const chunk of chunks) {
-                compressed.set(chunk, offset);
-                offset += chunk.length;
-            }
-
-            const now = new Date().toISOString();
-
-            if (previewOnly) {
-                // Only update preview_cache
-                const { error } = await supabase
-                    .from('repos')
-                    .update({
-                        preview_cache: {
-                            ...previewData,
-                            previewContent: content,
-                            previewHash: contentHash,
-                            previewAt: now
-                        },
-                        last_accessed: now
-                    })
-                    .eq('repo_id', repoId)
-                    .eq('file_path', filePath);
-
-                if (error) {
-                    return {
-                        success: false,
-                        error: error.message
-                    };
+            return {
+                success: true,
+                data: {
+                    filePath,
+                    action: 'updated',
+                    contentHash,
+                    newArchiveSize: recompressed.length
                 }
-
-                return {
-                    success: true,
-                    data: {
-                        filePath,
-                        action: 'preview_updated',
-                        contentHash
-                    }
-                };
-            } else {
-                // Full update with version increment
-                const updateData = {
-                    compressed_content: compressed,
-                    content_hash: contentHash,
-                    preview_cache: previewData,
-                    last_updated: now,
-                    last_accessed: now
-                };
-
-                // Use upsert to handle both update and insert
-                const { data: upsertData, error } = await supabase
-                    .from('repos')
-                    .upsert({
-                        repo_id: repoId,
-                        repo_name: (context.preflight as any)?.owner + '/' + (context.preflight as any)?.repo || 'unknown',
-                        file_path: filePath,
-                        ...updateData,
-                        version: 1 // Will be incremented by trigger if updating
-                    }, {
-                        onConflict: 'repo_id,file_path'
-                    })
-                    .select('version')
-                    .single();
-
-                if (error) {
-                    return {
-                        success: false,
-                        error: error.message
-                    };
-                }
-
-                return {
-                    success: true,
-                    data: {
-                        filePath,
-                        action: 'updated',
-                        contentHash,
-                        version: upsertData?.version
-                    }
-                };
-            }
+            };
         } catch (error) {
             return {
                 success: false,
@@ -628,39 +555,22 @@ export const updateRepoFileTool: Tool = {
 
 export const pushToGithubTool: Tool = {
     name: 'push_to_github',
-    description: 'Push file changes from repos table to the main GitHub repository. ONLY use in FIX MODE. This is the only way agents can write to GitHub.',
+    description: 'Push file changes from repo archive to GitHub. ONLY use in FIX MODE.',
     requiredPermission: PermissionLevel.WRITE,
 
     inputSchema: {
         type: 'object',
         properties: {
-            filePath: {
-                type: 'string',
-                description: 'Path to the file to push'
-            },
-            commitMessage: {
-                type: 'string',
-                description: 'Commit message for the change'
-            },
-            repoId: {
-                type: 'string',
-                description: 'Repository ID (preflight.id). Optional if preflight is in context.'
-            },
-            branch: {
-                type: 'string',
-                description: 'Branch to push to. Defaults to default_branch from preflight.'
-            }
+            filePath: { type: 'string', description: 'Path to the file to push' },
+            commitMessage: { type: 'string', description: 'Commit message' },
+            repoId: { type: 'string', description: 'Repository ID (optional if in context)' },
+            branch: { type: 'string', description: 'Branch to push to (optional)' }
         },
         required: ['filePath', 'commitMessage']
     },
 
     async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
-        const {
-            filePath,
-            commitMessage,
-            repoId: inputRepoId,
-            branch: inputBranch
-        } = input as {
+        const { filePath, commitMessage, repoId: inputRepoId, branch: inputBranch } = input as {
             filePath: string;
             commitMessage: string;
             repoId?: string;
@@ -671,26 +581,17 @@ export const pushToGithubTool: Tool = {
         const preflight = context.preflight as any;
 
         if (!repoId || !preflight) {
-            return {
-                success: false,
-                error: 'No repoId or preflight data found in context'
-            };
+            return { success: false, error: 'No repoId or preflight data found in context' };
         }
 
         if (!filePath || !commitMessage) {
-            return {
-                success: false,
-                error: 'filePath and commitMessage are required'
-            };
+            return { success: false, error: 'filePath and commitMessage are required' };
         }
 
-        // Check if we're in fix mode (this should be validated at a higher level too)
+        // Check fix mode
         const isFixMode = (context as any).mode === 'fix' || (context as any).fixMode === true;
         if (!isFixMode) {
-            return {
-                success: false,
-                error: 'push_to_github can ONLY be used in fix mode. Agents cannot push to GitHub during analysis.'
-            };
+            return { success: false, error: 'push_to_github can ONLY be used in fix mode.' };
         }
 
         try {
@@ -698,118 +599,63 @@ export const pushToGithubTool: Tool = {
             const githubClient = (context as any).githubClient;
 
             if (!githubClient) {
-                return {
-                    success: false,
-                    error: 'No GitHub client available. Fix mode requires authenticated GitHub access.'
-                };
+                return { success: false, error: 'No GitHub client available.' };
             }
 
-            // Get the file content from repos table
-            const { data: fileData, error: fetchError } = await supabase
+            // Get archive and extract file
+            const { data, error } = await supabase
                 .from('repos')
-                .select('compressed_content, content_hash')
+                .select('archive_blob')
                 .eq('repo_id', repoId)
-                .eq('file_path', filePath)
                 .single();
 
-            if (fetchError || !fileData?.compressed_content) {
-                return {
-                    success: false,
-                    error: `File not found in repos table: ${filePath}`
-                };
+            if (error || !data?.archive_blob) {
+                return { success: false, error: 'Repository archive not found' };
             }
 
-            // Decompress the content
-            const compressed = new Uint8Array(fileData.compressed_content);
-            const stream = new ReadableStream({
-                start(controller) {
-                    controller.enqueue(compressed);
-                    controller.close();
-                }
-            });
+            // Import fflate and extract file
+            const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
 
-            const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
-            const reader = decompressedStream.getReader();
-            const chunks: Uint8Array[] = [];
+            const archiveData = new Uint8Array(data.archive_blob);
+            const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
+            if (!unzipped[filePath]) {
+                return { success: false, error: `File not in archive: ${filePath}` };
             }
 
-            const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-            const result = new Uint8Array(totalLength);
-            let offset = 0;
-            for (const chunk of chunks) {
-                result.set(chunk, offset);
-                offset += chunk.length;
-            }
+            const content = strFromU8(unzipped[filePath]);
 
-            const decoder = new TextDecoder();
-            const content = decoder.decode(result);
-
-            // Get the current SHA of the file on GitHub (needed for update)
-            // Note: This is the ONLY GitHub fetch allowed - it's just for the SHA, not content
-            // Content comes from repos table, SHA is needed for GitHub's update API
+            // Get current SHA from GitHub (needed for update)
             const branch = inputBranch || preflight.default_branch || 'main';
             let currentSha: string | null = null;
 
             try {
                 const fileResponse = await githubClient.fetchFile(
-                    preflight.owner,
-                    preflight.repo,
-                    filePath,
-                    branch
+                    preflight.owner, preflight.repo, filePath, branch
                 );
                 if (fileResponse.ok) {
                     const existingFile = await fileResponse.json();
                     currentSha = existingFile.sha;
                 }
             } catch {
-                // File doesn't exist yet, will create new
+                // File doesn't exist yet
             }
 
-            // Base64 encode the content for GitHub API
+            // Push to GitHub
             const base64Content = btoa(content);
-
-            // Push to GitHub using the Contents API
-            const updatePayload: any = {
-                message: commitMessage,
-                content: base64Content,
-                branch
-            };
-
-            if (currentSha) {
-                updatePayload.sha = currentSha;
-            }
+            const updatePayload: any = { message: commitMessage, content: base64Content, branch };
+            if (currentSha) updatePayload.sha = currentSha;
 
             const pushResponse = await githubClient.updateFile(
-                preflight.owner,
-                preflight.repo,
-                filePath,
-                updatePayload
+                preflight.owner, preflight.repo, filePath, updatePayload
             );
 
             if (!pushResponse.ok) {
                 const errorData = await pushResponse.json();
-                return {
-                    success: false,
-                    error: `GitHub push failed: ${errorData.message || pushResponse.statusText}`
-                };
+                return { success: false, error: `GitHub push failed: ${errorData.message}` };
             }
 
             const pushResult = await pushResponse.json();
-
-            // Clear the preview_cache since file is now committed
-            await supabase
-                .from('repos')
-                .update({
-                    preview_cache: {},
-                    last_updated: new Date().toISOString()
-                })
-                .eq('repo_id', repoId)
-                .eq('file_path', filePath);
 
             return {
                 success: true,
@@ -822,10 +668,7 @@ export const pushToGithubTool: Tool = {
                 }
             };
         } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : String(error)
-            };
+            return { success: false, error: error instanceof Error ? error.message : String(error) };
         }
     }
 };
