@@ -75,6 +75,9 @@ export interface AuditContext {
     // When present, agents should use this instead of re-computing
     preflight?: PreflightData;
 
+    // Mode: 'audit' (read-only) or 'fix' (can push to GitHub)
+    mode?: 'audit' | 'fix';
+
     detectedStack?: {
         supabase: boolean;
         firebase: boolean;
@@ -84,8 +87,16 @@ export interface AuditContext {
         graphql: boolean;
         hasDockerfile: boolean;
     };
+
+    // GitHub client - ONLY used in fix mode for pushing code
+    // Agents should NEVER use this for fetching - use repos table instead
+    githubClient?: any;
     githubToken?: string; // Legacy - kept for backward compatibility
-    githubClient?: any; // GitHubAPIClient or GitHubAppClient instance
+
+    // Supabase client - used for reading files from repos table
+    // This is the ONLY source of file content for agents
+    supabase?: any;
+
     metadata?: any;
 }
 

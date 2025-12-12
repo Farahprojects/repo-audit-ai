@@ -150,9 +150,11 @@ serve(async (req) => {
       detectedStack
     } as AuditContext;
 
-    const context: AuditContext = effectiveGitHubToken ?
-      { ...baseContext, githubToken: effectiveGitHubToken } :
-      baseContext;
+    const context: AuditContext = {
+      ...baseContext,
+      ...(effectiveGitHubToken && { githubToken: effectiveGitHubToken }),
+      supabase // Pass supabase client for repos table cache access
+    };
 
     // 6. SWARM PIPELINE EXECUTION
     const orchestrator = new AuditOrchestrator(GEMINI_API_KEY);

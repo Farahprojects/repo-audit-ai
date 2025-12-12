@@ -68,6 +68,7 @@ import { parseGitHubRepo } from '../_shared/utils.ts';
 import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';
 import { GitHubAppClient } from '../_shared/github/GitHubAppClient.ts';
 import { FileCacheManager } from '../_shared/github/FileCacheManager.ts';
+import { RepoStorageService } from '../_shared/services/RepoStorageService.ts';
 
 // Alias for backward compatibility
 function parseGitHubUrl(url: string) {
@@ -328,6 +329,35 @@ async function getOrCreatePreflight(
         };
     }
 
+    // Step 5: Prefetch and store repository files (async, don't block response)
+    // This runs in the background to populate the repos table for agents
+    if (newPreflight && freshData.fileMap && freshData.fileMap.length > 0) {
+        // Fire and forget - don't await to avoid slowing down preflight response
+        (async () => {
+            try {
+                console.log(`📦 [preflight-manager] Starting file prefetch for ${owner}/${repo}...`);
+
+                // Create a GitHub client for fetching file contents
+                const githubClient = userToken
+                    ? new GitHubAPIClient(userToken)
+                    : new GitHubAPIClient(); // Public access
+
+                const storageService = new RepoStorageService(supabase);
+                const result = await storageService.prefetchAndStoreFiles(
+                    newPreflight.id,
+                    `${owner}/${repo}`,
+                    freshData.fileMap,
+                    githubClient,
+                    freshData.defaultBranch
+                );
+
+                console.log(`✅ [preflight-manager] File prefetch complete: ${result.stored} stored, ${result.failed} failed, ${result.skipped} skipped`);
+            } catch (err) {
+                console.error(`❌ [preflight-manager] File prefetch failed:`, err);
+                // Don't throw - preflight still succeeded, just without cached files
+            }
+        })();
+    }
 
     return {
         success: true,

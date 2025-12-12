@@ -105,48 +105,109 @@ export async function runWorker(
         };
     }
 
-    // Fetch files by path using GitHub API (preflight provides owner/repo/branch)
-    // Use the githubClient from context (could be GitHubAPIClient or GitHubAppClient)
-    const apiClient = context.githubClient;
-    
+    // Fetch files ONLY from repos table - agents have NO GitHub fetch access
+    // GitHub is only for pushing code in fix mode, never for fetching
+    const supabase = context.supabase;
+
+    if (!supabase) {
+        console.error(`🚨 Worker [${task.role}] has no supabase client - cannot fetch files from repos table!`);
+        return {
+            result: {
+                taskId: task.id,
+                findings: {
+                    error: "NO_DATABASE_CLIENT",
+                    message: "Cannot fetch files without database access. This is a system error.",
+                    analysis: null,
+                    issues: []
+                },
+                tokenUsage: 0
+            },
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        };
+    }
+
+    if (!context.preflight?.id) {
+        console.error(`🚨 Worker [${task.role}] has no preflight ID - cannot fetch files!`);
+        return {
+            result: {
+                taskId: task.id,
+                findings: {
+                    error: "NO_PREFLIGHT_ID",
+                    message: "Cannot fetch files without preflight ID. Ensure preflight was created first.",
+                    analysis: null,
+                    issues: []
+                },
+                tokenUsage: 0
+            },
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        };
+    }
+
     const fetchedContent = await Promise.all(filesToFetch.map(async f => {
-
         try {
-            const response = await apiClient.fetchFile(
-                context.preflight!.owner,
-                context.preflight!.repo,
-                f.path,
-                context.preflight!.default_branch
-            );
+            const { data: cached, error } = await supabase
+                .from('repos')
+                .select('compressed_content')
+                .eq('repo_id', context.preflight!.id)
+                .eq('file_path', f.path)
+                .single();
 
-            if (!response.ok) {
-                console.error(`🚨 GitHub API error for ${f.path}: ${response.status}`);
+            if (error || !cached?.compressed_content) {
+                console.warn(`⚠️ File not found in repos table: ${f.path}`);
                 return null;
             }
 
-            const fileData = await response.json();
+            // Decompress the cached content
+            try {
+                const compressed = new Uint8Array(cached.compressed_content);
+                const stream = new ReadableStream({
+                    start(controller) {
+                        controller.enqueue(compressed);
+                        controller.close();
+                    }
+                });
 
-            let content: string;
-            // GitHub API returns content as base64
-            if (fileData.encoding === 'base64' && fileData.content) {
-                content = atob(fileData.content.replace(/\n/g, ''));
-            } else if (fileData.content) {
-                // Sometimes content is already decoded
-                content = fileData.content;
-            } else {
-                console.error(`🚨 No content in GitHub API response for ${f.path}`);
+                const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
+                const reader = decompressedStream.getReader();
+                const chunks: Uint8Array[] = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                }
+
+                const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                const result = new Uint8Array(totalLength);
+                let offset = 0;
+                for (const chunk of chunks) {
+                    result.set(chunk, offset);
+                    offset += chunk.length;
+                }
+
+                const decoder = new TextDecoder();
+                const content = decoder.decode(result);
+
+                if (content && content.trim().length > 0) {
+                    console.log(`📦 Loaded ${f.path} from repos table`);
+                    // Update last_accessed asynchronously (fire and forget)
+                    supabase
+                        .from('repos')
+                        .update({ last_accessed: new Date().toISOString() })
+                        .eq('repo_id', context.preflight!.id)
+                        .eq('file_path', f.path)
+                        .then(() => { });
+                    return `--- ${f.path} ---\n${content}`;
+                }
+
+                console.warn(`⚠️ Empty content in repos table for ${f.path}`);
+                return null;
+            } catch (decompressErr) {
+                console.error(`🚨 Failed to decompress ${f.path}:`, decompressErr);
                 return null;
             }
-
-            // Check for empty content
-            if (!content || content.trim().length === 0) {
-                console.warn(`⚠️ Empty content returned for ${f.path}`);
-                return null;
-            }
-
-            return `--- ${f.path} ---\n${content}`;
-        } catch (error) {
-            console.error(`🚨 Fetch failed for ${f.path}:`, error);
+        } catch (err) {
+            console.error(`🚨 Database error fetching ${f.path}:`, err);
             return null;
         }
     }));
@@ -246,14 +307,14 @@ ${fileContext}
 Analyze these files according to your mission instructions above.`;
 
     const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, {
-      role: 'WORKER',
-      thinkingBudget: -1 // Use dynamic thinking for JSON output
+        role: 'WORKER',
+        thinkingBudget: -1 // Use dynamic thinking for JSON output
     });
 
     console.log(`🤖 Worker [${task.role}] completed analysis:`, {
-      issuesCount: data?.issues?.length || 0,
-      hasHealthScore: typeof data?.healthScore === 'number',
-      dataType: typeof data
+        issuesCount: data?.issues?.length || 0,
+        hasHealthScore: typeof data?.healthScore === 'number',
+        dataType: typeof data
     });
 
     return {
