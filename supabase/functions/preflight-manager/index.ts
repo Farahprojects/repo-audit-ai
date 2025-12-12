@@ -330,31 +330,27 @@ async function getOrCreatePreflight(
     }
 
     // Step 5: Download and store entire repository as archive (ONE API CALL)
-    // This runs async to not block the preflight response
+    // CRITICAL: This is SYNCHRONOUS - we MUST wait for repo to be stored before returning
+    // FAIL-FAST: If download fails, the preflight fails
     if (newPreflight) {
-        (async () => {
-            try {
-                console.log(`📦 [preflight-manager] Downloading repo archive for ${owner}/${repo}...`);
+        console.log(`📦 [preflight-manager] Downloading repo archive for ${owner}/${repo}...`);
 
-                const storageService = new RepoStorageService(supabase);
-                const result = await storageService.downloadAndStoreRepo(
-                    newPreflight.id,
-                    owner,
-                    repo,
-                    freshData.defaultBranch,
-                    userToken // Pass token for private repos
-                );
+        const storageService = new RepoStorageService(supabase);
+        const result = await storageService.downloadAndStoreRepo(
+            newPreflight.id,
+            owner,
+            repo,
+            freshData.defaultBranch,
+            userToken // Pass token for private repos
+        );
 
-                if (result.success) {
-                    console.log(`✅ [preflight-manager] Repo stored: ${result.fileCount} files, ${(result.archiveSize / 1024).toFixed(1)}KB`);
-                } else {
-                    console.error(`❌ [preflight-manager] Repo storage failed:`, result.error);
-                }
-            } catch (err) {
-                console.error(`❌ [preflight-manager] Repo download failed:`, err);
-                // Don't throw - preflight still succeeded
-            }
-        })();
+        if (!result.success) {
+            // FAIL-FAST: If we can't store the repo, fail the entire preflight
+            console.error(`❌ [preflight-manager] Repo storage FAILED:`, result.error);
+            throw new Error(`Failed to download repository: ${result.error}`);
+        }
+
+        console.log(`✅ [preflight-manager] Repo stored: ${result.fileCount} files, ${(result.archiveSize / 1024).toFixed(1)}KB`);
     }
 
     return {
