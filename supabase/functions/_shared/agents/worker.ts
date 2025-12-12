@@ -105,48 +105,83 @@ export async function runWorker(
         };
     }
 
-    // Fetch files by path using GitHub API (preflight provides owner/repo/branch)
-    // Use the githubClient from context (could be GitHubAPIClient or GitHubAppClient)
-    const apiClient = context.githubClient;
-    
+    // =========================================================================
+    // FETCH FILES FROM REPOS TABLE ONLY
+    // Agents have NO GitHub API access - all files come from the database
+    // =========================================================================
+    const supabase = context.supabase;
+
+    if (!supabase) {
+        console.error(`🚨 Worker [${task.role}] has no supabase client - cannot fetch files!`);
+        return {
+            result: {
+                taskId: task.id,
+                findings: {
+                    error: "NO_DATABASE_CLIENT",
+                    message: "Cannot fetch files without database access. Ensure supabase is passed in context.",
+                    analysis: null,
+                    issues: []
+                },
+                tokenUsage: 0
+            },
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        };
+    }
+
     const fetchedContent = await Promise.all(filesToFetch.map(async f => {
-
         try {
-            const response = await apiClient.fetchFile(
-                context.preflight!.owner,
-                context.preflight!.repo,
-                f.path,
-                context.preflight!.default_branch
-            );
+            // Query the repos table for this file
+            const { data: cached, error } = await supabase
+                .from('repos')
+                .select('compressed_content')
+                .eq('repo_id', context.preflight!.id)
+                .eq('file_path', f.path)
+                .single();
 
-            if (!response.ok) {
-                console.error(`🚨 GitHub API error for ${f.path}: ${response.status}`);
+            if (error || !cached?.compressed_content) {
+                console.warn(`⚠️ File not found in repos table: ${f.path}`);
                 return null;
             }
 
-            const fileData = await response.json();
+            // Decompress the content using built-in DecompressionStream
+            const compressed = new Uint8Array(cached.compressed_content);
+            const stream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(compressed);
+                    controller.close();
+                }
+            });
 
-            let content: string;
-            // GitHub API returns content as base64
-            if (fileData.encoding === 'base64' && fileData.content) {
-                content = atob(fileData.content.replace(/\n/g, ''));
-            } else if (fileData.content) {
-                // Sometimes content is already decoded
-                content = fileData.content;
-            } else {
-                console.error(`🚨 No content in GitHub API response for ${f.path}`);
-                return null;
+            const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
+            const reader = decompressedStream.getReader();
+            const chunks: Uint8Array[] = [];
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
             }
 
-            // Check for empty content
+            const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+            const result = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const chunk of chunks) {
+                result.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            const decoder = new TextDecoder();
+            const content = decoder.decode(result);
+
             if (!content || content.trim().length === 0) {
-                console.warn(`⚠️ Empty content returned for ${f.path}`);
+                console.warn(`⚠️ Empty content in repos table for ${f.path}`);
                 return null;
             }
 
+            console.log(`📦 Loaded ${f.path} from repos table`);
             return `--- ${f.path} ---\n${content}`;
-        } catch (error) {
-            console.error(`🚨 Fetch failed for ${f.path}:`, error);
+        } catch (err) {
+            console.error(`🚨 Failed to load ${f.path} from repos table:`, err);
             return null;
         }
     }));
@@ -155,15 +190,14 @@ export async function runWorker(
     const successfulContent = fetchedContent.filter(Boolean) as string[];
 
     // CRITICAL: If ALL file fetches failed, do NOT proceed with LLM analysis
-    // This prevents hallucination when files can't be accessed (e.g., private repo without valid token)
     if (successfulContent.length === 0) {
-        console.error(`🚨 Worker [${task.role}] could not fetch ANY file content! Aborting to prevent hallucination.`);
+        console.error(`🚨 Worker [${task.role}] could not load ANY files from repos table!`);
         return {
             result: {
                 taskId: task.id,
                 findings: {
-                    error: "FILE_FETCH_FAILED",
-                    message: `Could not retrieve content for any of the ${filesToFetch.length} requested files. This may indicate an authentication issue for private repositories.`,
+                    error: "FILES_NOT_IN_DATABASE",
+                    message: `Could not retrieve any of the ${filesToFetch.length} files from repos table. Ensure preflight completed successfully and files were stored.`,
                     filesAttempted: filesToFetch.map(f => f.path),
                     analysis: null,
                     issues: []
@@ -246,14 +280,14 @@ ${fileContext}
 Analyze these files according to your mission instructions above.`;
 
     const { data, usage } = await callGemini(apiKey, systemPrompt, userPrompt, 0.2, {
-      role: 'WORKER',
-      thinkingBudget: -1 // Use dynamic thinking for JSON output
+        role: 'WORKER',
+        thinkingBudget: -1 // Use dynamic thinking for JSON output
     });
 
     console.log(`🤖 Worker [${task.role}] completed analysis:`, {
-      issuesCount: data?.issues?.length || 0,
-      hasHealthScore: typeof data?.healthScore === 'number',
-      dataType: typeof data
+        issuesCount: data?.issues?.length || 0,
+        hasHealthScore: typeof data?.healthScore === 'number',
+        dataType: typeof data
     });
 
     return {

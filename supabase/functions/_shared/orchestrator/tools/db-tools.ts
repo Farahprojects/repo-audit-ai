@@ -750,6 +750,8 @@ export const pushToGithubTool: Tool = {
             const content = decoder.decode(result);
 
             // Get the current SHA of the file on GitHub (needed for update)
+            // Note: This is the ONLY GitHub fetch allowed - it's just for the SHA, not content
+            // Content comes from repos table, SHA is needed for GitHub's update API
             const branch = inputBranch || preflight.default_branch || 'main';
             let currentSha: string | null = null;
 
