@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { RepoReport, AuditRecord, AuditTier } from '../../../types';
 import { UniversalConnectModal } from '../auth/UniversalConnectModal';
 import { ReportHeader } from './ReportHeader';
@@ -9,6 +9,7 @@ import { AuditHistoryDropdown } from '../dashboard/AuditHistoryDropdown';
 import { AuditUpgradesDropdown } from '../dashboard/AuditUpgradesDropdown';
 import { useReportState } from '../../../hooks/useReportState';
 import { useDropdownPositioning } from '../../../hooks/useDropdownPositioning';
+import DeleteConfirmModal from '../../common/DeleteConfirmModal';
 
 interface ReportDashboardProps {
   data: RepoReport;
@@ -16,6 +17,7 @@ interface ReportDashboardProps {
   onRestart: () => void;
   onRunTier?: (tier: AuditTier, repoUrl: string, config?: any) => void;
   onSelectAudit?: (audit: AuditRecord) => void;
+  onDeleteAudit?: (auditId: string) => void;
 }
 
 const ReportDashboard: React.FC<ReportDashboardProps> = ({
@@ -23,8 +25,12 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
   relatedAudits,
   onRestart,
   onRunTier,
-  onSelectAudit
+  onSelectAudit,
+  onDeleteAudit
 }) => {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [auditToDelete, setAuditToDelete] = useState<AuditRecord | null>(null);
+
   // Get repoUrl from first related audit, fallback to constructed URL
   const rawRepoUrl = relatedAudits[0]?.repo_url || `https://github.com/${data.repoName}`;
   // Ensure repoUrl is always valid by normalizing it
@@ -40,6 +46,21 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
     setHistoryDropdownOpen: reportState.setHistoryDropdownOpen,
     setUpgradesDropdownOpen: reportState.setUpgradesDropdownOpen,
   });
+
+  const handleDeleteAuditClick = (audit: AuditRecord) => {
+    setAuditToDelete(audit);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDeleteAudit = async () => {
+    if (auditToDelete && onDeleteAudit) {
+      await onDeleteAudit(auditToDelete.id);
+      setShowDeleteModal(false);
+      setAuditToDelete(null);
+      // Close the dropdown after deletion
+      reportState.setHistoryDropdownOpen(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-surface flex flex-col print:bg-white text-foreground font-sans pt-32">
@@ -89,6 +110,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
         onSelectAudit={onSelectAudit}
         onCloseDropdown={() => reportState.setHistoryDropdownOpen(null)}
         onRunTier={onRunTier}
+        onDeleteAudit={handleDeleteAuditClick}
         repoUrl={repoUrl}
       />
 
@@ -107,6 +129,19 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
         onClose={() => reportState.setIsConnectModalOpen(false)}
         onSubmit={reportState.handleConnectSubmit}
         provider={reportState.pendingProvider}
+      />
+
+      {/* Delete Audit Modal */}
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        title="Delete Audit"
+        message={`Are you sure you want to delete this audit from ${reportState.formatDate(auditToDelete?.created_at || '')}? This action cannot be undone.`}
+        confirmText="Delete Audit"
+        onConfirm={handleConfirmDeleteAudit}
+        onCancel={() => {
+          setShowDeleteModal(false);
+          setAuditToDelete(null);
+        }}
       />
     </div>
   );

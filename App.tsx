@@ -16,6 +16,7 @@ import { AuditFlow } from './components/features/audit/AuditFlow';
 import { DashboardPage } from './components/pages/DashboardPage';
 import { DebugService } from './services/debugService';
 import { PreflightRecord } from './services/preflightService';
+import { deleteService } from './services/deleteService';
 
 const AppContent: React.FC = () => {
   const { user, signOut, clearGitHubState } = useAuthContext();
@@ -129,6 +130,17 @@ const AppContent: React.FC = () => {
     navigate(previousView);
   }, [navigate, previousView]);
 
+  const handleDeleteAudit = useCallback(async (auditId: string) => {
+    try {
+      await deleteService.deleteAudit(auditId);
+      // Could add toast notification here
+      console.log('Audit deleted successfully:', auditId);
+    } catch (error) {
+      console.error('Failed to delete audit:', error);
+      // Could add error toast notification here
+    }
+  }, []);
+
   const seoData = getSEO(reportData);
 
   const renderContent = () => {
@@ -159,6 +171,7 @@ const AppContent: React.FC = () => {
             onRestart={handleRestart}
             onSelectAudit={handleSelectAudit}
             onRunTier={handleRunTier}
+            onDeleteAudit={handleDeleteAudit}
           />
         );
       case 'pricing':

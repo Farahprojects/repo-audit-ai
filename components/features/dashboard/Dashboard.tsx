@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { ViewState } from '../../../types';
 import { supabase } from '../../../src/integrations/supabase/client';
 import { Tables } from '../../../src/integrations/supabase/types';
-import { Calendar, ExternalLink, TrendingUp, FileText, RefreshCw, AlertCircle, Eye, Search, Zap, AlertTriangle } from 'lucide-react';
+import { Calendar, ExternalLink, TrendingUp, FileText, RefreshCw, AlertCircle, Eye, Search, Zap, AlertTriangle, Trash2 } from 'lucide-react';
 import TierBadges, { AuditTier } from '../../common/TierBadges';
 import { parseGitHubUrl } from '../../../services/githubService';
 import { useGitHubAuth } from '../../../hooks/useGitHubAuth';
+import DeleteConfirmModal from '../../common/DeleteConfirmModal';
+import { deleteService } from '../../../services/deleteService';
 
 type Audit = Tables<'audits'> & { tier?: string };
 
@@ -59,6 +61,8 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
   const [newRepoUrl, setNewRepoUrl] = useState('');
   const [repoError, setRepoError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [repoToDelete, setRepoToDelete] = useState<string | null>(null);
   const { getGitHubToken } = useGitHubAuth();
 
   useEffect(() => {
@@ -69,12 +73,17 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('audits')
+        .from('audit_complete_data')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setAudits(data || []);
+
+      // Additional client-side filter to ensure we only show current user's audits
+      const { data: { user } } = await supabase.auth.getUser();
+      const userAudits = user ? (data || []).filter(audit => audit.user_id === user.id) : (data || []);
+
+      setAudits(userAudits);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load audits');
     } finally {
@@ -119,6 +128,11 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
       onStartAudit(repoUrl, tier);
     }
   }, [onStartAudit]);
+
+  const handleDeleteProject = useCallback((repoUrl: string) => {
+    setRepoToDelete(repoUrl);
+    setShowDeleteModal(true);
+  }, []);
 
   // Group audits by repository
   const repoGroups: RepoGroup[] = React.useMemo(() => {
@@ -322,6 +336,13 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
                         <ExternalLink className="w-4 h-4" />
                       </a>
                       <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteProject(group.repoUrl); }}
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Project"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => handleViewReport(group.latestAudit)}
                         className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-2"
                       >
@@ -336,6 +357,33 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
           </div>
         )}
       </div>
+
+      {/* Delete Project Modal */}
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        title="Delete Project"
+        message={`Are you sure you want to delete all audits for "${repoToDelete ? extractRepoName(repoToDelete) : ''}"? This action cannot be undone.`}
+        confirmText="Delete Project"
+        onConfirm={async () => {
+          if (repoToDelete) {
+            try {
+              await deleteService.deleteProject(repoToDelete);
+              setShowDeleteModal(false);
+              setRepoToDelete(null);
+              // Refresh the dashboard after deletion
+              fetchUserAudits();
+            } catch (error) {
+              console.error('Failed to delete project:', error);
+              // Error handling could be improved with toast notifications
+            }
+          }
+        }}
+        onCancel={() => {
+          setShowDeleteModal(false);
+          setRepoToDelete(null);
+        }}
+      />
+
     </div>
   );
 });

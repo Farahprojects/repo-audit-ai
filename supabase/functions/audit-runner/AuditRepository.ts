@@ -64,7 +64,7 @@ export class AuditRepository {
     const normalizedTopWeaknesses = normalizeStrengthsOrIssues(auditData.topWeaknesses);
     const normalizedRiskLevel = normalizeRiskLevel(auditData.riskLevel);
 
-    const { error: insertError } = await this.supabase.from('audits').insert({
+    const { error: insertError } = await this.supabase.from('audit_complete_data').insert({
       user_id: auditData.userId,
       repo_url: auditData.repoUrl,
       tier: auditData.tier,

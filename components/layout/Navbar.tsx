@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, User, LogOut, ChevronDown } from 'lucide-react';
+import { Menu, X, User, LogOut, ChevronDown, Trash2 } from 'lucide-react';
 import { ViewState } from '../../types';
 import { User as SupabaseUser } from '@supabase/supabase-js';
+import DeleteConfirmModal from '../common/DeleteConfirmModal';
+import { deleteService } from '../../services/deleteService';
 
 interface NavbarProps {
   currentView: ViewState;
@@ -15,6 +17,7 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick, user, onSignOut, onLogoClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -125,6 +128,17 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
                     <LogOut className="w-4 h-4" />
                     Sign out
                   </button>
+                  <div className="h-px bg-border my-1"></div>
+                  <button
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      setShowDeleteModal(true);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Account
+                  </button>
                 </div>
               )}
             </div>
@@ -175,6 +189,16 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
                       <LogOut className="w-4 h-4" />
                       Sign Out
                     </button>
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setShowDeleteModal(true);
+                      }}
+                      className="w-full py-3 text-red-500 border border-red-200 rounded-lg hover:bg-red-50 font-medium flex items-center justify-center gap-2 mt-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Account
+                    </button>
                   </>
                 ) : (
                   <button
@@ -188,6 +212,27 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
             </div>
           </div>
         )}
+
+        {/* Delete Account Modal */}
+        <DeleteConfirmModal
+          isOpen={showDeleteModal}
+          title="Delete Account"
+          message="This action cannot be undone. This will permanently delete your account and remove all your data including audits, projects, and settings."
+          confirmText="Delete Account"
+          onConfirm={async () => {
+            try {
+              await deleteService.deleteUserAccount();
+              setShowDeleteModal(false);
+              // After successful deletion, sign out and redirect
+              onSignOut();
+            } catch (error) {
+              console.error('Failed to delete account:', error);
+              // Error handling could be improved with toast notifications
+            }
+          }}
+          onCancel={() => setShowDeleteModal(false)}
+          requireTypedConfirmation={true}
+        />
 
       </div>
     </nav>

@@ -20,6 +20,7 @@ interface AuditFlowProps {
   onRestart: () => void;
   onSelectAudit: (audit: AuditRecord) => void;
   onRunTier: (tier: string, url: string, config?: any) => void;
+  onDeleteAudit?: (auditId: string) => void;
 }
 
 export const AuditFlow: React.FC<AuditFlowProps> = memo(({
@@ -37,6 +38,7 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
   onRestart,
   onSelectAudit,
   onRunTier,
+  onDeleteAudit,
 }) => {
   switch (view) {
     case 'preflight':
@@ -71,6 +73,7 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
           onRestart={onRestart}
           onSelectAudit={onSelectAudit}
           onRunTier={onRunTier}
+          onDeleteAudit={onDeleteAudit}
         />
       ) : null;
     default:

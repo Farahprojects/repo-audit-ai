@@ -55,7 +55,7 @@ export class FileCacheManager {
         content: cached.content,
         fromCache: true,
         etag: cached.etag,
-        size: cached.size
+        size: cached.size ?? 0
       };
     }
 
@@ -337,6 +337,6 @@ export class FileCacheManager {
       return 0;
     }
 
-    return data?.length || 0;
+    return typeof data === 'number' ? data : 0;
   }
 }

@@ -154,7 +154,7 @@ serve(async (req) => {
         const normalizedTopWeaknesses = normalizeStrengthsOrIssues(topWeaknesses);
         const normalizedRiskLevel = normalizeRiskLevel(riskLevel);
 
-        const { data: insertedAudit, error: insertError } = await supabase.from('audits').insert({
+        const { data: insertedAudit, error: insertError } = await supabase.from('audit_complete_data').insert({
             user_id: userId,
             repo_url: preflightRecord.repo_url,
             tier: tier,

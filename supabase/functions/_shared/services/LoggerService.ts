@@ -21,6 +21,8 @@ export interface LogContext {
   url?: string | undefined;
   endpoint?: string | undefined;
   metadata?: Record<string, any> | undefined;
+  installationId?: number | string | undefined;
+  accountId?: string | undefined;
   // Queue-based architecture fields
   jobId?: string | undefined;
   workerId?: string | undefined;
@@ -44,6 +46,16 @@ export interface LogContext {
   action?: string | undefined;
   result?: any | undefined;
   concurrency?: number | undefined;
+
+  // GitHub-related fields
+  expiresAt?: string | undefined;
+  resetAt?: string | undefined;
+  required?: number | undefined;
+  scheduledAt?: string | undefined;
+  waitUntil?: string | undefined;
+  available?: number | undefined;
+  reason?: string | undefined;
+  waitMinutes?: number | undefined;
 }
 
 

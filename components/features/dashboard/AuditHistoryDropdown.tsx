@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { Check } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
 import { AuditRecord } from '../../../types';
 import { TIERS } from '../../common/TierBadges';
 
@@ -13,6 +13,7 @@ interface AuditHistoryDropdownProps {
   onSelectAudit: (audit: AuditRecord) => void;
   onCloseDropdown: () => void;
   onRunTier?: (tier: string, repoUrl: string) => void;
+  onDeleteAudit?: (audit: AuditRecord) => void;
   repoUrl: string;
 }
 
@@ -25,6 +26,7 @@ export const AuditHistoryDropdown: React.FC<AuditHistoryDropdownProps> = ({
   onSelectAudit,
   onCloseDropdown,
   onRunTier,
+  onDeleteAudit,
   repoUrl,
 }) => {
   if (!historyDropdownOpen || !dropdownPosition || !auditsByTier[historyDropdownOpen]) {
@@ -46,31 +48,43 @@ export const AuditHistoryDropdown: React.FC<AuditHistoryDropdownProps> = ({
       {auditsByTier[historyDropdownOpen].map((audit) => {
         const isCurrentAudit = audit.id === historyDropdownOpen;
         return (
-          <button
+          <div
             key={audit.id}
-            onClick={() => {
-              onSelectAudit(audit);
-              onCloseDropdown();
-            }}
-            className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-left ${isCurrentAudit
+            className={`group w-full flex items-center justify-between p-3 rounded-lg transition-colors ${isCurrentAudit
               ? 'bg-slate-100'
               : 'hover:bg-slate-50'
               }`}
           >
-            <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                onSelectAudit(audit);
+                onCloseDropdown();
+              }}
+              className="flex items-center gap-3 flex-1 text-left"
+            >
               {isCurrentAudit && <Check className="w-4 h-4 text-emerald-500" />}
               <div>
                 <span className="text-sm text-slate-700 block">
                   {formatDate(audit.created_at)}
                 </span>
               </div>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-semibold ${(audit.health_score || 0) > 80 ? 'text-emerald-600' :
+                (audit.health_score || 0) > 60 ? 'text-amber-600' : 'text-red-600'
+                }`}>
+                {audit.health_score || 0}/100
+              </span>
+              {onDeleteAudit && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteAudit(audit); }}
+                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-            <span className={`text-sm font-semibold ${(audit.health_score || 0) > 80 ? 'text-emerald-600' :
-              (audit.health_score || 0) > 60 ? 'text-amber-600' : 'text-red-600'
-              }`}>
-              {audit.health_score || 0}/100
-            </span>
-          </button>
+          </div>
         );
       })}
       {/* Re-run audit button */}

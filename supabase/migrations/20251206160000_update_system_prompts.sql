@@ -5,9 +5,7 @@
 DELETE FROM public.system_prompts;
 
 INSERT INTO public.system_prompts (tier, name, description, credit_cost, prompt) VALUES
-
 ('shape', 'Repo Shape Check', 'Shape-level structural analysis of project organization and basic conventions', 2,
-
 'I want you to perform a shape-level analysis of this repo.
 
 Don''t review individual code logic yet.
@@ -24,7 +22,9 @@ Folder structure clarity
 
 
 
+
 Dependency hygiene (package.json / imports)
+
 
 
 
@@ -32,7 +32,9 @@ Config + environment file setup
 
 
 
+
 API + routing organization
+
 
 
 
@@ -40,7 +42,9 @@ Authentication flow structure
 
 
 
+
 Error handling patterns
+
 
 
 
@@ -69,17 +73,9 @@ After your analysis, give me:
 • Whether the repo looks like it was produced by a senior dev
 
 • A summary in under 10 bullet points'),
-
-
-
 ('conventions', 'Senior Conventions Check', 'Structural health analysis of project organization, dependencies, and senior-level conventions', 4,
-
 'I want you to perform a structural health analysis of this repo. Don''t review individual code logic yet. Just evaluate the structural health of the project. Specifically check: 1. Folder structure clarity 2. Dependency hygiene (package.json / imports) 3. Config + environment file setup 4. API + routing organization 5. Authentication flow structure 6. Error handling patterns 7. How well the repo reflects senior-level conventions 8. Any signs of AI-generated shortcuts or missing pieces 9. Anything a hiring manager would consider a red flag After your analysis, give me: • A high-level repo maturity score (0–100) • Top 5 strengths • Top 5 issues • Any suspicious or missing files • Whether the repo looks like it was produced by a senior dev • A summary in under 10 bullet points DO NOT fix anything yet. DO NOT generate new code yet. Just analyze the shape and presentation of the repo.'),
-
-
-
 ('performance', 'Performance Deep Dive', 'Deep performance + AI-anti-pattern audit focusing on hidden structural issues and AI-generated shortcuts', 6,
-
 'I want you to perform a deep performance + AI-anti-pattern audit of this repo.
 
 Do NOT look at code style.
@@ -159,11 +155,7 @@ After your audit, give me:
 • A list of files that need urgent refactoring
 
 • Whether this repo is "performance ready" for production'),
-
-
-
 ('security', 'Security Audit', 'Comprehensive security vulnerability analysis including database security, auth, API security, and AI-generated code risks', 10,
-
 'You are a WORKER AGENT in a multi-agent code audit system.
 
 You are analyzing ONE CHUNK of a larger codebase.
@@ -281,4 +273,3 @@ For EACH issue found, provide:
 - Clear, actionable suggestion
 
 Use category: "security"');
-
