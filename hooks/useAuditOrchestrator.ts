@@ -143,7 +143,7 @@ export const useAuditOrchestrator = ({
 
               // Fetch related audits for navigation
               supabase
-                .from('audits')
+                .from('audit_complete_data')
                 .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
                 .eq('repo_url', url)
                 .order('created_at', { ascending: false })
@@ -228,7 +228,7 @@ export const useAuditOrchestrator = ({
     setScannerProgress(0);
   }, [navigate]);
 
-  const handleViewHistoricalReport = useCallback(async (audit: Tables<'audits'> & { extra_data?: any }) => {
+  const handleViewHistoricalReport = useCallback(async (audit: Tables<'audit_complete_data'> & { extra_data?: any }) => {
     const result = await AuditService.processHistoricalAudit(audit);
     setRelatedAudits(result.relatedAudits);
     setHistoricalReportData(result.report);

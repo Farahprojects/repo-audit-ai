@@ -116,14 +116,14 @@ export class AuditService {
   }
 
   // Process historical audit data
-  static async processHistoricalAudit(audit: Tables<'audits'> & { extra_data?: any }): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {
+  static async processHistoricalAudit(audit: Tables<'audit_complete_data'> & { extra_data?: any }): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {
     const issues = (audit.issues as unknown as Issue[]) || [];
     const repoName = audit.repo_url.split('/').slice(-2).join('/');
     const extraData = audit.extra_data || {};
 
     // Fetch all audits for this repo to enable tier navigation
     const { data: allAudits } = await supabase
-      .from('audits')
+      .from('audit_complete_data')
       .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
       .eq('repo_url', audit.repo_url)
       .order('created_at', { ascending: false });

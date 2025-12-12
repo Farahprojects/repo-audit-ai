@@ -9,7 +9,7 @@ import { useGitHubAuth } from '../../../hooks/useGitHubAuth';
 import DeleteConfirmModal from '../../common/DeleteConfirmModal';
 import { deleteService } from '../../../services/deleteService';
 
-type Audit = Tables<'audits'> & { tier?: string };
+type Audit = Tables<'audit_complete_data'> & { tier?: string };
 
 interface DashboardProps {
   onNavigate: (view: ViewState) => void;

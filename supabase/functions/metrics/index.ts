@@ -156,7 +156,7 @@ async function getAuditStats(supabase: any, hours: number): Promise<any> {
 
   try {
     const { data, error } = await supabase
-      .from('audits')
+      .from('audit_complete_data')
       .select('tier, created_at, health_score')
       .gte('created_at', cutoff)
 
@@ -191,7 +191,7 @@ async function getUserActivity(supabase: any, hours: number): Promise<any> {
   try {
     // Get active users (those who created audits)
     const { data, error } = await supabase
-      .from('audits')
+      .from('audit_complete_data')
       .select('user_id, created_at')
       .gte('created_at', cutoff)
 

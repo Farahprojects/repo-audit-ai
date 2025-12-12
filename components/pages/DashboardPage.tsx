@@ -5,7 +5,7 @@ import Dashboard from '../features/dashboard/Dashboard';
 
 interface DashboardPageProps {
   onNavigate: (view: ViewState) => void;
-  onViewReport: (audit: Tables<'audits'> & { extra_data?: any }) => void;
+  onViewReport: (audit: Tables<'audit_complete_data'> & { extra_data?: any }) => void;
   onStartAudit: (repoUrl: string, tier: string) => void;
 }
 

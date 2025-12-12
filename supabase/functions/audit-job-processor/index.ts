@@ -643,9 +643,9 @@ async function processJob(
 
         await updateProgress(95, 'Saving audit results...');
 
-        // Save to audits table
+        // Save to audit_complete_data table
         const { data: audit, error: auditError } = await supabase
-            .from('audits')
+            .from('audit_complete_data')
             .insert({
                 user_id: job.user_id,
                 repo_url: preflight.repo_url,
@@ -654,6 +654,9 @@ async function processJob(
                 summary,
                 issues: dbIssues,
                 total_tokens: totalTokensUsed,
+                estimated_tokens: totalTokensUsed, // Map for compatibility
+                results_chunked: false,
+                complete_data: null,
                 extra_data: {
                     topStrengths,
                     topWeaknesses,

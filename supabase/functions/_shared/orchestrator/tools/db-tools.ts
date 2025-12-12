@@ -187,7 +187,7 @@ export const saveAuditResultsTool: Tool = {
             const supabase = context.supabase as any;
 
             const { data, error } = await supabase
-                .from('audits')
+                .from('audit_complete_data')
                 .insert({
                     user_id: context.userId,
                     repo_url: finalRepoUrl,
@@ -197,7 +197,9 @@ export const saveAuditResultsTool: Tool = {
                     tier: finalTier,
                     total_tokens: totalTokens,
                     extra_data: extraData,
-                    created_at: new Date().toISOString()
+                    estimated_tokens: totalTokens, // Map total_tokens to estimated_tokens for compatibility
+                    results_chunked: false,
+                    complete_data: null
                 })
                 .select()
                 .single();

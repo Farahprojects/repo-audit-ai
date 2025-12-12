@@ -125,7 +125,7 @@ async function checkDatabaseHealth(supabase: any): Promise<HealthCheck> {
   try {
     // Test basic connectivity
     const { data, error } = await supabase
-      .from('audits')
+      .from('audit_complete_data')
       .select('count', { count: 'exact', head: true })
 
     if (error) throw error
