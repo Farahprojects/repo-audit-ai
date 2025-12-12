@@ -154,8 +154,7 @@ export class RepoStorageService {
                     archive_blob: recompressed,
                     archive_hash: archiveHash,
                     archive_size: recompressed.length,
-                    file_index: fileIndex,
-                    last_accessed: new Date().toISOString()
+                    file_index: fileIndex
                 }, {
                     onConflict: 'repo_id'
                 });

@@ -32,6 +32,7 @@ CREATE TABLE repos (
 
     -- Timestamps
     created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_updated TIMESTAMPTZ DEFAULT NOW(),
     last_accessed TIMESTAMPTZ DEFAULT NOW(),
 
     -- Unique constraint: one archive per preflight
@@ -44,6 +45,7 @@ CREATE TABLE repos (
 
 CREATE INDEX idx_repos_repo_id ON repos(repo_id);
 CREATE INDEX idx_repos_last_accessed ON repos(last_accessed);
+CREATE INDEX idx_repos_last_updated ON repos(last_updated);
 
 -- GIN index for querying file_index
 CREATE INDEX idx_repos_file_index ON repos USING GIN (file_index);
@@ -95,6 +97,23 @@ BEGIN
     UPDATE repos SET last_accessed = NOW() WHERE repo_id = p_repo_id;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Update last_updated timestamp on archive changes
+CREATE OR REPLACE FUNCTION update_repos_last_updated()
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    NEW.last_updated = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_repos_last_updated
+    BEFORE UPDATE ON repos
+    FOR EACH ROW
+    EXECUTE FUNCTION update_repos_last_updated();
 
 -- Cleanup stale repos
 CREATE OR REPLACE FUNCTION cleanup_stale_repos(days_retention INTEGER DEFAULT 7)
