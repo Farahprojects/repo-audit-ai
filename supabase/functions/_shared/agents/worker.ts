@@ -131,21 +131,22 @@ export async function runWorker(
     // Import fflate for unzip
     const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
 
-    // Load the entire repo archive once
+    // Load the entire repo archive from Storage (avoid DB bloat)
+    // 1. Get storage path from DB
     const { data: repoData, error: repoError } = await supabase
         .from('repos')
-        .select('archive_blob, file_index')
+        .select('storage_path, file_index')
         .eq('repo_id', context.preflight!.id)
         .single();
 
-    if (repoError || !repoData?.archive_blob) {
-        console.error(`🚨 Worker [${task.role}] could not load repo archive!`);
+    if (repoError || !repoData?.storage_path) {
+        console.error(`🚨 Worker [${task.role}] could not find repo storage path!`);
         return {
             result: {
                 taskId: task.id,
                 findings: {
                     error: "REPO_NOT_FOUND",
-                    message: "Repository archive not found in database. Ensure preflight downloaded the repo.",
+                    message: "Repository metadata not found. Ensure preflight completed successfully.",
                     analysis: null,
                     issues: []
                 },
@@ -155,11 +156,34 @@ export async function runWorker(
         };
     }
 
-    // Unzip the archive once
-    const archiveData = new Uint8Array(repoData.archive_blob);
+    // 2. Download from Supabase Storage
+    const { data: storageData, error: storageError } = await supabase.storage
+        .from('repo_archives')
+        .download(repoData.storage_path);
+
+    if (storageError || !storageData) {
+        console.error(`🚨 Worker [${task.role}] could not download repo archive from storage: ${repoData.storage_path}`, storageError);
+        return {
+            result: {
+                taskId: task.id,
+                findings: {
+                    error: "STORAGE_DOWNLOAD_FAILED",
+                    message: "Failed to download repository archive from object storage.",
+                    analysis: null,
+                    issues: []
+                },
+                tokenUsage: 0
+            },
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        };
+    }
+
+    // 3. Unzip the archive
+    const arrayBuffer = await storageData.arrayBuffer();
+    const archiveData = new Uint8Array(arrayBuffer);
     const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
 
-    console.log(`📦 Worker [${task.role}] loaded repo archive, extracting ${filesToFetch.length} files...`);
+    console.log(`📦 Worker [${task.role}] loaded repo archive from storage, extracting ${filesToFetch.length} files...`);
 
     // Extract each requested file
     const fetchedContent: (string | null)[] = [];

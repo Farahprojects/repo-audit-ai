@@ -53,7 +53,7 @@ BEGIN
     -- STRICT CHECK: Only trigger if BOTH settings are present
     IF v_supabase_url IS NOT NULL AND v_service_key IS NOT NULL THEN
         -- Fire and forget via pg_net
-        SELECT net.http_post(
+        SELECT extensions.net.http_post(
             url := v_supabase_url || '/functions/v1/audit-job-processor',
             headers := jsonb_build_object(
                 'Authorization', 'Bearer ' || v_service_key,

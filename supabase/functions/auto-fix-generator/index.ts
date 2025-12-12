@@ -70,20 +70,30 @@ serve(async (req) => {
         // and `GitService` for writing (if action == fix). 
         // This is pragmatic for "Preview" mode.
 
-        const fileUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${issue.filePath}`;
-        // We can use the userToken to fetch
-        const fileRes = await fetch(fileUrl, {
-            headers: {
-                'Authorization': `Bearer ${userToken}`,
-                'Accept': 'application/vnd.github.v3.raw'
-            }
-        });
+        // 3. Fetch File Content from Storage (Enforce Offline Mode)
+        // We resolve the repoId from preflights and use RepoStorageService to get the file.
+        // This ensures consistent usage of the stored archive and avoids API calls.
+        const { data: preflightData, error: preflightError } = await supabase
+            .from('preflights')
+            .select('id')
+            .eq('owner', owner)
+            .eq('repo', repo)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
 
-        if (!fileRes.ok) {
-            throw new Error(`Failed to fetch file content: ${fileRes.statusText}`);
+        if (preflightError || !preflightData) {
+            // Strict enforcement: Must have audit data to run auto-fix
+            return createErrorResponse(new Error("Repository not found in cache. Please run an audit first."), 404);
         }
 
-        const fileContent = await fileRes.text();
+        const { RepoStorageService } = await import("../_shared/services/RepoStorageService.ts");
+        const repoStorage = new RepoStorageService(supabase);
+        const fileContent = await repoStorage.getRepoFile(preflightData.id, issue.filePath);
+
+        if (fileContent === null) {
+            return createErrorResponse(new Error(`File not found in any stored archive: ${issue.filePath}`), 404);
+        }
 
         // 4. Generate Fix (or Quote)
 

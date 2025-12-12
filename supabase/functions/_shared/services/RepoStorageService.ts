@@ -47,14 +47,15 @@ function getFileType(path: string): string {
 
 export class RepoStorageService {
     private supabase: any;
+    private readonly BUCKET_NAME = 'repo_archives';
 
     constructor(supabase: any) {
         this.supabase = supabase;
     }
 
     /**
-     * Download repo as zipball from GitHub and store in database
-     * This is the main entry point - ONE API call for entire repo
+     * Download repo as zipball from GitHub and upload to Supabase Storage
+     * Stores metadata and file index in Postgres
      */
     async downloadAndStoreRepo(
         repoId: string,
@@ -64,10 +65,11 @@ export class RepoStorageService {
         githubToken?: string
     ): Promise<{ success: boolean; fileCount: number; archiveSize: number; error?: string }> {
         const repoName = `${owner}/${repo}`;
+        const startTime = Date.now();
         console.log(`📦 Downloading zipball for ${repoName}@${branch}...`);
 
         try {
-            // 1. Download zipball from GitHub (ONE API call)
+            // 1. Download zipball from GitHub
             const zipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${branch}`;
             const headers: Record<string, string> = {
                 'Accept': 'application/vnd.github+json',
@@ -90,21 +92,19 @@ export class RepoStorageService {
                 };
             }
 
-            // 2. Get the zip data
+            // 2. Process zip data (Memory intensive, but necessary to build index)
             const zipBuffer = await response.arrayBuffer();
             const zipData = new Uint8Array(zipBuffer);
-            console.log(`📥 Downloaded ${(zipData.length / 1024).toFixed(1)}KB zipball`);
+            console.log(`📥 Downloaded ${(zipData.length / 1024).toFixed(1)}KB from GitHub`);
 
             // 3. Unzip and build file index
             const unzipped = unzipSync(zipData);
             const fileIndex: Record<string, FileIndexEntry> = {};
             const cleanFiles: Record<string, Uint8Array> = {};
 
-            // GitHub's zipball has a root folder like "owner-repo-sha/"
-            // We need to strip that prefix
+            // Strip root folder
             let rootPrefix = '';
             const unzippedTyped = unzipped as Record<string, Uint8Array>;
-
             for (const path of Object.keys(unzippedTyped)) {
                 if (path.endsWith('/')) {
                     rootPrefix = path;
@@ -114,18 +114,17 @@ export class RepoStorageService {
 
             let fileCount = 0;
             for (const [rawPath, content] of Object.entries(unzippedTyped)) {
-                // Skip directories (empty entries)
                 if (rawPath.endsWith('/') || !content || content.length === 0) continue;
 
-                // Strip the root prefix
+                // Strip root
                 const cleanPath = rootPrefix ? rawPath.replace(rootPrefix, '') : rawPath;
                 if (!cleanPath) continue;
 
-                // Skip hidden files and common non-essential files
+                // Filter ignores
                 if (cleanPath.startsWith('.git/')) continue;
                 if (cleanPath.includes('node_modules/')) continue;
 
-                // Build index entry
+                // Index
                 fileIndex[cleanPath] = {
                     size: content.length,
                     hash: hashContent(content),
@@ -136,40 +135,48 @@ export class RepoStorageService {
                 fileCount++;
             }
 
-            console.log(`📋 Indexed ${fileCount} files`);
-
-            // 4. Re-compress into our own clean zip
+            // 4. Re-compress
             const recompressed = zipSync(cleanFiles, { level: 6 });
             const archiveHash = hashContent(recompressed);
-
             console.log(`🗜️ Re-compressed: ${(recompressed.length / 1024).toFixed(1)}KB`);
 
-            // 5. Store in database (upsert - one row per repo)
+            // 5. Upload to Supabase Storage
+            const storagePath = `${repoId}/archive.zip`;
+            const { error: uploadError } = await this.supabase.storage
+                .from(this.BUCKET_NAME)
+                .upload(storagePath, recompressed, {
+                    contentType: 'application/zip',
+                    upsert: true
+                });
+
+            if (uploadError) {
+                console.error(`❌ Storage upload failed:`, uploadError);
+                return { success: false, fileCount: 0, archiveSize: 0, error: uploadError.message };
+            }
+
+            // 6. Store metadata in DB
             const { error: dbError } = await this.supabase
                 .from('repos')
                 .upsert({
                     repo_id: repoId,
                     repo_name: repoName,
                     branch: branch,
-                    archive_blob: recompressed,
+                    storage_path: storagePath, // Storing PATH, not BLOB
                     archive_hash: archiveHash,
                     archive_size: recompressed.length,
-                    file_index: fileIndex
+                    file_index: fileIndex,
+                    last_updated: new Date().toISOString()
                 }, {
                     onConflict: 'repo_id'
                 });
 
             if (dbError) {
-                console.error(`❌ Database storage failed:`, dbError);
-                return {
-                    success: false,
-                    fileCount: 0,
-                    archiveSize: 0,
-                    error: dbError.message
-                };
+                console.error(`❌ Database metadata insert failed:`, dbError);
+                // Try to cleanup storage? (Optional)
+                return { success: false, fileCount: 0, archiveSize: 0, error: dbError.message };
             }
 
-            console.log(`✅ Stored ${repoName}: ${fileCount} files, ${(recompressed.length / 1024).toFixed(1)}KB`);
+            console.log(`✅ Stored ${repoName}: ${fileCount} files in Storage (${storagePath}) in ${Date.now() - startTime}ms`);
 
             return {
                 success: true,
@@ -189,52 +196,60 @@ export class RepoStorageService {
     }
 
     /**
+     * Helper: Download archive from Storage
+     */
+    private async fetchArchiveFromStorage(storagePath: string): Promise<Uint8Array | null> {
+        const { data, error } = await this.supabase.storage
+            .from(this.BUCKET_NAME)
+            .download(storagePath);
+
+        if (error || !data) {
+            console.warn(`⚠️ Failed to download archive from storage: ${storagePath}`, error);
+            return null;
+        }
+
+        return new Uint8Array(await data.arrayBuffer());
+    }
+
+    /**
      * Get a single file from stored archive
      */
     async getRepoFile(repoId: string, filePath: string): Promise<string | null> {
         try {
-            // Get archive and index
-            const { data, error } = await this.supabase
+            // Get storage path from DB meta
+            const { data: repoMeta, error } = await this.supabase
                 .from('repos')
-                .select('archive_blob, file_index')
+                .select('storage_path, file_index')
                 .eq('repo_id', repoId)
                 .single();
 
-            if (error || !data?.archive_blob) {
-                console.warn(`⚠️ Repo archive not found for ${repoId}`);
+            if (error || !repoMeta?.storage_path) {
+                console.warn(`⚠️ Repo metadata not found for ${repoId}`);
                 return null;
             }
 
-            // Check if file exists in index
-            const index = data.file_index as Record<string, FileIndexEntry>;
+            // Check index first
+            const index = repoMeta.file_index as Record<string, FileIndexEntry>;
             if (!index[filePath]) {
-                console.warn(`⚠️ File not in index: ${filePath}`);
-                return null;
+                return null; // File doesn't exist
             }
 
-            // Unzip and extract specific file
-            const archiveData = new Uint8Array(data.archive_blob);
-            const unzipped = unzipSync(archiveData);
+            // Download archive
+            const archiveData = await this.fetchArchiveFromStorage(repoMeta.storage_path);
+            if (!archiveData) return null;
 
-            if (!unzipped[filePath]) {
-                console.warn(`⚠️ File not in archive: ${filePath}`);
-                return null;
-            }
+            // Unzip
+            const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
 
-            // Convert to string
-            const content = strFromU8(unzipped[filePath]);
+            if (!unzipped[filePath]) return null;
 
-            // Update last_accessed (fire and forget)
-            this.supabase
-                .from('repos')
-                .update({ last_accessed: new Date().toISOString() })
-                .eq('repo_id', repoId)
-                .then(() => { });
+            // Mark accessed
+            this.touchRepo(repoId);
 
-            return content;
+            return strFromU8(unzipped[filePath]);
 
         } catch (err) {
-            console.error(`❌ Error extracting file ${filePath}:`, err);
+            console.error(`❌ Error retrieving file ${filePath}:`, err);
             return null;
         }
     }
@@ -244,23 +259,24 @@ export class RepoStorageService {
      */
     async getRepoFiles(repoId: string, filePaths: string[]): Promise<Map<string, string>> {
         const result = new Map<string, string>();
-
         if (filePaths.length === 0) return result;
 
         try {
-            const { data, error } = await this.supabase
+            // Get storage path
+            const { data: repoMeta, error } = await this.supabase
                 .from('repos')
-                .select('archive_blob, file_index')
+                .select('storage_path')
                 .eq('repo_id', repoId)
                 .single();
 
-            if (error || !data?.archive_blob) {
-                return result;
-            }
+            if (error || !repoMeta?.storage_path) return result;
 
-            // Unzip once, extract multiple files
-            const archiveData = new Uint8Array(data.archive_blob);
-            const unzipped = unzipSync(archiveData);
+            // Download archive
+            const archiveData = await this.fetchArchiveFromStorage(repoMeta.storage_path);
+            if (!archiveData) return result;
+
+            // Unzip
+            const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
 
             for (const path of filePaths) {
                 if (unzipped[path]) {
@@ -268,62 +284,17 @@ export class RepoStorageService {
                 }
             }
 
-            // Update last_accessed
-            this.supabase
-                .from('repos')
-                .update({ last_accessed: new Date().toISOString() })
-                .eq('repo_id', repoId)
-                .then(() => { });
-
+            this.touchRepo(repoId);
             return result;
 
         } catch (err) {
-            console.error(`❌ Error extracting files:`, err);
+            console.error(`❌ Error retrieving files batch:`, err);
             return result;
         }
     }
 
     /**
-     * Get the file index (list of all files) for a repo
-     */
-    async getFileIndex(repoId: string): Promise<Record<string, FileIndexEntry> | null> {
-        const { data, error } = await this.supabase
-            .from('repos')
-            .select('file_index')
-            .eq('repo_id', repoId)
-            .single();
-
-        if (error || !data) return null;
-        return data.file_index;
-    }
-
-    /**
-     * Check if repo archive exists
-     */
-    async hasRepo(repoId: string): Promise<boolean> {
-        const { count, error } = await this.supabase
-            .from('repos')
-            .select('id', { count: 'exact', head: true })
-            .eq('repo_id', repoId);
-
-        return !error && (count || 0) > 0;
-    }
-
-    /**
-     * Delete repo archive
-     */
-    async deleteRepo(repoId: string): Promise<boolean> {
-        const { error } = await this.supabase
-            .from('repos')
-            .delete()
-            .eq('repo_id', repoId);
-
-        return !error;
-    }
-
-    /**
      * Update a file in the archive (for AI fixes)
-     * Re-compresses the entire archive with the updated file
      */
     async updateRepoFile(
         repoId: string,
@@ -331,27 +302,28 @@ export class RepoStorageService {
         newContent: string
     ): Promise<boolean> {
         try {
-            // Get current archive
-            const { data, error } = await this.supabase
+            // Get current meta
+            const { data: repoMeta, error } = await this.supabase
                 .from('repos')
-                .select('archive_blob, file_index, repo_name, branch')
+                .select('storage_path, file_index')
                 .eq('repo_id', repoId)
                 .single();
 
-            if (error || !data?.archive_blob) {
-                return false;
-            }
+            if (error || !repoMeta?.storage_path) return false;
+
+            // Download
+            const archiveData = await this.fetchArchiveFromStorage(repoMeta.storage_path);
+            if (!archiveData) return false;
 
             // Unzip
-            const archiveData = new Uint8Array(data.archive_blob);
-            const unzipped = unzipSync(archiveData);
+            const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
 
-            // Update the file
+            // Update file in memory
             const contentBytes = strToU8(newContent);
             unzipped[filePath] = contentBytes;
 
             // Update index
-            const index = data.file_index as Record<string, FileIndexEntry>;
+            const index = repoMeta.file_index as Record<string, FileIndexEntry>;
             index[filePath] = {
                 size: contentBytes.length,
                 hash: hashContent(contentBytes),
@@ -361,23 +333,47 @@ export class RepoStorageService {
             // Re-compress
             const recompressed = zipSync(unzipped, { level: 6 });
 
-            // Save
-            const { error: updateError } = await this.supabase
+            // Upload back to Storage
+            const { error: uploadError } = await this.supabase.storage
+                .from(this.BUCKET_NAME)
+                .upload(repoMeta.storage_path, recompressed, {
+                    contentType: 'application/zip',
+                    upsert: true
+                });
+
+            if (uploadError) return false;
+
+            // Update DB meta
+            await this.supabase
                 .from('repos')
                 .update({
-                    archive_blob: recompressed,
                     archive_hash: hashContent(recompressed),
                     archive_size: recompressed.length,
                     file_index: index,
-                    last_accessed: new Date().toISOString()
+                    last_updated: new Date().toISOString()
                 })
                 .eq('repo_id', repoId);
 
-            return !updateError;
+            return true;
 
         } catch (err) {
             console.error(`❌ Error updating file ${filePath}:`, err);
             return false;
         }
+    }
+
+    private async touchRepo(repoId: string) {
+        // Fire and forget update
+        this.supabase
+            .from('repos')
+            .update({ last_accessed: new Date().toISOString() })
+            .eq('repo_id', repoId)
+            .then(() => { });
+    }
+
+    // Pass-throughs for consistency
+    async getFileIndex(repoId: string) {
+        const { data } = await this.supabase.from('repos').select('file_index').eq('repo_id', repoId).single();
+        return data?.file_index || null;
     }
 }

@@ -105,88 +105,83 @@ async function decryptToken(encryptedToken: string): Promise<string | null> {
 }
 
 // ============================================================================
-// Fetch GitHub File Tool
+// Fetch GitHub File Tool - REPLACED with Storage/DB version
 // ============================================================================
 
 export const fetchGitHubFileTool: Tool = {
     name: 'fetch_github_file',
-    description: 'Fetches the content of a specific file from a GitHub repository. Use this when you need to read code, configs, or documentation.',
+    description: 'Fetches the content of a specific file. USES LOCAL STORAGE CACHE (No GitHub API).',
     requiredPermission: PermissionLevel.READ,
 
     inputSchema: {
         type: 'object',
         properties: {
-            owner: { type: 'string', description: 'Repository owner (user or org)' },
+            owner: { type: 'string', description: 'Repository owner' },
             repo: { type: 'string', description: 'Repository name' },
-            path: { type: 'string', description: 'File path within the repository' },
-            branch: { type: 'string', description: 'Branch name (defaults to main)', required: false }
+            path: { type: 'string', description: 'File path' },
+            branch: { type: 'string', description: 'Ignored (uses cached version)', required: false }
         },
         required: ['owner', 'repo', 'path']
     },
 
     async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
-        const { owner, repo, path, branch = 'main' } = input as {
-            owner: string;
-            repo: string;
-            path: string;
-            branch?: string;
-        };
+        const { owner, repo, path } = input as { owner: string; repo: string; path: string };
 
         try {
-            const headers: Record<string, string> = {
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'SCAI-Orchestrator'
-            };
+            const supabase = context.supabase as any;
 
-            const token = await getGitHubToken(context.supabase, context.userId, context.preflight);
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+            // Find repo_id using owner/repo
+            const { data: preflightData, error: preflightError } = await supabase
+                .from('preflights')
+                .select('id')
+                .eq('owner', owner)
+                .eq('repo', repo)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (preflightError || !preflightData) {
+                return { success: false, error: `Repository not found in cache: ${owner}/${repo}` };
             }
 
-            const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
-            const response = await fetch(url, { headers });
+            // Delegate to common logic (similar to get_repo_file)
+            // Get metadata
+            const { data: repoMeta, error: metaError } = await supabase
+                .from('repos')
+                .select('storage_path, file_index')
+                .eq('repo_id', preflightData.id)
+                .single();
 
-            if (!response.ok) {
-                if (response.status === 404) {
-                    return {
-                        success: false,
-                        error: `File not found: ${path}`,
-                        metadata: { statusCode: 404 }
-                    };
-                }
-                if (response.status === 401 || response.status === 403) {
-                    return {
-                        success: false,
-                        error: 'Authentication required for this repository',
-                        metadata: { statusCode: response.status }
-                    };
-                }
-                return {
-                    success: false,
-                    error: `GitHub API error: ${response.status}`,
-                    metadata: { statusCode: response.status }
-                };
+            if (metaError || !repoMeta?.storage_path) {
+                return { success: false, error: 'Repository archive not found in storage' };
             }
 
-            const data = await response.json();
+            // Download from Storage
+            const { data: blob, error: storageError } = await supabase.storage
+                .from('repo_archives')
+                .download(repoMeta.storage_path);
 
-            // Decode base64 content
-            let content: string;
-            if (data.encoding === 'base64' && data.content) {
-                content = atob(data.content.replace(/\n/g, ''));
-            } else {
-                content = data.content || '';
+            if (storageError || !blob) {
+                return { success: false, error: 'Failed to download archive from storage' };
+            }
+
+            // Import fflate
+            const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
+            const archiveData = new Uint8Array(await blob.arrayBuffer());
+            const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
+
+            if (!unzipped[path]) {
+                return { success: false, error: `File not found in archive: ${path}` };
             }
 
             return {
                 success: true,
                 data: {
-                    path: data.path,
-                    content,
-                    size: data.size,
-                    sha: data.sha
-                },
-                metadata: { encoding: data.encoding }
+                    path,
+                    content: strFromU8(unzipped[path]),
+                    size: unzipped[path].length,
+                    source: 'storage_cache'
+                }
             };
         } catch (error) {
             return {
@@ -198,79 +193,101 @@ export const fetchGitHubFileTool: Tool = {
 };
 
 // ============================================================================
-// List Repository Files Tool
+// List Repository Files Tool - REPLACED with Storage/DB version
 // ============================================================================
 
 export const listRepoFilesTool: Tool = {
     name: 'list_repo_files',
-    description: 'Lists files and directories in a GitHub repository path. Use this to explore repository structure.',
+    description: 'Lists files in a directory using the LOCALLY CACHED file index. No GitHub API.',
     requiredPermission: PermissionLevel.READ,
 
     inputSchema: {
         type: 'object',
         properties: {
-            owner: { type: 'string', description: 'Repository owner (user or org)' },
+            owner: { type: 'string', description: 'Repository owner' },
             repo: { type: 'string', description: 'Repository name' },
-            path: { type: 'string', description: 'Directory path (empty for root)', required: false },
-            branch: { type: 'string', description: 'Branch name (defaults to main)', required: false }
+            path: { type: 'string', description: 'Directory path (empty for root)' },
+            branch: { type: 'string', description: 'Ignored', required: false }
         },
         required: ['owner', 'repo']
     },
 
     async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
-        const { owner, repo, path = '', branch = 'main' } = input as {
-            owner: string;
-            repo: string;
-            path?: string;
-            branch?: string;
-        };
+        const { owner, repo, path = '' } = input as { owner: string; repo: string; path?: string };
 
         try {
-            const headers: Record<string, string> = {
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'SCAI-Orchestrator'
-            };
+            const supabase = context.supabase as any;
 
-            const token = await getGitHubToken(context.supabase, context.userId, context.preflight);
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+            // Find repo_id
+            const { data: preflightData, error: preflightError } = await supabase
+                .from('preflights')
+                .select('id')
+                .eq('owner', owner)
+                .eq('repo', repo)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (preflightError || !preflightData) {
+                return { success: false, error: `Repository not found in cache: ${owner}/${repo}` };
             }
 
-            const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
-            const response = await fetch(url, { headers });
+            // Get file index
+            const { data: repoMeta, error: metaError } = await supabase
+                .from('repos')
+                .select('file_index')
+                .eq('repo_id', preflightData.id)
+                .single();
 
-            if (!response.ok) {
-                return {
-                    success: false,
-                    error: `GitHub API error: ${response.status}`,
-                    metadata: { statusCode: response.status }
-                };
+            if (metaError || !repoMeta?.file_index) {
+                return { success: false, error: 'Repository index not found' };
             }
 
-            const data = await response.json();
+            const fileIndex = repoMeta.file_index as Record<string, { size: number }>;
+            const allPaths = Object.keys(fileIndex);
 
-            // GitHub returns an array for directories
-            if (!Array.isArray(data)) {
-                return {
-                    success: false,
-                    error: 'Path is a file, not a directory. Use fetch_github_file instead.',
-                    metadata: { type: data.type }
-                };
+            // Filter by path
+            const normalizedPath = path ? (path.endsWith('/') ? path : `${path}/`) : '';
+            const items: any[] = [];
+            const processedDirs = new Set<string>();
+
+            // Simulate directory listing from flat paths
+            for (const filePath of allPaths) {
+                if (!filePath.startsWith(normalizedPath)) continue;
+
+                const relative = filePath.slice(normalizedPath.length);
+                const parts = relative.split('/');
+
+                if (parts.length === 1) {
+                    // It's a file in this dir
+                    items.push({
+                        name: parts[0],
+                        path: filePath,
+                        type: 'file',
+                        size: fileIndex[filePath].size
+                    });
+                } else {
+                    // It's a subdir
+                    const dirName = parts[0];
+                    if (!processedDirs.has(dirName)) {
+                        processedDirs.add(dirName);
+                        items.push({
+                            name: dirName,
+                            path: normalizedPath + dirName,
+                            type: 'dir',
+                            size: 0
+                        });
+                    }
+                }
             }
-
-            const files = data.map((item: any) => ({
-                name: item.name,
-                path: item.path,
-                type: item.type, // 'file' or 'dir'
-                size: item.size
-            }));
 
             return {
                 success: true,
                 data: {
                     path: path || '/',
-                    items: files,
-                    count: files.length
+                    items,
+                    count: items.length,
+                    source: 'storage_index'
                 }
             };
         } catch (error) {

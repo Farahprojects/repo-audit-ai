@@ -354,14 +354,14 @@ export const getRepoFileTool: Tool = {
         try {
             const supabase = context.supabase as any;
 
-            // Get the archive and file index
-            const { data, error } = await supabase
+            // Get storage path from DB
+            const { data: repoMeta, error: metaError } = await supabase
                 .from('repos')
-                .select('archive_blob, file_index')
+                .select('storage_path, file_index')
                 .eq('repo_id', repoId)
                 .single();
 
-            if (error || !data?.archive_blob) {
+            if (metaError || !repoMeta?.storage_path) {
                 return {
                     success: false,
                     error: `Repository archive not found`,
@@ -369,8 +369,8 @@ export const getRepoFileTool: Tool = {
                 };
             }
 
-            // Check file exists in index
-            const fileIndex = data.file_index as Record<string, { size: number; hash: string; type: string }>;
+            // Check file exists in index first (fast fail)
+            const fileIndex = repoMeta.file_index as Record<string, { size: number; hash: string; type: string }>;
             if (!fileIndex[filePath]) {
                 return {
                     success: false,
@@ -379,10 +379,22 @@ export const getRepoFileTool: Tool = {
                 };
             }
 
+            // Download from Storage
+            const { data: blob, error: storageError } = await supabase.storage
+                .from('repo_archives')
+                .download(repoMeta.storage_path);
+
+            if (storageError || !blob) {
+                return {
+                    success: false,
+                    error: `Failed to download archive from storage: ${storageError?.message}`
+                };
+            }
+
             // Import fflate and extract file
             const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
 
-            const archiveData = new Uint8Array(data.archive_blob);
+            const archiveData = new Uint8Array(await blob.arrayBuffer());
             const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
 
             if (!unzipped[filePath]) {
@@ -467,22 +479,31 @@ export const updateRepoFileTool: Tool = {
         try {
             const supabase = context.supabase as any;
 
-            // Get current archive
-            const { data, error } = await supabase
+            // Get current meta
+            const { data: repoMeta, error: metaError } = await supabase
                 .from('repos')
-                .select('archive_blob, file_index')
+                .select('storage_path, file_index')
                 .eq('repo_id', repoId)
                 .single();
 
-            if (error || !data?.archive_blob) {
+            if (metaError || !repoMeta?.storage_path) {
                 return { success: false, error: 'Repository archive not found' };
+            }
+
+            // Download from Storage
+            const { data: blob, error: storageError } = await supabase.storage
+                .from('repo_archives')
+                .download(repoMeta.storage_path);
+
+            if (storageError || !blob) {
+                return { success: false, error: 'Failed to download archive from storage' };
             }
 
             // Import fflate
             const { unzipSync, zipSync, strToU8 } = await import('https://esm.sh/fflate@0.8.2');
 
             // Unzip current archive
-            const archiveData = new Uint8Array(data.archive_blob);
+            const archiveData = new Uint8Array(await blob.arrayBuffer());
             const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
 
             // Update the file
@@ -498,7 +519,7 @@ export const updateRepoFileTool: Tool = {
             const contentHash = hash.toString(16);
 
             // Update file index
-            const fileIndex = data.file_index as Record<string, { size: number; hash: string; type: string }>;
+            const fileIndex = repoMeta.file_index as Record<string, { size: number; hash: string; type: string }>;
             const ext = filePath.split('.').pop()?.toLowerCase() || 'unknown';
             fileIndex[filePath] = {
                 size: contentBytes.length,
@@ -512,20 +533,32 @@ export const updateRepoFileTool: Tool = {
             // Generate archive hash
             let archiveHashNum = 0;
             for (let i = 0; i < recompressed.length; i++) {
-                archiveHashNum = ((archiveHashNum << 5) - archiveHashNum) + recompressed[i]!;
+                archiveHashNum = ((archiveHashNum << 5) - archiveHashNum) + (recompressed[i] || 0);
                 archiveHashNum = archiveHashNum & archiveHashNum;
             }
             const archiveHash = archiveHashNum.toString(16);
 
-            // Save
+            // Upload back to Storage
+            const { error: uploadError } = await supabase.storage
+                .from('repo_archives')
+                .upload(repoMeta.storage_path, recompressed, {
+                    contentType: 'application/zip',
+                    upsert: true
+                });
+
+            if (uploadError) {
+                return { success: false, error: `Upload failed: ${uploadError.message}` };
+            }
+
+            // Update DB meta
             const { error: updateError } = await supabase
                 .from('repos')
                 .update({
-                    archive_blob: recompressed,
                     archive_hash: archiveHash,
                     archive_size: recompressed.length,
                     file_index: fileIndex,
-                    last_accessed: new Date().toISOString()
+                    last_accessed: new Date().toISOString(),
+                    last_updated: new Date().toISOString()
                 })
                 .eq('repo_id', repoId);
 
@@ -604,21 +637,30 @@ export const pushToGithubTool: Tool = {
                 return { success: false, error: 'No GitHub client available.' };
             }
 
-            // Get archive and extract file
-            const { data, error } = await supabase
+            // Get storage path from DB
+            const { data: repoMeta, error: metaError } = await supabase
                 .from('repos')
-                .select('archive_blob')
+                .select('storage_path')
                 .eq('repo_id', repoId)
                 .single();
 
-            if (error || !data?.archive_blob) {
+            if (metaError || !repoMeta?.storage_path) {
                 return { success: false, error: 'Repository archive not found' };
+            }
+
+            // Download from Storage
+            const { data: blob, error: storageError } = await supabase.storage
+                .from('repo_archives')
+                .download(repoMeta.storage_path);
+
+            if (storageError || !blob) {
+                return { success: false, error: 'Failed to download archive from storage' };
             }
 
             // Import fflate and extract file
             const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
 
-            const archiveData = new Uint8Array(data.archive_blob);
+            const archiveData = new Uint8Array(await blob.arrayBuffer());
             const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
 
             if (!unzipped[filePath]) {

@@ -21,8 +21,8 @@ CREATE TABLE repos (
     repo_name TEXT NOT NULL, -- "owner/repo"
     branch TEXT NOT NULL DEFAULT 'main',
 
-    -- Archive storage (re-compressed zip)
-    archive_blob BYTEA NOT NULL, -- The complete repo archive
+    -- Archive location (Supabase Storage)
+    storage_path TEXT NOT NULL, -- Path in 'repo_archives' bucket (e.g., "repo_id/archive.zip")
     archive_hash TEXT NOT NULL,  -- Hash for change detection
     archive_size INTEGER NOT NULL DEFAULT 0, -- Size in bytes
 
@@ -38,6 +38,14 @@ CREATE TABLE repos (
     -- Unique constraint: one archive per preflight
     CONSTRAINT unique_repo_archive UNIQUE (repo_id)
 );
+
+-- ============================================================================
+-- STORAGE BUCKET SETUP
+-- ============================================================================
+
+-- NOTE: Storage bucket 'repo_archives' and its policies must be created manually
+-- in the Supabase Dashboard if they do not exist.
+-- Reason: Creating them via migration often fails with permission errors (42501).
 
 -- ============================================================================
 -- INDEXES
@@ -137,5 +145,5 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 
 COMMENT ON TABLE repos IS 'Stores entire repositories as compressed archives. One row per repo.';
-COMMENT ON COLUMN repos.archive_blob IS 'Complete repo archive (re-compressed zip)';
 COMMENT ON COLUMN repos.file_index IS 'JSONB index of files: {path: {size, hash, type, offset}}';
+COMMENT ON COLUMN repos.storage_path IS 'Path to archive in repo_archives bucket';
