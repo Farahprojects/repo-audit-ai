@@ -15,8 +15,11 @@ export interface Chunk {
     priority: number; // Higher = more important
 }
 
-// Import shared token estimation
-import { estimateTokens } from './utils.ts';
+// Use centralized token estimation from TokenChunker
+import { getTokenChunker } from './orchestrator/utils/token-chunker.ts';
+
+// Get singleton instance for token estimation
+const tokenChunker = getTokenChunker();
 
 // Group files by top-level folder
 function groupByFolder(files: FileInfo[]): Map<string, FileInfo[]> {
@@ -176,10 +179,10 @@ export function createChunks(
     maxTokensPerChunk: number = 500000,
     minTokensToMerge: number = 50000
 ): Chunk[] {
-    // Add token estimates
+    // Add token estimates using centralized TokenChunker
     const filesWithTokens: FileInfo[] = files.map(f => ({
         ...f,
-        tokens: estimateTokens(f.content),
+        tokens: tokenChunker.estimateTokens(f.content),
     }));
 
     const totalTokens = filesWithTokens.reduce((sum, f) => sum + f.tokens, 0);

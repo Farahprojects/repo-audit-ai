@@ -278,14 +278,16 @@ export class Orchestrator {
         thinkingBudget: number
     ): Promise<{ text: string; tokenUsage: number }> {
         // Use the unified callGemini with robust error handling and retry logic
+        // Note: We pass explicit thinkingBudget (task-based) without a role
+        // because the orchestrator uses task complexity budgets, not agent role budgets
         const response = await callGemini(
             this.config.apiKey,
             '', // No system prompt for orchestrator
             prompt,
             0.3, // temperature
             {
-                thinkingBudget: thinkingBudget,
-                role: 'WORKER' as AgentRole // Use WORKER role for orchestrator tasks
+                thinkingBudget: thinkingBudget
+                // No role specified - we're using explicit task-based budget
             }
         );
 

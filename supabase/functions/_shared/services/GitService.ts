@@ -25,6 +25,7 @@ export class GitService {
     /**
      * Updates a single file in the repository on a specific branch.
      * Handles base64 encoding.
+     * If file doesn't exist (404), creates it. Other errors are thrown.
      */
     async updateFile(
         owner: string,
@@ -40,8 +41,22 @@ export class GitService {
             const currentFile = await this.client.getFileContent(owner, repo, path, branch);
             sha = currentFile.sha;
         } catch (e) {
-            // File might not exist, which is fine for new files (though this method is named updateFile)
-            // If strictly updating, we might want to throw. For now, we allow upsert behavior implicitly.
+            // Only allow upsert behavior for 404 (file not found)
+            // For other errors (network, permissions, API errors), throw to prevent data loss
+            const error = e as any;
+            const is404 = error?.status === 404 ||
+                error?.response?.status === 404 ||
+                (error?.message && error.message.includes('404')) ||
+                (error?.message && error.message.toLowerCase().includes('not found'));
+
+            if (!is404) {
+                // This is a real error (network, permissions, etc.) - don't proceed
+                console.error(`❌ [GitService] Failed to fetch file ${path} for update:`, e);
+                throw new Error(`Failed to fetch file for update: ${error?.message || String(e)}`);
+            }
+
+            // File doesn't exist (404) - proceed with creation
+            console.log(`[GitService] File ${path} not found, will create new file`);
         }
 
         // 2. Encode content

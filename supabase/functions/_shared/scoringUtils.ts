@@ -40,15 +40,33 @@ export function calculateHealthScore({ issues, fileCount }: ScoringInput): numbe
 
 /**
  * 🔄 ISSUE DEDUPLICATION
- * Remove duplicate issues based on title + filename to avoid noise
+ * Remove duplicate issues based on category + title + filename
+ * If same issue found multiple times, keep the one with more detail
+ * 
+ * This is the single source of truth for issue deduplication across the system.
  */
 export function deduplicateIssues(allIssues: any[]): IssueDeduplicationResult {
   const uniqueIssuesMap = new Map<string, any>();
 
   allIssues.forEach((issue: any) => {
-    const key = `${issue.title}-${issue.filePath || issue.file}`;
-    if (!uniqueIssuesMap.has(key)) {
+    // Enhanced key: category + title + file for better deduplication
+    const file = issue.filePath || issue.file || '';
+    const category = issue.category || '';
+    const title = issue.title || '';
+    const key = `${category}-${title}-${file}`.toLowerCase().replace(/\s+/g, '-');
+
+    const existing = uniqueIssuesMap.get(key);
+
+    if (!existing) {
       uniqueIssuesMap.set(key, issue);
+    } else {
+      // Keep the one with more detail (longer description)
+      const existingDesc = existing.description || '';
+      const currentDesc = issue.description || '';
+
+      if (currentDesc.length > existingDesc.length) {
+        uniqueIssuesMap.set(key, issue);
+      }
     }
   });
 

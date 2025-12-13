@@ -648,6 +648,7 @@ export class RepoStorageService {
 
             // 5. For each changed file: fetch content or mark for deletion
             const changes: { path: string; content: string | null }[] = [];
+            const failedFiles: { path: string; error: string }[] = [];
 
             for (const file of comparison.files) {
                 const { filename, status } = file;
@@ -664,10 +665,36 @@ export class RepoStorageService {
                             : '';
                         changes.push({ path: filename, content });
                     } catch (error) {
-                        console.warn(`Failed to fetch ${filename}:`, error);
-                        // Skip this file, continue with others
+                        const errorMsg = error instanceof Error ? error.message : String(error);
+                        console.error(`❌ Failed to fetch ${filename}:`, errorMsg);
+                        failedFiles.push({ path: filename, error: errorMsg });
+
+                        // Track error for monitoring
+                        ErrorTrackingService.trackError(
+                            error instanceof Error ? error : new Error(errorMsg),
+                            {
+                                component: 'RepoStorageService',
+                                operation: 'syncRepo',
+                                repoId,
+                                filename,
+                                phase: 'file_fetch'
+                            }
+                        );
                     }
                 }
+            }
+
+            // If any files failed to fetch, abort the sync to prevent incomplete state
+            if (failedFiles.length > 0) {
+                const failedPaths = failedFiles.map(f => f.path).join(', ');
+                const errorMessage = `Sync aborted: ${failedFiles.length} file(s) failed to fetch: ${failedPaths}`;
+                console.error(`❌ ${errorMessage}`);
+
+                return {
+                    synced: false,
+                    changes: 0,
+                    error: errorMessage
+                };
             }
 
             // 6. Apply all changes in batch
@@ -677,7 +704,7 @@ export class RepoStorageService {
                 throw new Error('Failed to apply changes to repository archive');
             }
 
-            // 7. Update commit_sha in repos table
+            // 7. Update commit_sha in repos table (only if all files fetched successfully)
             const { error: updateError } = await this.supabase
                 .from('repos')
                 .update({
@@ -690,6 +717,7 @@ export class RepoStorageService {
                 throw updateError;
             }
 
+            console.log(`✅ Synced ${repoId}: ${changes.length} changes applied, commit_sha updated to ${latestSha}`);
             return { synced: true, changes: changes.length };
 
         } catch (error) {

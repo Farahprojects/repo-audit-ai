@@ -101,7 +101,9 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   const { clearGitHubState } = useGitHubAuth();
 
   // Scanner logs - managed locally, synced from real-time updates
-  const [scannerLogs, setScannerLogs] = useState<LogEntry[]>([]);
+  // NOTE: We still expose via context for backward compatibility,
+  // but the actual state is in Zustand to prevent parent re-renders
+  const scannerLogs = useScannerStore((state) => state.logs);
   const scannerProgress = useScannerStore((state) => state.progress);
   const preflightId = usePreflightStore((state) => state.preflightId);
 
@@ -131,7 +133,8 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
             }
             return { timestamp: Date.now(), message: logStr };
           });
-          setScannerLogs(transformedLogs);
+          // Update logs in Zustand store instead of local state
+          useScannerStore.getState().setLogs(transformedLogs);
 
           // Handle completion
           if (status.status === 'completed') {

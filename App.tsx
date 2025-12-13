@@ -32,8 +32,7 @@ const AppContent: React.FC = () => {
     usePreflightStore.getState().setRepoUrl(url);
   }, []);
 
-  // Local state for scanner logs (synced via real-time in AppProviders)
-  const [scannerLogs, setScannerLogs] = useState<LogEntry[]>([]);
+  // Track active channel for cleanup (logs are now in Zustand store)
   const [activeChannel, setActiveChannel] = useState<any>(null);
 
   // Clean up active subscription on component unmount
@@ -65,8 +64,7 @@ const AppContent: React.FC = () => {
   const clearAuditState = useCallback(() => {
     usePreflightStore.getState().clear();
     useAuditStore.getState().clear();
-    useScannerStore.getState().reset();
-    setScannerLogs([]);
+    useScannerStore.getState().reset(); // This now also clears logs
     if (activeChannel) {
       supabase.removeChannel(activeChannel);
       setActiveChannel(null);
@@ -113,14 +111,13 @@ const AppContent: React.FC = () => {
     }
 
     navigate('scanning');
-    setScannerLogs([]);
-    useScannerStore.getState().reset();
+    useScannerStore.getState().reset(); // This clears logs too
     useScannerStore.getState().setStatus('running');
     useAuditStore.getState().setAuditPhase('scan');
     usePreflightStore.getState().setPreflightId(preflightId);
 
     try {
-      setScannerLogs(prev => [...prev, { message: `[System] Submitting audit job for ${tier}...`, timestamp: Date.now() }]);
+      useScannerStore.getState().addLog({ message: `[System] Submitting audit job for ${tier}...`, timestamp: Date.now() });
 
       const { data: jobResponse, error: jobError } = await supabase.functions.invoke('audit-job-submit', {
         body: { preflightId, tier }
@@ -133,7 +130,7 @@ const AppContent: React.FC = () => {
 
       const jobId = jobResponse?.jobId || jobResponse?.existingJobId;
       useScannerStore.getState().setActiveJobId(jobId);
-      setScannerLogs(prev => [...prev, { message: `[System] Job ${jobResponse?.existingJobId ? 'resumed' : 'queued'}: ${jobId}`, timestamp: Date.now() }]);
+      useScannerStore.getState().addLog({ message: `[System] Job ${jobResponse?.existingJobId ? 'resumed' : 'queued'}: ${jobId}`, timestamp: Date.now() });
 
       // Real-time subscription for progress
       const channel = supabase
@@ -157,10 +154,10 @@ const AppContent: React.FC = () => {
               }
               return { timestamp: Date.now(), message: logStr };
             });
-            setScannerLogs(transformedLogs);
+            useScannerStore.getState().setLogs(transformedLogs);
 
             if (status.status === 'completed' && status.report_data) {
-              setScannerLogs(prev => [...prev, { message: '[System] Audit completed successfully!', timestamp: Date.now() }]);
+              useScannerStore.getState().addLog({ message: '[System] Audit completed successfully!', timestamp: Date.now() });
 
               const auditId = status.report_data.auditId;
               useAuditStore.getState().setActiveAuditId(auditId);
@@ -185,7 +182,7 @@ const AppContent: React.FC = () => {
             }
 
             if (status.status === 'failed') {
-              setScannerLogs(prev => [...prev, { message: `[Error] Audit failed: ${status.error_message || 'Unknown error'}`, timestamp: Date.now() }]);
+              useScannerStore.getState().addLog({ message: `[Error] Audit failed: ${status.error_message || 'Unknown error'}`, timestamp: Date.now() });
               useScannerStore.getState().setStatus('failed');
               supabase.removeChannel(channel);
               setActiveChannel(null);
@@ -199,7 +196,7 @@ const AppContent: React.FC = () => {
 
     } catch (error) {
       console.error('Orchestration Error:', error);
-      setScannerLogs(prev => [...prev, { message: `[Error] Failed to start audit: ${error instanceof Error ? error.message : 'Unknown error'}`, timestamp: Date.now() }]);
+      useScannerStore.getState().addLog({ message: `[Error] Failed to start audit: ${error instanceof Error ? error.message : 'Unknown error'}`, timestamp: Date.now() });
       setTimeout(() => navigate('preflight'), 4000);
     }
   }, [navigate, repoUrl]);

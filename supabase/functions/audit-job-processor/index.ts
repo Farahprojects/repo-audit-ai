@@ -34,6 +34,7 @@ import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
 import { GitHubAppClient } from '../_shared/github/GitHubAppClient.ts';
 import { RateLimitScheduler } from '../_shared/github/RateLimitScheduler.ts';
 import { LoggerService } from '../_shared/services/LoggerService.ts';
+import { ErrorTrackingService } from '../_shared/services/ErrorTrackingService.ts';
 import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/services/RuntimeMonitoringService.ts';
 import { calculateHealthScore, generateEgoDrivenSummary, deduplicateIssues } from '../_shared/scoringUtils.ts';
 import { normalizeStrengthsOrIssues, normalizeRiskLevel } from '../_shared/normalization.ts';
@@ -317,6 +318,29 @@ async function processJob(
                     jobId: job.job_id,
                     accountId: preflight.github_account_id
                 });
+            } else {
+                // Token decryption failed - this is critical
+                const errorMessage = `Failed to decrypt GitHub token for private repository`;
+                LoggerService.error(errorMessage, {
+                    component: 'AuditJobProcessor',
+                    jobId: job.job_id,
+                    preflightId: preflight.id,
+                    githubAccountId: preflight.github_account_id,
+                    repoUrl: preflight.repo_url
+                });
+
+                ErrorTrackingService.trackError(
+                    new Error(errorMessage),
+                    {
+                        component: 'AuditJobProcessor',
+                        operation: 'tokenDecryption',
+                        jobId: job.job_id,
+                        preflightId: preflight.id,
+                        githubAccountId: preflight.github_account_id,
+                        repoUrl: preflight.repo_url,
+                        severity: 'critical'
+                    }
+                );
             }
         } else if (!preflight.is_private) {
             // Public repo - no auth needed
@@ -424,12 +448,12 @@ async function processJob(
                 plan_data: plan
             });
         } else {
-        // Fire-and-forget for non-critical progress updates
-        if (typeof EdgeRuntime !== 'undefined') {
-            EdgeRuntime.waitUntil(updateProgress(15, 'Running planner - generating task breakdown...'));
-        } else {
-            await updateProgress(15, 'Running planner - generating task breakdown...');
-        }
+            // Fire-and-forget for non-critical progress updates
+            if (typeof EdgeRuntime !== 'undefined') {
+                EdgeRuntime.waitUntil(updateProgress(15, 'Running planner - generating task breakdown...'));
+            } else {
+                await updateProgress(15, 'Running planner - generating task breakdown...');
+            }
             const execResult = await runPlanner(contextWithFiles, GEMINI_API_KEY, tierPrompt);
             plan = execResult.result;
             plannerUsage = execResult.usage;

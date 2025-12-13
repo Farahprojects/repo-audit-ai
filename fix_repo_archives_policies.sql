@@ -7,18 +7,30 @@
 -- ============================================================================
 
 -- ============================================
--- DROP EXISTING BROKEN POLICIES
+-- DROP EXISTING BROKEN POLICIES (ROBUST METHOD)
 -- ============================================
 
--- Drop all existing repo_archives policies
-DROP POLICY IF EXISTS "Service role full access to repo_archives 1u5llpa_0" ON storage.objects;
-DROP POLICY IF EXISTS "Service role full access to repo_archives 1u5llpa_1" ON storage.objects;
-DROP POLICY IF EXISTS "Service role full access to repo_archives 1u5llpa_2" ON storage.objects;
-DROP POLICY IF EXISTS "Service role full access to repo_archives 1u5llpa_3" ON storage.objects;
-DROP POLICY IF EXISTS "Users can manage own repo archives 1u5llpa_0" ON storage.objects;
-DROP POLICY IF EXISTS "Users can manage own repo archives 1u5llpa_1" ON storage.objects;
-DROP POLICY IF EXISTS "Users can manage own repo archives 1u5llpa_2" ON storage.objects;
-DROP POLICY IF EXISTS "Users can manage own repo archives 1u5llpa_3" ON storage.objects;
+-- This approach dynamically finds and drops all repo_archives policies,
+-- regardless of Supabase-generated hash suffixes. This is much more robust
+-- than hardcoding specific policy names that may change.
+
+DO $$
+DECLARE
+    policy_record RECORD;
+BEGIN
+    -- Find all policies on storage.objects that relate to repo_archives
+    FOR policy_record IN
+        SELECT policyname
+        FROM pg_policies
+        WHERE schemaname = 'storage'
+          AND tablename = 'objects'
+          AND policyname LIKE '%repo_archives%'
+    LOOP
+        -- Drop each policy dynamically
+        EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', policy_record.policyname);
+        RAISE NOTICE 'Dropped policy: %', policy_record.policyname;
+    END LOOP;
+END $$;
 
 -- ============================================
 -- CREATE CORRECT POLICIES

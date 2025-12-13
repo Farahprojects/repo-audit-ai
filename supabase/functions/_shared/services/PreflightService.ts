@@ -4,6 +4,7 @@
 import { createSupabaseClient } from '../utils.ts';
 import { GitHubAuthenticator } from '../github/GitHubAuthenticator.ts';
 import { ValidatedRequest } from './RequestValidationService.ts';
+import { ErrorTrackingService } from './ErrorTrackingService.ts';
 
 export interface ResolvedPreflight {
   record: any;
@@ -67,7 +68,22 @@ export class PreflightService {
       serverDecryptedToken = await authenticator.getTokenByAccountId(preflightRecord.github_account_id);
 
       if (!serverDecryptedToken) {
-        console.warn(`⚠️ [PreflightService] Failed to decrypt token - private repo files may not be accessible`);
+        const errorMessage = `Failed to decrypt GitHub token for private repository`;
+        console.error(`❌ [PreflightService] ${errorMessage} - private repo files will not be accessible`);
+
+        // Track this critical failure for monitoring
+        ErrorTrackingService.trackError(
+          new Error(errorMessage),
+          {
+            component: 'PreflightService',
+            operation: 'resolveGitHubToken',
+            preflightId: preflightRecord.id,
+            githubAccountId: preflightRecord.github_account_id,
+            repoUrl: preflightRecord.repo_url,
+            isPrivate: preflightRecord.is_private,
+            severity: 'critical'
+          }
+        );
       }
     }
 
@@ -75,6 +91,7 @@ export class PreflightService {
     return serverDecryptedToken || clientToken || null;
   }
 }
+
 
 
 

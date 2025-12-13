@@ -2,6 +2,7 @@
 // Merges worker findings into unified report
 
 import { normalizeIssues } from './utils.ts';
+import { deduplicateIssues } from './scoringUtils.ts';
 
 export interface WorkerFinding {
     chunkId: string;
@@ -38,38 +39,6 @@ export interface SynthesisResult {
     };
     crossFileFlags: string[];
     uncertainties: string[];
-}
-
-/**
- * Generate a hash for issue deduplication
- */
-function issueHash(issue: WorkerIssue): string {
-    // Use title + file + category as unique key
-    return `${issue.category}-${issue.title}-${issue.file}`.toLowerCase().replace(/\s+/g, '-');
-}
-
-/**
- * Deduplicate issues from multiple workers
- * If same issue found by multiple workers, keep the one with more detail
- */
-function deduplicateIssues(allIssues: WorkerIssue[]): WorkerIssue[] {
-    const issueMap = new Map<string, WorkerIssue>();
-
-    for (const issue of allIssues) {
-        const hash = issueHash(issue);
-        const existing = issueMap.get(hash);
-
-        if (!existing) {
-            issueMap.set(hash, issue);
-        } else {
-            // Keep the one with more detail (longer description)
-            if (issue.description.length > existing.description.length) {
-                issueMap.set(hash, issue);
-            }
-        }
-    }
-
-    return Array.from(issueMap.values());
 }
 
 /**
@@ -179,8 +148,8 @@ export function synthesizeFindings(findings: WorkerFinding[]): SynthesisResult {
     // Collect all issues
     const allIssues = findings.flatMap(f => f.issues);
 
-    // Deduplicate
-    const uniqueIssues = deduplicateIssues(allIssues);
+    // Deduplicate using centralized function
+    const { minimizedIssues: uniqueIssues } = deduplicateIssues(allIssues);
 
     // Sort by severity
     const sortedIssues = sortBySeverity(uniqueIssues);

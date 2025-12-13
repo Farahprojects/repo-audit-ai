@@ -1,21 +1,16 @@
 
+// Import unified thinking budgets from orchestrator
+import { THINKING_BUDGETS } from '../orchestrator/core/types.ts';
+
 // Model selection by role - Flash for speed, Pro for reasoning
 export const GEMINI_MODEL_BY_ROLE = {
-  CEO: 'gemini-2.5-pro',        // Planner needs reasoning
-  SYNTHESIZER: 'gemini-2.5-pro', // Synthesis needs depth
-  WORKER: 'gemini-2.5-flash'     // Workers can use faster model
+    CEO: 'gemini-2.5-pro',        // Planner needs reasoning
+    SYNTHESIZER: 'gemini-2.5-pro', // Synthesis needs depth
+    WORKER: 'gemini-2.5-flash'     // Workers can use faster model
 } as const;
 
 // Legacy constant for backward compatibility
 export const GEMINI_MODEL = 'gemini-2.5-pro';
-
-// Thinking Budget Configuration
-// -1 = Dynamic (model decides), 128-32768 = Fixed budget for Gemini 2.5 Pro
-export const THINKING_BUDGET = {
-    CEO: 20000,       // 20k tokens - fixed budget for comprehensive audit planning
-    SYNTHESIZER: 100000, // 100k tokens - increased budget for thorough finding consolidation
-    WORKER: 10000,    // 10k tokens - high budget for thorough scanning (8k-12k range)
-} as const;
 
 export type AgentRole = 'CEO' | 'SYNTHESIZER' | 'WORKER';
 
@@ -84,9 +79,9 @@ export async function callGemini(
     temperature: number = 0.2,
     options: GeminiCallOptions = {}
 ): Promise<GeminiResponse> {
-    // Determine thinking budget: explicit override > role-based > default to dynamic
+    // Determine thinking budget: explicit override > role-based > default to WORKER budget
     const thinkingBudget = options.thinkingBudget ??
-        (options.role ? THINKING_BUDGET[options.role] : THINKING_BUDGET.WORKER);
+        (options.role ? THINKING_BUDGETS[options.role] : THINKING_BUDGETS.WORKER);
 
     // Select model by role: Flash for workers, Pro for reasoning tasks
     const model = GEMINI_MODEL_BY_ROLE[options.role || 'WORKER'];

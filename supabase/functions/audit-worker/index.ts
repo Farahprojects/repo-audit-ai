@@ -70,6 +70,26 @@ serve(async (req) => {
         if (preflightRecord.is_private && preflightRecord.github_account_id) {
             const authenticator = GitHubAuthenticator.getInstance();
             effectiveGitHubToken = await authenticator.getTokenByAccountId(preflightRecord.github_account_id);
+
+            if (!effectiveGitHubToken) {
+                const errorMessage = `Failed to decrypt GitHub token for private repository`;
+                console.error(`❌ [audit-worker] ${errorMessage} - worker will fail to fetch files`);
+
+                // Track this critical failure
+                const { ErrorTrackingService } = await import('../_shared/services/ErrorTrackingService.ts');
+                ErrorTrackingService.trackError(
+                    new Error(errorMessage),
+                    {
+                        component: 'audit-worker',
+                        operation: 'tokenDecryption',
+                        preflightId,
+                        taskId,
+                        githubAccountId: preflightRecord.github_account_id,
+                        repoUrl: preflightRecord.repo_url,
+                        severity: 'critical'
+                    }
+                );
+            }
         }
 
         // 3. Construct Minimal Context

@@ -20,11 +20,37 @@ export enum PermissionLevel {
 // Thinking Budget Configuration
 // ============================================================================
 
+/**
+ * Unified Thinking Budget System
+ * 
+ * This constant defines thinking budgets for both:
+ * 1. Agent Roles (CEO, SYNTHESIZER, WORKER) - for multi-agent audit systems
+ * 2. Task Complexity (simple, audit, complex, maximum) - for orchestrator tasks
+ * 
+ * The budget determines how many tokens the LLM can use for internal reasoning
+ * before generating its response. Higher budgets allow for more thorough analysis
+ * but cost more tokens.
+ */
 export const THINKING_BUDGETS = {
-    simple: 4096,      // Basic queries
-    audit: 8192,       // Code analysis
-    complex: 16384,    // Multi-step reasoning
-    maximum: 24576     // Heavy analysis
+    // ========================================
+    // Role-Based Budgets (Multi-Agent System)
+    // ========================================
+    CEO: 20000,         // Planner/CEO - comprehensive audit planning
+    SYNTHESIZER: 100000, // Synthesizer - thorough finding consolidation
+    WORKER: 10000,      // Worker agents - thorough file scanning
+
+    // ========================================
+    // Task-Based Budgets (Orchestrator)
+    // ========================================
+    simple: 4096,       // Basic queries
+    audit: 8192,        // Code analysis
+    complex: 16384,     // Multi-step reasoning
+    maximum: 24576,     // Heavy analysis
+
+    // ========================================
+    // Default
+    // ========================================
+    default: 8192       // Fallback budget
 } as const;
 
 export type ThinkingBudgetLevel = keyof typeof THINKING_BUDGETS;
