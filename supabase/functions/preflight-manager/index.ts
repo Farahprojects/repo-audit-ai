@@ -329,28 +329,57 @@ async function getOrCreatePreflight(
         };
     }
 
-    // Step 5: Download and store entire repository as archive (ONE API CALL)
+    // Step 5: Download/sync entire repository as archive (ONE API CALL)
     // CRITICAL: This is SYNCHRONOUS - we MUST wait for repo to be stored before returning
-    // FAIL-FAST: If download fails, the preflight fails
+    // FAIL-FAST: If download/sync fails, the preflight fails
     if (newPreflight) {
-        console.log(`📦 [preflight-manager] Downloading repo archive for ${owner}/${repo}...`);
-
         const storageService = new RepoStorageService(supabase);
-        const result = await storageService.downloadAndStoreRepo(
-            newPreflight.id,
-            owner,
-            repo,
-            freshData.defaultBranch,
-            userToken // Pass token for private repos
-        );
 
-        if (!result.success) {
-            // FAIL-FAST: If we can't store the repo, fail the entire preflight
-            console.error(`❌ [preflight-manager] Repo storage FAILED:`, result.error);
-            throw new Error(`Failed to download repository: ${result.error}`);
+        // Check if repo already exists in storage
+        const { data: existingRepo } = await supabase
+            .from('repos')
+            .select('repo_id')
+            .eq('repo_id', newPreflight.id)
+            .single();
+
+        if (existingRepo) {
+            // Repo exists - sync with latest changes
+            console.log(`🔄 [preflight-manager] Syncing existing repo archive for ${owner}/${repo}...`);
+
+            const syncResult = await storageService.syncRepo(
+                newPreflight.id,
+                owner,
+                repo,
+                freshData.defaultBranch,
+                userToken // Pass token for private repos
+            );
+
+            if (!syncResult.synced) {
+                console.error(`❌ [preflight-manager] Repo sync FAILED:`, syncResult.error);
+                throw new Error(`Failed to sync repository: ${syncResult.error}`);
+            }
+
+            console.log(`✅ [preflight-manager] Repo synced: ${syncResult.changes} changes applied`);
+        } else {
+            // Repo doesn't exist - full download
+            console.log(`📦 [preflight-manager] Downloading repo archive for ${owner}/${repo}...`);
+
+            const result = await storageService.downloadAndStoreRepo(
+                newPreflight.id,
+                owner,
+                repo,
+                freshData.defaultBranch,
+                userToken // Pass token for private repos
+            );
+
+            if (!result.success) {
+                // FAIL-FAST: If we can't store the repo, fail the entire preflight
+                console.error(`❌ [preflight-manager] Repo storage FAILED:`, result.error);
+                throw new Error(`Failed to download repository: ${result.error}`);
+            }
+
+            console.log(`✅ [preflight-manager] Repo stored: ${result.fileCount} files, ${(result.archiveSize / 1024).toFixed(1)}KB`);
         }
-
-        console.log(`✅ [preflight-manager] Repo stored: ${result.fileCount} files, ${(result.archiveSize / 1024).toFixed(1)}KB`);
     }
 
     return {

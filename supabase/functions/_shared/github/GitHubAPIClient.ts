@@ -79,6 +79,18 @@ export class GitHubAPIClient {
         return res.json();
     }
 
+    // Repository synchronization methods
+    async getLatestCommit(owner: string, repo: string, branch: string = 'main') {
+        const res = await this.request(`/repos/${owner}/${repo}/commits/${branch}`);
+        return res.json();
+    }
+
+    async compareCommits(owner: string, repo: string, base: string, head: string) {
+        // Returns: { files: [{ filename, status, sha, patch }] }
+        const res = await this.request(`/repos/${owner}/${repo}/compare/${base}...${head}`);
+        return res.json();
+    }
+
     private async request(endpoint: string) {
         const response = await fetch(`${this.baseUrl}${endpoint}`, {
             headers: this.headers

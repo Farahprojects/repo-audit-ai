@@ -22,6 +22,9 @@ export interface ErrorDetails {
   function?: string;
   errorType?: string;
   repoId?: string;
+  owner?: string;
+  repo?: string;
+  branch?: string;
   duration?: number;
   preflightId?: string;
   tier?: string;
