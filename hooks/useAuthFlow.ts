@@ -32,8 +32,9 @@ export const useAuthFlow = ({
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
       }
 
-      // If there's a pending repo URL, start the audit automatically
-      if (pendingRepoUrl) {
+      // If there's a pending repo URL and we're on landing page, start the audit automatically
+      // This prevents unwanted navigation when viewing historical reports
+      if (pendingRepoUrl && view === 'landing') {
         setPendingRepoUrl(null);
         setPreviousView('landing');
         navigate('preflight');

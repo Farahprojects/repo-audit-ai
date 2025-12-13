@@ -236,14 +236,25 @@ const AppContent: React.FC = () => {
   // Handle cancel preflight
   const handleCancelPreflight = useCallback(() => {
     navigate(previousView);
-  }, [navigate, previousView]);
+  }, [navigate, previousView, view]);
 
   // Handle view historical report
   const handleViewHistoricalReport = useCallback(async (audit: any) => {
+    // Validate that we have a repo URL
+    if (!audit.repo_url) {
+      console.error('[handleViewHistoricalReport] Audit missing repo_url:', audit.id);
+      return;
+    }
+
     useAuditStore.getState().setActiveAuditId(audit.id);
     setRepoUrl(audit.repo_url);
+
+    // Set previousView to dashboard explicitly for historical report viewing
+    // This ensures "Try Another Repo" goes back to dashboard, not previous report
+    setPreviousView('dashboard');
+
     navigate('report');
-  }, [setRepoUrl, navigate]);
+  }, [setRepoUrl, navigate, setPreviousView]);
 
   const seoData = getSEO(null);
 
