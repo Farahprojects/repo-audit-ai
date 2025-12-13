@@ -109,14 +109,22 @@ export const useAuditOrchestrator = ({
       });
 
       if (jobError) {
-        throw jobError;
+        // Check if it's a 409 (audit already in progress)
+        const errorBody = await jobError.context?.json?.() || jobResponse;
+        if (errorBody?.existingJobId) {
+          addLog(`[System] Audit already in progress, tracking existing job...`);
+          // Subscribe to existing job instead of failing
+        } else {
+          throw jobError;
+        }
       }
 
-      if (!jobResponse?.success) {
+      if (!jobResponse?.success && !jobResponse?.existingJobId) {
         throw new Error(jobResponse?.error || 'Failed to submit audit job');
       }
 
-      addLog(`[System] Job queued: ${jobResponse.jobId}`);
+      const jobId = jobResponse?.jobId || jobResponse?.existingJobId;
+      addLog(`[System] Job ${jobResponse?.existingJobId ? 'resumed' : 'queued'}: ${jobId}`);
       addLog(`[System] Tracking progress in real-time...`);
 
       // Set up real-time subscription for progress updates

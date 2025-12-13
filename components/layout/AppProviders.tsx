@@ -75,6 +75,7 @@ interface AuditContextType {
   activeAuditId: string | null;
   handleAnalyze: (url: string) => void;
   handleConfirmAudit: (tier: string, stats: AuditStats) => Promise<void>;
+  handleStartAuditWithPreflight: (url: string, tier: string, preflight: any) => Promise<void>;
   handleRestart: () => void;
   handleViewHistoricalReport: (audit: any) => Promise<void>;
   handleSelectAudit: (audit: AuditRecord) => void;
@@ -171,6 +172,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     activeAuditId: auditOrchestrator.activeAuditId,
     handleAnalyze: auditOrchestrator.handleAnalyze,
     handleConfirmAudit: auditOrchestrator.handleConfirmAudit,
+    handleStartAuditWithPreflight: auditOrchestrator.handleStartAuditWithPreflight,
     handleRestart: auditOrchestrator.handleRestart,
     handleViewHistoricalReport: auditOrchestrator.handleViewHistoricalReport,
     handleSelectAudit: auditOrchestrator.handleSelectAudit,
@@ -187,6 +189,7 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     auditOrchestrator.activeAuditId,
     auditOrchestrator.handleAnalyze,
     auditOrchestrator.handleConfirmAudit,
+    auditOrchestrator.handleStartAuditWithPreflight,
     auditOrchestrator.handleRestart,
     auditOrchestrator.handleViewHistoricalReport,
     auditOrchestrator.handleSelectAudit,
