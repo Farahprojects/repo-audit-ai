@@ -1,22 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { Issue } from '../../../types';
-import { AlertTriangle, AlertOctagon, Info, ChevronDown, Wand2, Check } from 'lucide-react';
+import { ChevronDown, Wand2, Check } from 'lucide-react';
 
 interface IssueCardProps {
   issue: Issue;
 }
-
-interface SeverityIconProps {
-  severity: string;
-}
-
-const SeverityIcon: React.FC<SeverityIconProps> = ({ severity }) => {
-  switch (severity) {
-    case 'Critical': return <AlertOctagon className="w-4 h-4 text-red-600" />;
-    case 'Warning': return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-    default: return <Info className="w-4 h-4 text-blue-500" />;
-  }
-};
 
 const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
   const [expanded, setExpanded] = useState(false);
@@ -63,10 +51,6 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
         className="px-5 py-4 flex items-start gap-4 cursor-pointer select-none"
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="mt-0.5 text-slate-400 group-hover:text-slate-600 transition-colors">
-          <SeverityIcon severity={issue.severity} />
-        </div>
-
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline justify-between gap-4">
             <h4 className="text-[15px] font-semibold text-slate-900 truncate pr-4">
