@@ -548,7 +548,7 @@ export class RepoStorageService {
                 return {
                     synced: result.success,
                     changes: result.fileCount,
-                    error: result.error
+                    ...(result.error && { error: result.error })
                 };
             }
 

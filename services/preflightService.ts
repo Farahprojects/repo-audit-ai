@@ -85,7 +85,7 @@ export class PreflightService {
     ): Promise<PreflightResponse> {
         const action: PreflightAction = options.forceRefresh ? 'refresh' : 'get';
 
-        ErrorLogger.info('Fetching preflight', { repoUrl, action, hasToken: !!options.userToken });
+        ErrorLogger.info('Fetching preflight', { action, hasToken: !!options.userToken });
 
         try {
             const { data, error } = await supabase.functions.invoke('preflight-manager', {
@@ -98,7 +98,7 @@ export class PreflightService {
             });
 
             if (error) {
-                ErrorLogger.error('Preflight service error', error, { repoUrl, action });
+                ErrorLogger.error('Preflight service error', error, { action });
                 return {
                     success: false,
                     error: error.message || 'Failed to fetch preflight',
@@ -111,14 +111,12 @@ export class PreflightService {
 
             if (response.success) {
                 ErrorLogger.info('Preflight fetched successfully', {
-                    repoUrl,
                     source: response.source,
                     fileCount: response.preflight?.file_count,
                     isPrivate: response.preflight?.is_private
                 });
             } else {
                 ErrorLogger.warn('Preflight fetch failed', undefined, {
-                    repoUrl,
                     error: response.error,
                     errorCode: response.errorCode
                 });
@@ -128,7 +126,7 @@ export class PreflightService {
 
         } catch (err) {
             const error = err instanceof Error ? err : new Error('Unknown preflight error');
-            ErrorLogger.error('Unexpected preflight error', error, { repoUrl });
+            ErrorLogger.error('Unexpected preflight error', error);
 
             return {
                 success: false,
@@ -155,7 +153,7 @@ export class PreflightService {
      * Use this when you detect that a GitHub token has expired.
      */
     static async invalidate(repoUrl: string): Promise<{ success: boolean; error?: string }> {
-        ErrorLogger.info('Invalidating preflight', { repoUrl });
+        ErrorLogger.info('Invalidating preflight');
 
         try {
             const { data, error } = await supabase.functions.invoke('preflight-manager', {
@@ -166,7 +164,7 @@ export class PreflightService {
             });
 
             if (error) {
-                ErrorLogger.error('Preflight invalidation error', error, { repoUrl });
+                ErrorLogger.error('Preflight invalidation error', error);
                 return { success: false, error: error.message };
             }
 
@@ -271,7 +269,7 @@ export class PreflightService {
  */
 export async function findExistingPreflight(repoUrl: string): Promise<PreflightRecord | null> {
     try {
-        ErrorLogger.info('Finding existing preflight', { repoUrl });
+        ErrorLogger.info('Finding existing preflight');
 
         const { data, error } = await supabase
             .from('preflights')
@@ -284,16 +282,16 @@ export async function findExistingPreflight(repoUrl: string): Promise<PreflightR
 
         if (error) {
             if (error.code === 'PGRST116') { // No rows returned
-                ErrorLogger.info('No existing preflight found', { repoUrl });
+                ErrorLogger.info('No existing preflight found');
                 return null;
             }
             throw error;
         }
 
-        ErrorLogger.info('Found existing preflight', { repoUrl, preflightId: data.id });
+        ErrorLogger.info('Found existing preflight');
         return data as unknown as PreflightRecord;
     } catch (error) {
-        ErrorLogger.error('Failed to find existing preflight', error instanceof Error ? error : new Error('Unknown error'), { repoUrl });
+        ErrorLogger.error('Failed to find existing preflight', error instanceof Error ? error : new Error('Unknown error'));
         return null;
     }
 }

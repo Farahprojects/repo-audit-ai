@@ -67,7 +67,7 @@ export function useGitHubAuth() {
 
             if (result.success) {
                 if (result.data) {
-                    ErrorLogger.debug('GitHub account found', { userId: session.user.id, login: result.data.login });
+                    ErrorLogger.debug('GitHub account found');
                     setState(prev => ({
                         ...prev,
                         isConnected: true,
@@ -75,7 +75,7 @@ export function useGitHubAuth() {
                         error: null,
                     }));
                 } else {
-                    ErrorLogger.debug('No GitHub account found for user', { userId: session.user.id });
+                    ErrorLogger.debug('No GitHub account found for user');
                     setState(prev => ({
                         ...prev,
                         isConnected: false,
@@ -85,7 +85,7 @@ export function useGitHubAuth() {
                     }));
                 }
             } else if (result.success === false) {
-                ErrorLogger.warn('Failed to fetch GitHub account', result.error, { userId: session.user.id });
+                ErrorLogger.warn('Failed to fetch GitHub account', result.error);
                 setState(prev => ({
                     ...prev,
                     isConnected: false,
@@ -96,7 +96,7 @@ export function useGitHubAuth() {
             }
         } catch (err) {
             const error = err instanceof Error ? err : new Error('Unknown error in fetchGitHubAccount');
-            ErrorLogger.error('Unexpected error in fetchGitHubAccount', error, { userId: session.user.id });
+            ErrorLogger.error('Unexpected error in fetchGitHubAccount', error);
             setState(prev => ({
                 ...prev,
                 error: 'Failed to load GitHub account data',
@@ -181,7 +181,7 @@ export function useGitHubAuth() {
             );
 
             if (result.success) {
-                ErrorLogger.info('GitHub account disconnected successfully', { userId: state.account.user_id });
+                ErrorLogger.info('GitHub account disconnected successfully');
                 setState(prev => ({
                     ...prev,
                     isConnected: false,
