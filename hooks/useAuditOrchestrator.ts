@@ -135,7 +135,19 @@ export const useAuditOrchestrator = ({
 
             // Update progress and logs
             setScannerProgress(status.progress || 0);
-            setScannerLogs(status.logs || []);
+
+            // Transform backend log strings into LogEntry format
+            // Backend format: ["[2025-12-13T04:40:56Z] Job acquired..."]
+            // Frontend expects: [{ message: string, timestamp: number }]
+            const transformedLogs = (status.logs || []).map((logStr: string) => {
+              // Parse "[2025-12-13T04:40:56Z] Message text" format
+              const match = logStr.match(/^\[([^\]]+)\]\s*(.+)$/);
+              if (match) {
+                return { timestamp: new Date(match[1]).getTime(), message: match[2] };
+              }
+              return { timestamp: Date.now(), message: logStr };
+            });
+            setScannerLogs(transformedLogs);
 
             // Handle completion
             if (status.status === 'completed' && status.report_data) {

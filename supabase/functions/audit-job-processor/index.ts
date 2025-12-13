@@ -21,6 +21,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// Declare EdgeRuntime global for Deno/Supabase Edge Functions
+declare const EdgeRuntime: {
+    waitUntil: (promise: Promise<any>) => void;
+};
 import { runPlanner } from '../_shared/agents/planner.ts';
 import { runWorker } from '../_shared/agents/worker.ts';
 import { AuditContext, WorkerTask } from '../_shared/agents/types.ts';
@@ -278,7 +283,12 @@ async function processJob(
 
         const tierPrompt = promptData?.prompt || job.tier;
 
-        await updateProgress(10, 'Analyzing codebase structure...');
+        // Fire-and-forget for non-critical progress updates
+        if (typeof EdgeRuntime !== 'undefined') {
+            EdgeRuntime.waitUntil(updateProgress(10, 'Analyzing codebase structure...'));
+        } else {
+            await updateProgress(10, 'Analyzing codebase structure...');
+        }
 
         // 3. Prepare context
         const fileMap = preflight.repo_map || [];
@@ -415,7 +425,12 @@ async function processJob(
                 plan_data: plan
             });
         } else {
+        // Fire-and-forget for non-critical progress updates
+        if (typeof EdgeRuntime !== 'undefined') {
+            EdgeRuntime.waitUntil(updateProgress(15, 'Running planner - generating task breakdown...'));
+        } else {
             await updateProgress(15, 'Running planner - generating task breakdown...');
+        }
             const execResult = await runPlanner(contextWithFiles, GEMINI_API_KEY, tierPrompt);
             plan = execResult.result;
             plannerUsage = execResult.usage;
@@ -580,6 +595,13 @@ async function processJob(
                 (taskProgress as any).cachedFindings = result.findings; // Save for resumability
 
                 completedCount++;
+
+                // Add real-time progress update after each worker completes
+                await updateProgress(
+                    25 + (completedCount / totalToRun) * 60,  // 25-85% range for workers
+                    `🤖 Worker [${task.role}] completed (${completedCount}/${totalToRun})`
+                );
+
                 await throttledUpdateProgress(); // This is now throttled
 
                 return {
@@ -637,7 +659,12 @@ async function processJob(
         // ============================================================
         // PHASE 3: COORDINATOR (INLINE, DETERMINISTIC)
         // ============================================================
-        await updateProgress(90, 'Synthesizing results...');
+        // Fire-and-forget for non-critical progress updates
+        if (typeof EdgeRuntime !== 'undefined') {
+            EdgeRuntime.waitUntil(updateProgress(90, 'Synthesizing results...'));
+        } else {
+            await updateProgress(90, 'Synthesizing results...');
+        }
 
         // Aggregate issues
         const allIssues = workerResults.flatMap(r => r.findings?.issues || []);
@@ -685,7 +712,12 @@ async function processJob(
             cwe: issue.cwe
         }));
 
-        await updateProgress(95, 'Saving audit results...');
+        // Fire-and-forget for non-critical progress updates
+        if (typeof EdgeRuntime !== 'undefined') {
+            EdgeRuntime.waitUntil(updateProgress(95, 'Saving audit results...'));
+        } else {
+            await updateProgress(95, 'Saving audit results...');
+        }
 
         // Save to audit_complete_data table
         const { data: audit, error: auditError } = await supabase

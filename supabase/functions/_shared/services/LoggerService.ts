@@ -39,6 +39,10 @@ export interface LogContext {
   totalTokens?: number | undefined;
   processingTime?: number | undefined;
 
+  // Repository metrics
+  fileCount?: number | undefined;
+  archiveSizeKB?: number | undefined;
+
   // NEW: Job processing metrics
   attempt?: number | undefined;
   attempts?: number | undefined;

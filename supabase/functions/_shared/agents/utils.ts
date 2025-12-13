@@ -1,5 +1,12 @@
 
-// Gemini 2.5 Pro for all agents - reasoning model for quality audits
+// Model selection by role - Flash for speed, Pro for reasoning
+export const GEMINI_MODEL_BY_ROLE = {
+  CEO: 'gemini-2.5-pro',        // Planner needs reasoning
+  SYNTHESIZER: 'gemini-2.5-pro', // Synthesis needs depth
+  WORKER: 'gemini-2.5-flash'     // Workers can use faster model
+} as const;
+
+// Legacy constant for backward compatibility
 export const GEMINI_MODEL = 'gemini-2.5-pro';
 
 // Thinking Budget Configuration
@@ -81,6 +88,9 @@ export async function callGemini(
     const thinkingBudget = options.thinkingBudget ??
         (options.role ? THINKING_BUDGET[options.role] : THINKING_BUDGET.WORKER);
 
+    // Select model by role: Flash for workers, Pro for reasoning tasks
+    const model = GEMINI_MODEL_BY_ROLE[options.role || 'WORKER'];
+
     const roleLabel = options.role || 'UNKNOWN';
 
     let lastError: any;
@@ -88,7 +98,7 @@ export async function callGemini(
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
                 {
                     method: 'POST',
                     headers: {
