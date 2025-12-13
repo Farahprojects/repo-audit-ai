@@ -8,6 +8,7 @@
 
 // Using fflate for zip handling (lightweight, works in Deno)
 import { unzipSync, zipSync, strToU8, strFromU8 } from 'https://esm.sh/fflate@0.8.2';
+import { ErrorTrackingService } from './ErrorTrackingService.ts';
 
 export interface FileIndexEntry {
     size: number;
@@ -84,6 +85,15 @@ export class RepoStorageService {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error(`❌ GitHub zipball download failed: ${response.status}`, errorText);
+                ErrorTrackingService.trackError(
+                    new Error(`GitHub zipball download failed: ${response.status}`),
+                    {
+                        component: 'RepoStorageService',
+                        operation: 'downloadRepo',
+                        statusCode: response.status,
+                        repoId
+                    }
+                );
                 return {
                     success: false,
                     fileCount: 0,
@@ -250,6 +260,15 @@ export class RepoStorageService {
 
         } catch (err) {
             console.error(`❌ Error retrieving file ${filePath}:`, err);
+            ErrorTrackingService.trackError(
+                err instanceof Error ? err : new Error(String(err)),
+                {
+                    component: 'RepoStorageService',
+                    operation: 'getRepoFile',
+                    filePath,
+                    repoId
+                }
+            );
             return null;
         }
     }
@@ -363,12 +382,24 @@ export class RepoStorageService {
     }
 
     private async touchRepo(repoId: string) {
-        // Fire and forget update
-        this.supabase
-            .from('repos')
-            .update({ last_accessed: new Date().toISOString() })
-            .eq('repo_id', repoId)
-            .then(() => { });
+        // Throttle updates to avoid excessive database writes
+        // Only update if we haven't updated this repo in the last 5 minutes
+        const now = Date.now();
+        const lastUpdateKey = `last_accessed_${repoId}`;
+        const lastUpdate = (this as any)[lastUpdateKey] || 0;
+        const timeSinceLastUpdate = now - lastUpdate;
+
+        // Only update if it's been more than 5 minutes (300,000 ms)
+        if (timeSinceLastUpdate > 300000) {
+            (this as any)[lastUpdateKey] = now;
+
+            // Fire and forget update
+            this.supabase
+                .from('repos')
+                .update({ last_accessed: new Date().toISOString() })
+                .eq('repo_id', repoId)
+                .then(() => { });
+        }
     }
 
     // Pass-throughs for consistency

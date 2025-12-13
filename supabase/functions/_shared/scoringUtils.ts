@@ -11,6 +11,11 @@ export interface ScoringResult {
   summary: string;
 }
 
+export interface IssueDeduplicationResult {
+  minimizedIssues: any[];
+  uniqueIssuesMap: Map<string, any>;
+}
+
 /**
  * 🧠 EGO-BASED SCORING ALGORITHM
  * Calculate health score using weighted severity and project size normalization
@@ -31,6 +36,28 @@ export function calculateHealthScore({ issues, fileCount }: ScoringInput): numbe
 
   // Step 3: Convert to 0-100 Final Score
   return Math.max(0, Math.min(100, Math.round(100 - normalized)));
+}
+
+/**
+ * 🔄 ISSUE DEDUPLICATION
+ * Remove duplicate issues based on title + filename to avoid noise
+ */
+export function deduplicateIssues(allIssues: any[]): IssueDeduplicationResult {
+  const uniqueIssuesMap = new Map<string, any>();
+
+  allIssues.forEach((issue: any) => {
+    const key = `${issue.title}-${issue.filePath || issue.file}`;
+    if (!uniqueIssuesMap.has(key)) {
+      uniqueIssuesMap.set(key, issue);
+    }
+  });
+
+  const minimizedIssues = Array.from(uniqueIssuesMap.values());
+
+  return {
+    minimizedIssues,
+    uniqueIssuesMap
+  };
 }
 
 /**

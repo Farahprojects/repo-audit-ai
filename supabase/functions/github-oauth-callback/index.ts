@@ -35,8 +35,6 @@ if (!ENV.TOKEN_ENCRYPTION_KEY) {
   throw new Error('Missing TOKEN_ENCRYPTION_KEY environment variable');
 }
 
-const supabase = createSupabaseClient(ENV);
-
 // Crypto-based encryption using Web Crypto API
 async function encryptToken(token: string, secret: string): Promise<string> {
   try {
@@ -254,6 +252,9 @@ Deno.serve(async (req: Request) => {
 
     // Parse state format: "user_id:${userId}:${timestamp}:${randomToken}"
     let userId: string | null = null;
+    // Initialize Supabase client (moved from global scope for better cold-start performance)
+    const supabase = createSupabaseClient(ENV);
+
     let timestamp: number | null = null;
 
     try {

@@ -115,17 +115,8 @@ interface AuditJobRequest {
     };
 }
 
-// Canonical tier mapping
-const TIER_MAPPING: Record<string, string> = {
-    'lite': 'shape',
-    'deep': 'conventions',
-    'ultra': 'security',
-    'performance': 'performance',
-    'security': 'security',
-    'shape': 'shape',
-    'conventions': 'conventions',
-    'supabase_deep_dive': 'supabase_deep_dive',
-};
+// Import shared tier mapping
+import { TIER_MAPPING } from '../_shared/costEstimation.ts';
 
 serve(withPerformanceMonitoring(async (req) => {
     if (req.method === 'OPTIONS') {

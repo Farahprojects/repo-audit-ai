@@ -53,6 +53,10 @@ CREATE POLICY "Anyone can submit a lead"
   ON public.leads FOR INSERT
   WITH CHECK (true);
 
+CREATE POLICY "Service role can read all leads"
+  ON public.leads FOR SELECT
+  USING (auth.role() = 'service_role');
+
 -- Audits policies: users can only access their own audits
 CREATE POLICY "Users can view their own audits"
   ON public.audits FOR SELECT

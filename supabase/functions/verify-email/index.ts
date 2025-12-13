@@ -26,12 +26,6 @@ const ENV = validateSupabaseEnv({
   SUPABASE_ANON_KEY: Deno.env.get('SUPABASE_ANON_KEY')!,
 });
 
-const supabase = createSupabaseClient(ENV, {
-  auth: {
-    persistSession: false,
-  },
-});
-
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -96,6 +90,13 @@ Deno.serve(async (req: Request) => {
 
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+      // Initialize Supabase client (moved from global scope for better cold-start performance)
+      const supabase = createSupabaseClient(ENV, {
+        auth: {
+          persistSession: false,
+        },
+      });
 
       // Delete any existing codes for this user
 

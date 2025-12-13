@@ -4,6 +4,7 @@
 import { WorkerResult } from '../agents/types.ts';
 import { calculateHealthScore, generateEgoDrivenSummary } from '../scoringUtils.ts';
 import { normalizeStrengthsOrIssues, normalizeRiskLevel } from '../normalization.ts';
+import { normalizeIssues } from '../utils.ts';
 
 export interface ProcessedResults {
   healthScore: number;
@@ -206,17 +207,6 @@ export class ResultsProcessingService {
    * Normalize issues for database storage
    */
   private normalizeIssues(issues: any[]): any[] {
-    return issues.map((issue: any, index: number) => ({
-      id: issue.id || `issue-${index}`,
-      title: issue.title,
-      description: issue.description,
-      category: issue.category || 'Security',
-      severity: issue.severity || 'warning',
-      filePath: issue.file || 'Repository-wide',
-      lineNumber: issue.line || 0,
-      badCode: issue.badCode || '',
-      fixedCode: issue.fixedCode || '',
-      cwe: issue.cwe
-    }));
+    return normalizeIssues(issues, true); // Include CWE for audit results
   }
 }

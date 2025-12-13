@@ -33,8 +33,6 @@ if (!ENV.GITHUB_OAUTH_CALLBACK_URL) {
   throw new Error('Missing GITHUB_OAUTH_CALLBACK_URL environment variable - this must be set to your callback URL (e.g., http://localhost:8080)');
 }
 
-const supabase = createSupabaseClient(ENV);
-
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -69,6 +67,9 @@ Deno.serve(async (req: Request) => {
     const timestamp = Date.now();
     const randomToken = crypto.randomUUID();
     const state = `user_id:${userId}:${timestamp}:${randomToken}`;
+
+    // Initialize Supabase client (moved from global scope for better cold-start performance)
+    const supabase = createSupabaseClient(ENV);
 
     // Store CSRF state in database with expiry (10 minutes)
     const expiresAt = new Date(timestamp + 10 * 60 * 1000).toISOString();

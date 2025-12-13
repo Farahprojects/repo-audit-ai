@@ -18,8 +18,6 @@ if (!TOKEN_ENCRYPTION_KEY) {
   throw new Error('TOKEN_ENCRYPTION_KEY is not configured');
 }
 
-const supabase = createSupabaseClient(ENV);
-
 // Crypto-based decryption
 async function decryptToken(encryptedData: string, secret: string): Promise<string> {
   try {
@@ -109,6 +107,9 @@ Deno.serve(async (req: Request) => {
     if (!/^[A-Za-z0-9+/=]+$/.test(encryptedToken)) {
       return createErrorResponse('Invalid encryptedToken format', 400);
     }
+
+    // Initialize Supabase client (moved from global scope for better cold-start performance)
+    const supabase = createSupabaseClient(ENV);
 
     // Verify user owns this GitHub account
     const { data: githubAccount, error: accountError } = await supabase

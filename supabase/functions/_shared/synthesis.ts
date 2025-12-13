@@ -1,6 +1,8 @@
 // Synthesis utilities for multi-agent audit system
 // Merges worker findings into unified report
 
+import { normalizeIssues } from './utils.ts';
+
 export interface WorkerFinding {
     chunkId: string;
     chunkName: string;
@@ -221,29 +223,5 @@ export function synthesizeFindings(findings: WorkerFinding[]): SynthesisResult {
  * Transform worker issues to match frontend Issue interface
  */
 export function transformIssuesToFrontend(issues: WorkerIssue[]): any[] {
-    const CATEGORY_MAP: Record<string, string> = {
-        'security': 'Security',
-        'performance': 'Performance',
-        'maintainability': 'Architecture',
-        'best-practices': 'Architecture',
-        'dependencies': 'Architecture',
-    };
-
-    const SEVERITY_MAP: Record<string, string> = {
-        'critical': 'Critical',
-        'warning': 'Warning',
-        'info': 'Info',
-    };
-
-    return issues.map((issue, index) => ({
-        id: issue.id || `issue-${index + 1}`,
-        title: issue.title,
-        description: issue.description,
-        category: CATEGORY_MAP[issue.category] || 'Architecture',
-        severity: SEVERITY_MAP[issue.severity] || 'Info',
-        filePath: issue.file || 'Repository-wide',
-        lineNumber: issue.line || 0,
-        badCode: issue.badCode || '',
-        fixedCode: issue.fixedCode || '',
-    }));
+    return normalizeIssues(issues, false); // Don't include CWE for synthesis
 }

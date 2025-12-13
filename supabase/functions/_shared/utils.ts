@@ -2,6 +2,28 @@
 // @ts-ignore - Deno import
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Environment-based CORS configuration
+const ALLOWED_ORIGINS = Deno.env.get('ALLOWED_ORIGINS')?.split(',') || [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://scai.dev',
+  'https://www.scai.dev',
+  // Add production domains here
+];
+
+function getSecureCorsHeaders(request: Request) {
+  const origin = request.headers.get('origin');
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
+    'Access-Control-Allow-Credentials': 'true',
+  };
+}
+
+// Legacy corsHeaders for backward compatibility (less secure)
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -9,11 +31,12 @@ export const corsHeaders = {
 };
 
 
-export function createJsonResponse(data: any, status = 200) {
+export function createJsonResponse(data: any, status = 200, request?: Request) {
+  const headers = request ? getSecureCorsHeaders(request) : corsHeaders;
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      ...corsHeaders,
+      ...headers,
       'Content-Type': 'application/json',
     },
   });
@@ -93,6 +116,8 @@ export function validateAuditTier(tier: string): boolean {
   const validTiers = ['shape', 'conventions', 'performance', 'security', 'supabase_deep_dive'];
   return validTiers.includes(tier);
 }
+
+// TODO: Refactor to use shared VALID_TIERS from costEstimation.ts to avoid duplication
 
 // Action validation
 export function validateAction(action: string, allowedActions: string[]): boolean {
@@ -278,18 +303,89 @@ export function parseGitHubRepo(input: string): GitHubRepo | null {
 }
 
 // ============================================================================
+// TOKEN ESTIMATION UTILITIES
+// ============================================================================
+
+/**
+ * Estimate tokens from content length
+ * Based on GPT tokenization: ~4 characters per token
+ */
+export function estimateTokens(content: string): number {
+  return Math.ceil(content.length / 4);
+}
+
+/**
+ * Estimate tokens from byte size
+ * Based on UTF-8 encoding: ~4 bytes per token
+ */
+export function estimateTokensFromBytes(byteSize: number): number {
+  return Math.round(byteSize / 4);
+}
+
+// ============================================================================
+// ISSUE NORMALIZATION UTILITIES
+// ============================================================================
+
+export interface NormalizedIssue {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  severity: string;
+  filePath: string;
+  lineNumber: number;
+  badCode: string;
+  fixedCode: string;
+  cwe?: string;
+}
+
+/**
+ * Normalize issues to a consistent format for frontend consumption
+ * Handles category and severity mapping
+ */
+export function normalizeIssues(issues: any[], includeCwe: boolean = false): NormalizedIssue[] {
+  const CATEGORY_MAP: Record<string, string> = {
+    'security': 'Security',
+    'performance': 'Performance',
+    'maintainability': 'Architecture',
+    'best-practices': 'Architecture',
+    'dependencies': 'Architecture',
+  };
+
+  const SEVERITY_MAP: Record<string, string> = {
+    'critical': 'Critical',
+    'warning': 'Warning',
+    'info': 'Info',
+  };
+
+  return issues.map((issue: any, index: number) => ({
+    id: issue.id || `issue-${index + 1}`,
+    title: issue.title,
+    description: issue.description,
+    category: CATEGORY_MAP[issue.category] || issue.category || 'Architecture',
+    severity: SEVERITY_MAP[issue.severity] || issue.severity || 'Info',
+    filePath: issue.file || issue.filePath || 'Repository-wide',
+    lineNumber: issue.line || issue.lineNumber || 0,
+    badCode: issue.badCode || '',
+    fixedCode: issue.fixedCode || '',
+    ...(includeCwe && issue.cwe && { cwe: issue.cwe })
+  }));
+}
+
+// ============================================================================
 // SHARED RESPONSE UTILITIES
 // ============================================================================
 
 // Standardized error response
-export function createErrorResponse(error: any, status: number = 500): Response {
+export function createErrorResponse(error: any, status: number = 500, request?: Request): Response {
   const message = error instanceof Error ? error.message : 'Unknown error';
+  const headers = request ? getSecureCorsHeaders(request) : corsHeaders;
   return new Response(
     JSON.stringify({ error: message }),
     {
       status,
       headers: {
-        ...corsHeaders,
+        ...headers,
         'Content-Type': 'application/json'
       }
     }
@@ -297,13 +393,14 @@ export function createErrorResponse(error: any, status: number = 500): Response 
 }
 
 // Standardized success response
-export function createSuccessResponse(data: any, status: number = 200): Response {
+export function createSuccessResponse(data: any, status: number = 200, request?: Request): Response {
+  const headers = request ? getSecureCorsHeaders(request) : corsHeaders;
   return new Response(
     JSON.stringify(data),
     {
       status,
       headers: {
-        ...corsHeaders,
+        ...headers,
         'Content-Type': 'application/json'
       }
     }

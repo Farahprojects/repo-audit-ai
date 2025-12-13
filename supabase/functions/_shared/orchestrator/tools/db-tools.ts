@@ -75,12 +75,61 @@ export const queryDbTool: Tool = {
             };
         }
 
+        // Validate user context for security
+        if (!context.userId) {
+            return {
+                success: false,
+                error: 'User context required for database queries'
+            };
+        }
+
         try {
             const supabase = context.supabase as any;
             let query = supabase.from(table).select(select);
 
-            // Apply filters
+            // Apply automatic user-based authorization filters
+            switch (table) {
+                case 'preflights':
+                    // Direct user_id filter
+                    query = query.eq('user_id', context.userId);
+                    break;
+                case 'repos':
+                    // Filter through preflights relationship
+                    query = query
+                        .select(`${select}, preflights!inner(user_id)`)
+                        .eq('preflights.user_id', context.userId);
+                    break;
+                case 'audits':
+                    // Assuming 'audits' refers to audit_complete_data
+                    query = query.eq('user_id', context.userId);
+                    break;
+                case 'reasoning_sessions':
+                    // Direct user_id filter
+                    query = query.eq('user_id', context.userId);
+                    break;
+                case 'reasoning_steps':
+                    // Filter through session ownership (steps are owned by sessions)
+                    query = query
+                        .select(`${select}, reasoning_sessions!inner(user_id)`)
+                        .eq('reasoning_sessions.user_id', context.userId);
+                    break;
+                default:
+                    // For any other tables, require explicit user_id in filters
+                    if (!filters.user_id) {
+                        return {
+                            success: false,
+                            error: `Table '${table}' requires explicit user_id filter for security`
+                        };
+                    }
+                    break;
+            }
+
+            // Apply additional filters
             for (const [key, value] of Object.entries(filters)) {
+                // Skip user_id filter if already applied automatically
+                if (key === 'user_id' && ['preflights', 'audits', 'reasoning_sessions'].includes(table)) {
+                    continue;
+                }
                 query = query.eq(key, value);
             }
 
@@ -351,8 +400,31 @@ export const getRepoFileTool: Tool = {
             };
         }
 
+        // Validate user context for security
+        if (!context.userId) {
+            return {
+                success: false,
+                error: 'User context required for repository access'
+            };
+        }
+
         try {
             const supabase = context.supabase as any;
+
+            // First, validate that the user owns this preflight/repo
+            const { data: ownershipCheck, error: ownershipError } = await supabase
+                .from('preflights')
+                .select('id')
+                .eq('id', repoId)
+                .eq('user_id', context.userId)
+                .single();
+
+            if (ownershipError || !ownershipCheck) {
+                return {
+                    success: false,
+                    error: 'Access denied: Repository not owned by user'
+                };
+            }
 
             // Get storage path from DB
             const { data: repoMeta, error: metaError } = await supabase
@@ -476,8 +548,31 @@ export const updateRepoFileTool: Tool = {
             return { success: false, error: 'filePath and content are required' };
         }
 
+        // Validate user context for security
+        if (!context.userId) {
+            return {
+                success: false,
+                error: 'User context required for repository access'
+            };
+        }
+
         try {
             const supabase = context.supabase as any;
+
+            // First, validate that the user owns this preflight/repo
+            const { data: ownershipCheck, error: ownershipError } = await supabase
+                .from('preflights')
+                .select('id')
+                .eq('id', repoId)
+                .eq('user_id', context.userId)
+                .single();
+
+            if (ownershipError || !ownershipCheck) {
+                return {
+                    success: false,
+                    error: 'Access denied: Repository not owned by user'
+                };
+            }
 
             // Get current meta
             const { data: repoMeta, error: metaError } = await supabase
@@ -623,10 +718,41 @@ export const pushToGithubTool: Tool = {
             return { success: false, error: 'filePath and commitMessage are required' };
         }
 
+        // Validate user context for security
+        if (!context.userId) {
+            return {
+                success: false,
+                error: 'User context required for repository access'
+            };
+        }
+
         // Check fix mode
         const isFixMode = (context as any).mode === 'fix' || (context as any).fixMode === true;
         if (!isFixMode) {
             return { success: false, error: 'push_to_github can ONLY be used in fix mode.' };
+        }
+
+        // Validate that the user owns this preflight/repo
+        try {
+            const supabase = context.supabase as any;
+            const { data: ownershipCheck, error: ownershipError } = await supabase
+                .from('preflights')
+                .select('id')
+                .eq('id', repoId)
+                .eq('user_id', context.userId)
+                .single();
+
+            if (ownershipError || !ownershipCheck) {
+                return {
+                    success: false,
+                    error: 'Access denied: Repository not owned by user'
+                };
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: 'Failed to validate repository ownership'
+            };
         }
 
         try {

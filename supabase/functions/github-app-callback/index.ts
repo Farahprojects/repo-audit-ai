@@ -12,6 +12,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GITHUB_APP_ID = Deno.env.get('GITHUB_APP_ID')!;
 const GITHUB_APP_PRIVATE_KEY = Deno.env.get('GITHUB_APP_PRIVATE_KEY')!;
+const GITHUB_WEBHOOK_SECRET = Deno.env.get('GITHUB_WEBHOOK_SECRET')!;
+const TOKEN_ENCRYPTION_KEY = Deno.env.get('TOKEN_ENCRYPTION_KEY')!;
 
 interface GitHubWebhookPayload {
   action: 'created' | 'deleted' | 'suspend' | 'unsuspend';
@@ -30,6 +32,40 @@ interface GitHubWebhookPayload {
     name: string;
     full_name: string;
   }>;
+}
+
+// ============================================================================
+// Webhook Signature Verification
+// ============================================================================
+
+async function verifyWebhookSignature(
+  payload: string,
+  signature: string,
+  secret: string
+): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const expectedSignature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(payload)
+  );
+
+  const expectedHex = Array.from(new Uint8Array(expectedSignature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  // GitHub signature format is "sha256=<hex>"
+  const actualHex = signature.replace('sha256=', '');
+
+  return expectedHex === actualHex;
 }
 
 // ============================================================================
@@ -134,14 +170,92 @@ async function getInstallationToken(installationId: number): Promise<{
 // ============================================================================
 
 async function encryptToken(token: string): Promise<string> {
-  // Use a simple encryption for now - in production, use proper encryption
-  // For this demo, we'll use base64 encoding (not secure for production!)
-  return btoa(token);
+  const encoder = new TextEncoder();
+
+  // Generate random salt and IV
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  // Generate key from secret using PBKDF2
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(TOKEN_ENCRYPTION_KEY),
+    'PBKDF2',
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt']
+  );
+
+  // Encrypt the token
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv },
+    key,
+    encoder.encode(token)
+  );
+
+  // Combine salt + iv + encrypted data
+  const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
+  combined.set(salt, 0);
+  combined.set(iv, salt.length);
+  combined.set(new Uint8Array(encrypted), salt.length + iv.length);
+
+  // Return base64 encoded result
+  return btoa(String.fromCharCode(...combined));
 }
 
-async function decryptToken(encryptedToken: string): Promise<string> {
-  // For this demo, base64 decoding (not secure for production!)
-  return atob(encryptedToken);
+async function decryptToken(encryptedData: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  // Decode base64
+  const combined = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
+
+  // Extract salt, iv, and encrypted data
+  const salt = combined.slice(0, 16);
+  const iv = combined.slice(16, 28);
+  const encrypted = combined.slice(28);
+
+  // Generate key from secret
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(TOKEN_ENCRYPTION_KEY),
+    'PBKDF2',
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv },
+    key,
+    encrypted
+  );
+
+  return decoder.decode(decrypted);
 }
 
 // ============================================================================
@@ -239,16 +353,31 @@ serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Verify webhook signature (important for security!)
-    // GitHub sends X-Hub-Signature-256 header
+    // Get the raw request body for signature verification
+    const body = await req.text();
+
+    // Verify webhook signature (critical for security!)
     const signature = req.headers.get('X-Hub-Signature-256');
     if (!signature) {
-      console.warn('No webhook signature provided');
-      // For now, continue (add proper signature verification in production)
+      console.error('No webhook signature provided - rejecting request');
+      return new Response('Unauthorized: Missing webhook signature', {
+        status: 401,
+        headers: corsHeaders
+      });
+    }
+
+    // Verify the signature
+    const isValidSignature = await verifyWebhookSignature(body, signature, GITHUB_WEBHOOK_SECRET);
+    if (!isValidSignature) {
+      console.error('Invalid webhook signature - rejecting request');
+      return new Response('Unauthorized: Invalid webhook signature', {
+        status: 401,
+        headers: corsHeaders
+      });
     }
 
     // Parse webhook payload
-    const payload: GitHubWebhookPayload = await req.json();
+    const payload: GitHubWebhookPayload = JSON.parse(body);
     const eventType = req.headers.get('X-GitHub-Event');
 
     console.log(`Received GitHub webhook: ${eventType} - ${payload.action}`);

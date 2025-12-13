@@ -11,11 +11,13 @@ export class GitHubAppClient {
   private installationId: number;
   private supabase: SupabaseClient;
   private baseUrl = 'https://api.github.com';
+  private encryptionKey: string;
 
   constructor(installationId: number) {
     this.installationId = installationId;
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    this.encryptionKey = Deno.env.get('TOKEN_ENCRYPTION_KEY')!;
     this.supabase = createClient(supabaseUrl, supabaseKey);
   }
 
@@ -409,14 +411,91 @@ export class GitHubAppClient {
   // ============================================================================
 
   private async encryptToken(token: string): Promise<string> {
-    // WARNING: This is a basic implementation for demo purposes
-    // In production, use proper encryption with a secure key
-    return btoa(token);
+    const encoder = new TextEncoder();
+
+    // Generate random salt and IV
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    // Generate key from secret using PBKDF2
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(this.encryptionKey),
+      'PBKDF2',
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt']
+    );
+
+    // Encrypt the token
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: iv },
+      key,
+      encoder.encode(token)
+    );
+
+    // Combine salt + iv + encrypted data
+    const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(new Uint8Array(encrypted), salt.length + iv.length);
+
+    // Return base64 encoded result
+    return btoa(String.fromCharCode(...combined));
   }
 
-  private async decryptToken(encryptedToken: string): Promise<string> {
-    // WARNING: This is a basic implementation for demo purposes
-    // In production, use proper decryption with a secure key
-    return atob(encryptedToken);
+  private async decryptToken(encryptedData: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    // Decode base64
+    const combined = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
+
+    // Extract salt, iv, and encrypted data
+    const salt = combined.slice(0, 16);
+    const iv = combined.slice(16, 28);
+    const encrypted = combined.slice(28);
+
+    // Generate key from secret
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(this.encryptionKey),
+      'PBKDF2',
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt']
+    );
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv },
+      key,
+      encrypted
+    );
+
+    return decoder.decode(decrypted);
   }
 }

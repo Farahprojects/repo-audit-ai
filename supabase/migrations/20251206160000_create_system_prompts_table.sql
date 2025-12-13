@@ -1,8 +1,8 @@
 -- Update system_prompts table with new audit tier prompts
 -- (Table already exists from previous migration)
 
--- Clear existing prompts and insert updated versions
-DELETE FROM public.system_prompts;
+-- Update existing prompts or insert new ones if they don't exist
+-- (Preserve any existing custom prompts not being updated)
 
 INSERT INTO public.system_prompts (tier, name, description, credit_cost, prompt) VALUES
 
@@ -280,5 +280,12 @@ For EACH issue found, provide:
 - fixedCode snippet showing the remediation
 - Clear, actionable suggestion
 
-Use category: "security"');
+Use category: "security"')
+
+ON CONFLICT (tier) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  credit_cost = EXCLUDED.credit_cost,
+  prompt = EXCLUDED.prompt,
+  updated_at = now();
 

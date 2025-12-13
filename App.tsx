@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import Pricing from './components/pages/Pricing';
@@ -35,6 +35,15 @@ const AppContent: React.FC = () => {
   // Local state for scanner logs (synced via real-time in AppProviders)
   const [scannerLogs, setScannerLogs] = useState<LogEntry[]>([]);
   const [activeChannel, setActiveChannel] = useState<any>(null);
+
+  // Clean up active subscription on component unmount
+  useEffect(() => {
+    return () => {
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+      }
+    };
+  }, [activeChannel]);
 
   // Handle analyze - navigate to preflight
   const handleAnalyze = useCallback((url: string) => {

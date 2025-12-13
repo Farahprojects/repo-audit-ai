@@ -18,6 +18,7 @@ import {
 export interface StateManagerConfig {
     supabase: any; // SupabaseClient
     sessionId?: string;
+    allowInMemoryFallback?: boolean; // Allow in-memory operation when DB fails
 }
 
 export class StateManager {
@@ -25,10 +26,12 @@ export class StateManager {
     private sessionId: string;
     private stepCounter: number = 0;
     private totalTokens: number = 0;
+    private allowInMemoryFallback: boolean;
 
     constructor(config: StateManagerConfig) {
         this.supabase = config.supabase;
         this.sessionId = config.sessionId || crypto.randomUUID();
+        this.allowInMemoryFallback = config.allowInMemoryFallback ?? false;
     }
 
     // ============================================================================
@@ -65,7 +68,10 @@ export class StateManager {
 
         if (error) {
             console.error('[StateManager] Failed to create session:', error);
-            // Continue anyway - we can operate in memory if DB fails
+            if (!this.allowInMemoryFallback) {
+                throw new Error(`Failed to persist session to database: ${error.message}`);
+            }
+            // Continue in memory only if explicitly allowed
         }
 
         return session;
@@ -157,7 +163,10 @@ export class StateManager {
 
         if (error) {
             console.error('[StateManager] Failed to save step:', error);
-            // Return the step anyway - we have it in memory
+            if (!this.allowInMemoryFallback) {
+                throw new Error(`Failed to persist step to database: ${error.message}`);
+            }
+            // Return the step anyway - we have it in memory only if explicitly allowed
         }
 
         fullStep.id = data?.id;

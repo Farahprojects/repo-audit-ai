@@ -5,6 +5,7 @@ import { runPlanner } from '../agents/planner.ts';
 import { runWorker } from '../agents/worker.ts';
 import { AuditContext, WorkerResult } from '../agents/types.ts';
 import { detectCapabilities } from '../capabilities.ts';
+import { ErrorTrackingService } from './ErrorTrackingService.ts';
 
 export interface AuditExecutionResult {
   workerResults: WorkerResult[];
@@ -142,6 +143,17 @@ export class AuditExecutionService {
       } else {
         failedWorkers++;
         console.warn(`⚠️ Worker ${i} failed:`, out.reason);
+
+        // Track worker failures in error tracking system
+        ErrorTrackingService.trackError(
+          out.reason instanceof Error ? out.reason : new Error(String(out.reason)),
+          {
+            component: 'AuditExecutionService',
+            operation: 'workerExecution',
+            workerIndex: i,
+            errorType: 'worker_failure'
+          }
+        );
       }
     });
 

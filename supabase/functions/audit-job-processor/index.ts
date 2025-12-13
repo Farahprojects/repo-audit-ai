@@ -35,7 +35,7 @@ import { GitHubAppClient } from '../_shared/github/GitHubAppClient.ts';
 import { RateLimitScheduler } from '../_shared/github/RateLimitScheduler.ts';
 import { LoggerService } from '../_shared/services/LoggerService.ts';
 import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/services/RuntimeMonitoringService.ts';
-import { calculateHealthScore, generateEgoDrivenSummary } from '../_shared/scoringUtils.ts';
+import { calculateHealthScore, generateEgoDrivenSummary, deduplicateIssues } from '../_shared/scoringUtils.ts';
 import { normalizeStrengthsOrIssues, normalizeRiskLevel } from '../_shared/normalization.ts';
 
 const WORKER_ID = `processor-${crypto.randomUUID().slice(0, 8)}`;
@@ -466,18 +466,12 @@ async function processJob(
 
         // Reconstruct results for completed tasks
         const cachedResults = workerProgress
-            .filter((wp: any) => wp.status === 'completed')
+            .filter((wp: any) => wp.status === 'completed' && wp.cachedFindings)
             .map((wp: any) => ({
                 taskId: wp.taskId,
                 role: wp.role,
-                findings: {
-                    issues: undefined // Ideally we'd cache full findings, but for now we might re-run critical paths or rely on DB
-                    // Note: In a full production system, findings should be stored in a separate table or jsonb column per task
-                },
+                findings: wp.cachedFindings, // Use the cached findings that were stored during execution
                 tokenUsage: wp.tokenUsage || 0,
-                // Warning: We don't have the full findings in worker_progress usually. 
-                // To support full resumability without re-running, we need to persist findings in worker_progress or separate table.
-                // For this implementation, we'll optimistically use what we have or re-run if findings are missing.
                 isCached: true
             }));
 
@@ -496,14 +490,11 @@ async function processJob(
         // Let's modify the process to store results in `worker_progress` so next time it works.
 
         if (completedTaskIds.size > 0) {
-            LoggerService.info(`Resumability: Found ${completedTaskIds.size} completed tasks.`, {
+            LoggerService.info(`Resumability: Found ${completedTaskIds.size} completed tasks with cached results.`, {
                 component: 'AuditJobProcessor',
-                jobId: job.job_id
+                jobId: job.job_id,
+                cachedTasks: completedTaskIds.size
             });
-            // However, since we didn't store full findings in the last migration in worker_progress,
-            // we can't fully skip them effectively in this version without data loss for the coordinator.
-            // DECISION: We will run all tasks for now to ensure coordinator correctness, 
-            // BUT we will update the code to STORE findings this time so NEXT retry works.
         }
 
         const tasksActual = tasksToRun; // Use the filtered list from resumability step
@@ -666,16 +657,9 @@ async function processJob(
             await updateProgress(90, 'Synthesizing results...');
         }
 
-        // Aggregate issues
+        // Aggregate and deduplicate issues
         const allIssues = workerResults.flatMap(r => r.findings?.issues || []);
-        const uniqueIssuesMap = new Map<string, any>();
-        allIssues.forEach((issue: any) => {
-            const key = `${issue.title}-${issue.filePath}`;
-            if (!uniqueIssuesMap.has(key)) {
-                uniqueIssuesMap.set(key, issue);
-            }
-        });
-        const minimizedIssues = Array.from(uniqueIssuesMap.values());
+        const { minimizedIssues } = deduplicateIssues(allIssues);
 
         // Calculate health score
         const healthScore = calculateHealthScore({
@@ -756,6 +740,21 @@ async function processJob(
                 component: 'AuditJobProcessor',
                 jobId: job.job_id
             });
+
+            // Mark job as failed due to audit save error
+            await supabase.rpc('fail_audit_job', {
+                p_job_id: job.job_id,
+                p_error_message: `Audit save failed: ${auditError.message}`
+            });
+
+            // Update status to failed
+            await updateProgress(100, 'Audit failed: Could not save results', {
+                status: 'failed',
+                error: auditError.message,
+                completed_at: new Date().toISOString()
+            });
+
+            throw new Error(`Audit save failed: ${auditError.message}`);
         }
 
         // Complete the job

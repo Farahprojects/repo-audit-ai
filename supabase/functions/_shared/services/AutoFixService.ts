@@ -1,6 +1,6 @@
 import { callGemini, GEMINI_MODEL } from "../agents/utils.ts";
 import { ExecutionPricing, PriceQuote } from "./ExecutionPricing.ts";
-import { estimateTokens } from "../costEstimation.ts";
+import { estimateTokensFromBytes } from "../utils.ts";
 
 export interface FixSpec {
     filePath: string;
@@ -93,10 +93,10 @@ export class AutoFixService {
         const fileSize = fileContent.length;
 
         // Rough estimate: file tokens (input) + instruction tokens + expected output (full file again)
-        // Input: File chars / 4
+        // Input: File bytes / 4
         // Instructions: ~500 tokens
-        // Output: File chars / 4
-        const estimatedTokens = Math.ceil((fileSize / 4) * 2 + 500);
+        // Output: File bytes / 4
+        const estimatedTokens = (estimateTokensFromBytes(fileSize) * 2) + 500;
 
         return ExecutionPricing.calculatePrice(estimatedTokens);
     }

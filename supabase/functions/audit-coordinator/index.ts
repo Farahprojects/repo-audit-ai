@@ -16,7 +16,7 @@ import {
 } from '../_shared/utils.ts';
 import { calculateServerEstimate } from '../_shared/costEstimation.ts';
 import { normalizeStrengthsOrIssues, normalizeRiskLevel } from '../_shared/normalization.ts';
-import { calculateHealthScore, generateEgoDrivenSummary } from '../_shared/scoringUtils.ts';
+import { calculateHealthScore, generateEgoDrivenSummary, deduplicateIssues } from '../_shared/scoringUtils.ts';
 
 
 
@@ -84,18 +84,9 @@ serve(async (req) => {
 
         // 3. Deterministic Aggregation (No LLM)
 
-        // Flatten all issues
+        // Flatten and deduplicate issues
         const allIssues = workerResults.flatMap(r => r.findings.issues || []);
-
-        // Deduplicate issues by title + filename
-        const uniqueIssuesMap = new Map<string, any>();
-        allIssues.forEach((issue: any) => {
-            const key = `${issue.title}-${issue.filePath}`;
-            if (!uniqueIssuesMap.has(key)) {
-                uniqueIssuesMap.set(key, issue);
-            }
-        });
-        const minimizedIssues = Array.from(uniqueIssuesMap.values());
+        const { minimizedIssues } = deduplicateIssues(allIssues);
 
         // 🧠 EGO-BASED SCORING ALGORITHM (now shared)
         const combinedAppMap = workerResults.reduce((map: any, result) => {
@@ -182,6 +173,7 @@ serve(async (req) => {
 
         if (insertError) {
             console.error('Failed to save audit:', insertError);
+            return createErrorResponse(`Failed to save audit results: ${insertError.message}`, 500);
         }
 
         // 6. Return Final Report

@@ -17,6 +17,7 @@ import {
     ThinkingBudgetLevel,
     ReasoningEvent
 } from './types.ts';
+import { callGemini, AgentRole } from '../../agents/utils.ts';
 
 import { ToolRegistry, createToolRegistry } from './tool-registry.ts';
 import { StateManager } from './state-manager.ts';
@@ -29,7 +30,6 @@ import {
 } from './prompt-templates.ts';
 
 // Gemini 2.5 Pro for orchestrator reasoning
-const GEMINI_MODEL = 'gemini-2.5-pro';
 const DEFAULT_MAX_ITERATIONS = 50;
 const MAX_RETRIES_PER_STEP = 3;
 
@@ -277,40 +277,21 @@ export class Orchestrator {
         prompt: string,
         thinkingBudget: number
     ): Promise<{ text: string; tokenUsage: number }> {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+        // Use the unified callGemini with robust error handling and retry logic
+        const response = await callGemini(
+            this.config.apiKey,
+            '', // No system prompt for orchestrator
+            prompt,
+            0.3, // temperature
             {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': this.config.apiKey
-                },
-                body: JSON.stringify({
-                    contents: [
-                        { role: 'user', parts: [{ text: prompt }] }
-                    ],
-                    generationConfig: {
-                        temperature: 0.3,
-                        maxOutputTokens: 16384
-                        // Removed thinkingConfig to rely 100% on prompt-based reasoning
-                        // This ensures universal compatibility across different models
-                    }
-                })
+                thinkingBudget: thinkingBudget,
+                role: 'WORKER' as AgentRole // Use WORKER role for orchestrator tasks
             }
         );
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Gemini API error: ${response.status} ${errorText}`);
-        }
-
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const usage = data.usageMetadata || {};
-
         return {
-            text,
-            tokenUsage: (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0)
+            text: response.data,
+            tokenUsage: response.usage.totalTokens
         };
     }
 

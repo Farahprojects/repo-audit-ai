@@ -2,6 +2,8 @@
 // Shared cost estimation utilities - centralized logic for token estimation
 // This prevents logic drift between cost-estimator, audit-runner, and audit-coordinator
 
+import { estimateTokensFromBytes } from './utils.ts';
+
 // Canonical tier mapping - single source of truth
 export const TIER_MAPPING: Record<string, string> = {
   'lite': 'shape',
@@ -129,7 +131,7 @@ export function buildComplexityFingerprint(files: any[]): ComplexityFingerprint 
   return {
     file_count: files.length,
     total_bytes: files.reduce((sum, f) => sum + (f.size || 0), 0),
-    token_estimate: Math.round(files.reduce((sum, f) => sum + (f.size || 0), 0) / 4),
+    token_estimate: files.reduce((sum, f) => sum + estimateTokensFromBytes(f.size || 0), 0),
     language_primary: '', // Not used in current formulas
     language_mix: [], // Not used in current formulas
     frontend_files: files.filter(f => /\.(tsx?|jsx?|vue|svelte)$/.test(f.path)).length,

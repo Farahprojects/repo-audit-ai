@@ -15,10 +15,8 @@ export interface Chunk {
     priority: number; // Higher = more important
 }
 
-// Rough token estimation: ~4 chars per token for code
-export function estimateTokens(content: string): number {
-    return Math.ceil(content.length / 4);
-}
+// Import shared token estimation
+export { estimateTokens } from './utils.ts';
 
 // Group files by top-level folder
 function groupByFolder(files: FileInfo[]): Map<string, FileInfo[]> {
