@@ -163,7 +163,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
 
         {/* Mobile Menu Overlay */}
         {isMenuOpen && (
-          <div className="fixed inset-0 bg-background z-40 flex flex-col pt-24 px-6 md:hidden animate-in fade-in slide-in-from-top-4 duration-200 overflow-y-auto">
+          <div className="fixed inset-0 bg-white z-40 flex flex-col pt-24 px-6 md:hidden animate-in fade-in slide-in-from-top-4 duration-200 overflow-y-auto">
             <div className="flex flex-col gap-2 pb-10">
               {NAV_ITEMS.map((item) => (
                 <button
