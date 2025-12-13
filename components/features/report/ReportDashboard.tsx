@@ -127,6 +127,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = memo(({
           onUpgradesClick={reportState.handleUpgradesClick}
           onShare={reportState.handleShare}
           onExportCSV={reportState.handleExportCSV}
+          onCopyIssues={reportState.handleCopyIssues}
           onRunTier={onRunTier}
           tierButtonRefs={reportState.tierButtonRefs}
           upgradesButtonRef={reportState.upgradesButtonRef}

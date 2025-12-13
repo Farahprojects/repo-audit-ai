@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { GitBranch, Download, Share2, Check, ChevronDown, Clock, Plus } from 'lucide-react';
+import { GitBranch, Download, Share2, Check, ChevronDown, Clock, Plus, Copy } from 'lucide-react';
 import { RepoReport, AuditRecord } from '../../../types';
 import { TIERS, AuditTier } from '../../common/TierBadges';
 
@@ -16,6 +16,7 @@ interface ReportHeaderProps {
   onUpgradesClick: () => void;
   onShare: () => void;
   onExportCSV: () => void;
+  onCopyIssues: () => void;
   onRunTier?: (tier: AuditTier, repoUrl: string, config?: any) => void;
   tierButtonRefs: React.MutableRefObject<Record<string, HTMLButtonElement | null>>;
   upgradesButtonRef: React.RefObject<HTMLButtonElement>;
@@ -40,6 +41,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = memo(({
   onUpgradesClick,
   onShare,
   onExportCSV,
+  onCopyIssues,
   onRunTier,
   tierButtonRefs,
   upgradesButtonRef,
@@ -116,6 +118,13 @@ export const ReportHeader: React.FC<ReportHeaderProps> = memo(({
 
         {/* Action Buttons - Far Right */}
         <div className="flex items-center gap-1 print:hidden">
+          <button
+            onClick={onCopyIssues}
+            className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
+            title="Copy All Issues"
+          >
+            {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+          </button>
           <button
             onClick={onExportCSV}
             className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"

@@ -126,6 +126,20 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
     document.body.removeChild(link);
   }, [data.issues, data.repoName]);
 
+  const handleCopyIssues = useCallback(async () => {
+    const issuesText = data.issues.map(issue =>
+      `• ${issue.severity.toUpperCase()}: ${issue.title}\n  ${issue.description}\n  File: ${issue.filePath}${issue.lineNumber ? `:${issue.lineNumber}` : ''}\n`
+    ).join('\n');
+
+    try {
+      await navigator.clipboard.writeText(issuesText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy issues:', err);
+    }
+  }, [data.issues]);
+
   // Get tiers that haven't been run yet
   const uncompletedTiers = TIERS.filter(t => !completedTiers.includes(t.id));
 
@@ -167,6 +181,7 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
     handleRunDeepAudit,
     handleConnectSubmit,
     handleExportCSV,
+    handleCopyIssues,
     formatDate,
   };
 };
