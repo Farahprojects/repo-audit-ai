@@ -24,6 +24,11 @@ declare const EdgeRuntime: {
     waitUntil: (promise: Promise<any>) => void;
 };
 
+// Initialize Supabase client at global scope to avoid cold start performance issues
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 
 // Trigger job processing with retry and busy handling
 async function triggerJobProcessing(supabaseUrl: string, supabaseKey: string, jobId: string, preflightId: string, tier: string) {
@@ -126,9 +131,6 @@ serve(withPerformanceMonitoring(async (req) => {
     const startTime = Date.now();
 
     try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
 
         // Get user from JWT
         const authHeader = req.headers.get('Authorization');

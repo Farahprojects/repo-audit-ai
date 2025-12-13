@@ -40,6 +40,9 @@ import { normalizeStrengthsOrIssues, normalizeRiskLevel } from '../_shared/norma
 
 const WORKER_ID = `processor-${crypto.randomUUID().slice(0, 8)}`;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 interface ProcessorRequest {
     trigger?: 'pg_cron' | 'insert' | 'manual';
@@ -51,10 +54,6 @@ serve(withPerformanceMonitoring(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     try {
         if (!GEMINI_API_KEY) {

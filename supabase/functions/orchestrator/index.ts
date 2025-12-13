@@ -23,6 +23,12 @@ import { githubTools } from '../_shared/orchestrator/tools/github-tools.ts';
 import { dbTools } from '../_shared/orchestrator/tools/db-tools.ts';
 import { auditTools } from '../_shared/orchestrator/tools/audit-tools.ts';
 
+// Initialize environment variables and Supabase client at global scope to avoid cold start performance issues
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const geminiApiKey = Deno.env.get('GEMINI_API_KEY')!;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -64,11 +70,6 @@ serve(async (req) => {
     }
 
     try {
-        // Initialize Supabase client
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const geminiApiKey = Deno.env.get('GEMINI_API_KEY')!;
-
         console.log('[Orchestrator] Environment check:', {
             hasSupabaseUrl: !!supabaseUrl,
             hasSupabaseKey: !!supabaseKey,
@@ -80,8 +81,6 @@ serve(async (req) => {
             console.error('[Orchestrator] GEMINI_API_KEY is missing from environment');
             throw new Error('GEMINI_API_KEY not configured');
         }
-
-        const supabase = createClient(supabaseUrl, supabaseKey);
 
         // Parse request
         const body: OrchestratorRequest & { preflightId?: string; tier?: string } = await req.json();

@@ -4,6 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 import { MonitoringService } from '../_shared/services/MonitoringService.ts'
 import { CircuitBreakerService } from '../_shared/services/CircuitBreakerService.ts'
 
+// Initialize Supabase client at global scope to avoid cold start performance issues
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+)
+
 interface MetricsResponse {
   timestamp: string
   period: string
@@ -42,10 +48,6 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
 
     // Get query parameters
     const url = new URL(req.url)

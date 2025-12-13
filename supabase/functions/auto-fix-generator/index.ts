@@ -9,6 +9,13 @@ import { PaymentService } from "../_shared/services/PaymentService.ts";
 // @ts-ignore
 console.log("Hello from auto-fix-generator!");
 
+// Initialize Supabase client at global scope to avoid cold start performance issues
+const env = validateSupabaseEnv({
+    SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
+    SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+});
+const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
 serve(async (req) => {
     // CORS check
     if (req.method === 'OPTIONS') {
@@ -16,11 +23,6 @@ serve(async (req) => {
     }
 
     try {
-        const env = validateSupabaseEnv({
-            SUPABASE_URL: Deno.env.get('SUPABASE_URL')!,
-            SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        });
-        const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
         // 1. Parse Request
         const { owner, repo, issue, userToken, action = 'preview' } = await req.json();

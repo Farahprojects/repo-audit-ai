@@ -59,6 +59,7 @@ interface PreflightResponse {
 // Environment
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 /**
  * Extract owner/repo from GitHub URL
@@ -453,7 +454,6 @@ serve(async (req) => {
     }
 
     try {
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
         const authHeader = req.headers.get('authorization');
 
         // Get authenticated user ID (returns null if not authenticated)

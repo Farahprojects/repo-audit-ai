@@ -14,6 +14,7 @@ const GITHUB_APP_ID = Deno.env.get('GITHUB_APP_ID')!;
 const GITHUB_APP_PRIVATE_KEY = Deno.env.get('GITHUB_APP_PRIVATE_KEY')!;
 const GITHUB_WEBHOOK_SECRET = Deno.env.get('GITHUB_WEBHOOK_SECRET')!;
 const TOKEN_ENCRYPTION_KEY = Deno.env.get('TOKEN_ENCRYPTION_KEY')!;
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 interface GitHubWebhookPayload {
   action: 'created' | 'deleted' | 'suspend' | 'unsuspend';
@@ -351,7 +352,6 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Get the raw request body for signature verification
     const body = await req.text();
