@@ -135,11 +135,11 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
       });
     }
 
-    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
+    const blob = new Blob([markdownContent], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `${data.repoName}_audit_report.md`);
+    link.setAttribute('download', `${data.repoName}_audit_report.txt`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
