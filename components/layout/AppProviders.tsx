@@ -19,13 +19,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuthContext = () => {
+// Named export for better Fast Refresh compatibility
+export function useAuthContext() {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuthContext must be used within an AuthProvider');
   }
   return context;
-};
+}
 
 // Router Context
 interface RouterContextType {
@@ -40,13 +41,14 @@ interface RouterContextType {
 
 const RouterContext = createContext<RouterContextType | undefined>(undefined);
 
-export const useRouterContext = () => {
+// Named export for better Fast Refresh compatibility
+export function useRouterContext() {
   const context = useContext(RouterContext);
   if (!context) {
     throw new Error('useRouterContext must be used within a RouterProvider');
   }
   return context;
-};
+}
 
 // Scanner Context - Now backed by Zustand store + real-time logs
 interface ScannerContextType {
@@ -56,13 +58,14 @@ interface ScannerContextType {
 
 const ScannerContext = createContext<ScannerContextType | undefined>(undefined);
 
-export const useScannerContext = () => {
+// Named export for better Fast Refresh compatibility
+export function useScannerContext() {
   const context = useContext(ScannerContext);
   if (!context) {
     throw new Error('useScannerContext must be used within a ScannerProvider');
   }
   return context;
-};
+}
 
 // Auth Flow Context
 interface AuthFlowContextType {
@@ -74,13 +77,14 @@ interface AuthFlowContextType {
 
 const AuthFlowContext = createContext<AuthFlowContextType | undefined>(undefined);
 
-export const useAuthFlowContext = () => {
+// Named export for better Fast Refresh compatibility
+export function useAuthFlowContext() {
   const context = useContext(AuthFlowContext);
   if (!context) {
     throw new Error('useAuthFlowContext must be used within an AuthFlowProvider');
   }
   return context;
-};
+}
 
 interface AppProvidersProps {
   children: React.ReactNode;
@@ -210,3 +214,6 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+// Stable component identity for Fast Refresh
+AppProviders.displayName = 'AppProviders';
