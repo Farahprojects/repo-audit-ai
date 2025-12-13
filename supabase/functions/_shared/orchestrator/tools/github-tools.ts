@@ -260,23 +260,28 @@ export const listRepoFilesTool: Tool = {
 
                 if (parts.length === 1) {
                     // It's a file in this dir
+                    const fileInfo = fileIndex[filePath];
+                    if (!fileInfo) continue; // Skip if file not in index
+
                     items.push({
                         name: parts[0],
                         path: filePath,
                         type: 'file',
-                        size: fileIndex[filePath].size
+                        size: fileInfo.size
                     });
                 } else {
                     // It's a subdir
                     const dirName = parts[0];
-                    if (!processedDirs.has(dirName)) {
-                        processedDirs.add(dirName);
-                        items.push({
-                            name: dirName,
-                            path: normalizedPath + dirName,
-                            type: 'dir',
-                            size: 0
-                        });
+                    if (!dirName || !processedDirs.has(dirName)) {
+                        if (dirName) {
+                            processedDirs.add(dirName);
+                            items.push({
+                                name: dirName,
+                                path: normalizedPath + dirName,
+                                type: 'dir',
+                                size: 0
+                            });
+                        }
                     }
                 }
             }
