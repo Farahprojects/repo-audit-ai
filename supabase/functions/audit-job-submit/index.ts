@@ -231,6 +231,7 @@ serve(withPerformanceMonitoring(async (req) => {
         }
 
         // Insert job into queue (upsert to handle re-runs)
+        // CRITICAL: Reset ALL state fields to allow re-runs to work properly
         const { data: job, error: insertError } = await supabase
             .from('audit_jobs')
             .upsert({
@@ -241,6 +242,15 @@ serve(withPerformanceMonitoring(async (req) => {
                 status: 'pending',
                 scheduled_at: new Date().toISOString(),
                 max_attempts: options.maxRetries || 3,
+                // Reset state fields for re-runs
+                attempts: 0,
+                started_at: null,
+                completed_at: null,
+                worker_id: null,
+                locked_until: null,
+                last_error: null,
+                error_stack: null,
+                output_data: null,
                 input_data: {
                     tier,
                     submittedAt: new Date().toISOString()

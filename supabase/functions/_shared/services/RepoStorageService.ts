@@ -430,10 +430,21 @@ export class RepoStorageService {
         changes: { path: string; content: string | null }[] // null = delete
     ): Promise<boolean> {
         try {
-            // Get current archive
-            const currentArchive = await this.fetchArchiveFromStorage(`repos/${repoId}.zip`);
+            // Get actual storage path from database (not hardcoded)
+            const { data: repoMeta, error: metaError } = await this.supabase
+                .from('repos')
+                .select('storage_path, file_index')
+                .eq('repo_id', repoId)
+                .single();
+
+            if (metaError || !repoMeta?.storage_path) {
+                throw new Error(`Repository metadata not found: ${repoId}`);
+            }
+
+            // Get current archive using actual storage path
+            const currentArchive = await this.fetchArchiveFromStorage(repoMeta.storage_path);
             if (!currentArchive) {
-                throw new Error(`Repository archive not found: ${repoId}`);
+                throw new Error(`Repository archive not found at: ${repoMeta.storage_path}`);
             }
 
             // Unzip current archive
@@ -454,7 +465,8 @@ export class RepoStorageService {
             }
 
             // Build new file index
-            for (const [path, content] of Object.entries(unzipped)) {
+            const unzippedTyped = unzipped as Record<string, Uint8Array>;
+            for (const [path, content] of Object.entries(unzippedTyped)) {
                 if (path.startsWith('.')) continue; // Skip hidden files
 
                 fileIndex[path] = {
@@ -464,15 +476,15 @@ export class RepoStorageService {
                 };
             }
 
-            // Re-zip and upload
+            // Re-zip and upload using .upload() with upsert (NOT .update())
             const newArchive = zipSync(unzipped, { level: 6 });
             const archiveHash = hashContent(newArchive);
 
             const { error: uploadError } = await this.supabase.storage
-                .from('repo_archives')
-                .update(`repos/${repoId}.zip`, newArchive, {
+                .from(this.BUCKET_NAME)
+                .upload(repoMeta.storage_path, newArchive, {
                     contentType: 'application/zip',
-                    upsert: true
+                    upsert: true  // This works with .upload(), NOT .update()
                 });
 
             if (uploadError) {
@@ -528,18 +540,30 @@ export class RepoStorageService {
 
             const storedCommitSha = repoData?.commit_sha;
 
-            // 2. Get latest HEAD sha from GitHub
+            // 2. If no stored commit SHA, we need a full re-download
+            // This handles repos downloaded before SHA tracking was added
+            if (!storedCommitSha) {
+                console.log(`⚠️ No stored commit SHA for ${repoId}, triggering full re-download...`);
+                const result = await this.downloadAndStoreRepo(repoId, owner, repo, branch, token);
+                return {
+                    synced: result.success,
+                    changes: result.fileCount,
+                    error: result.error
+                };
+            }
+
+            // 3. Get latest HEAD sha from GitHub
             const githubClient = new GitHubAPIClient(token);
             const latestCommit = await githubClient.getLatestCommit(owner, repo, branch);
             const latestSha = latestCommit.sha;
 
-            // 3. If same → return early (no changes)
+            // 4. If same → return early (no changes)
             if (storedCommitSha === latestSha) {
                 return { synced: false, changes: 0 };
             }
 
-            // 4. If different → call GitHub Compare API
-            const comparison = await githubClient.compareCommits(owner, repo, storedCommitSha || latestSha, latestSha);
+            // 5. If different → call GitHub Compare API
+            const comparison = await githubClient.compareCommits(owner, repo, storedCommitSha, latestSha);
 
             if (!comparison.files || comparison.files.length === 0) {
                 // No file changes, just update commit SHA
