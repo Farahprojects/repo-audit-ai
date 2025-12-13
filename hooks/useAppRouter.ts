@@ -12,8 +12,6 @@ export const useAppRouter = () => {
   const [previousView, setPreviousView] = useState<ViewState>('landing');
 
   const navigate = useCallback((newView: ViewState) => {
-    console.log(`[NAVIGATE] From ${view} to ${newView}`);
-    console.log('[NAVIGATE] Stack trace:', new Error().stack);
     setPreviousView(view);
     setView(newView);
   }, [view]);

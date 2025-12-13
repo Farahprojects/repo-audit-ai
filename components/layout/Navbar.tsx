@@ -16,7 +16,6 @@ interface NavbarProps {
 
 // Static navigation data moved outside component to prevent recreation on every render
 const NAV_ITEMS: { id: ViewState; label: string }[] = [
-  { id: 'dashboard', label: 'Dash' },
   { id: 'pricing', label: 'Pricing' },
   { id: 'features', label: 'Features' },
   { id: 'about', label: 'Mission' },
@@ -67,7 +66,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
 
         {/* Logo */}
         <div
-          onClick={() => onLogoClick ? onLogoClick() : handleNavClick('dashboard')}
+          onClick={() => onLogoClick ? onLogoClick() : handleNavClick(user ? 'dashboard' : 'landing')}
           className="flex items-center gap-2 cursor-pointer group z-50 relative"
         >
           <img src="/favicon-32x32.png" alt="SCAI Logo" className="w-6 h-6" />

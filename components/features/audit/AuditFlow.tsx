@@ -30,8 +30,6 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
   onRestart,
   onRunTier,
 }) => {
-  console.log(`[DEBUG] AuditFlow rendering ${view} view with repoUrl: "${repoUrl}"`);
-
   // Scanner data from context (still using context for now, will migrate later)
   const { scannerLogs, scannerProgress } = useScannerContext();
 
@@ -42,21 +40,16 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
 
   switch (view) {
     case 'preflight':
-      console.log('[DEBUG] AuditFlow rendering PreflightModal for view:', view);
       return (
         <PreflightModal
           repoUrl={repoUrl}
           onConfirm={onConfirmAudit}
-          onCancel={() => {
-            console.log('[DEBUG] PreflightModal onCancel called');
-            onCancelPreflight();
-          }}
+          onCancel={onCancelPreflight}
         />
       );
     case 'scanning':
       return <Scanner logs={scannerLogs} progress={scannerProgress} />;
     case 'report':
-      console.log('[DEBUG] AuditFlow rendering ReportDashboard for view:', view);
       // ReportDashboard now gets data from stores via useAuditData hook
       return (
         <ReportDashboard

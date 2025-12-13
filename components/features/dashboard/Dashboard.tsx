@@ -92,7 +92,6 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onNavigate, onViewReport, on
   };
 
   const handleViewReport = useCallback((audit: Audit) => {
-    console.log('[DEBUG] Dashboard clicking on audit ID:', audit.id);
     if (onViewReport) {
       onViewReport(audit);
     }

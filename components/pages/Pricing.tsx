@@ -57,7 +57,7 @@ const Pricing: React.FC = () => {
 
           {/* Pro Plan */}
           <div className="bg-slate-900 rounded-3xl p-8 flex flex-col relative transform md:-translate-y-4 shadow-2xl shadow-slate-900/20">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary text-white px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg">
               Most Popular
             </div>
             <div className="mb-8 mt-2">
