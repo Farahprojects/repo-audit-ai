@@ -37,7 +37,9 @@ run_check() {
 
 # Run Deno functions type check (only .ts files, not .tsx)
 if command -v deno >/dev/null 2>&1; then
-    if run_check "Deno Functions Type Check" "deno check supabase/functions/**/*.ts"; then
+    # Use find to get all .ts files and pass them individually to avoid glob expansion issues
+    TS_FILES=$(find supabase/functions -name "*.ts" -type f | tr '\n' ' ')
+    if run_check "Deno Functions Type Check" "deno check $TS_FILES"; then
         ((PASSED++))
     else
         ((FAILED++))

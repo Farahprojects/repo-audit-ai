@@ -110,15 +110,20 @@ async function fetchFreshPreflightData(
 
     // SECURITY: No userToken - only Authorization header
     // Call github-proxy with preflight action
-    const { data, error } = await supabase.functions.invoke('github-proxy', {
+    const invokeOptions: any = {
         body: {
             owner,
             repo,
             action: 'preflight',
             installationId: installationId // Pass installation ID for GitHub App
-        },
-        headers: authHeader ? { authorization: authHeader } : undefined
-    });
+        }
+    };
+
+    if (authHeader) {
+        invokeOptions.headers = { authorization: authHeader };
+    }
+
+    const { data, error } = await supabase.functions.invoke('github-proxy', invokeOptions);
 
     if (error) {
         console.error(`❌ [preflight-manager] GitHub proxy error:`, error);
@@ -199,7 +204,7 @@ async function getOrCreatePreflight(
         if (lookupError) {
             console.error(`❌ [preflight-manager] Preflight lookup error:`, lookupError);
         } else if (existingPreflights && existingPreflights.length > 0) {
-            const existing = existingPreflights[0] as PreflightRecord;
+            const existing = existingPreflights[0] as unknown as PreflightRecord;
 
             if (isPreflightValid(existing)) {
                 // Even with cached preflight, ensure repository data is fresh
@@ -255,8 +260,8 @@ async function getOrCreatePreflight(
             .eq('user_id', userId)
             .single();
 
-        if (githubAccount) {
-            githubAccountId = githubAccount.id;
+        if (githubAccount && typeof githubAccount === 'object' && 'id' in githubAccount) {
+            githubAccountId = (githubAccount as { id: string }).id;
         }
     }
 
@@ -339,14 +344,14 @@ async function getOrCreatePreflight(
     // Step 5: Download/sync entire repository as archive (ONE API CALL)
     // CRITICAL: This is SYNCHRONOUS - we MUST wait for repo to be stored before returning
     // FAIL-FAST: If download/sync fails, the preflight fails
-    if (newPreflight) {
+    if (newPreflight && typeof newPreflight === 'object' && 'id' in newPreflight) {
         const storageService = new RepoStorageService(supabase);
 
         // Check if repo already exists in storage
         const { data: existingRepo } = await supabase
             .from('repos')
             .select('repo_id')
-            .eq('repo_id', newPreflight.id)
+            .eq('repo_id', (newPreflight as PreflightRecord).id)
             .single();
 
         if (existingRepo) {
@@ -354,7 +359,7 @@ async function getOrCreatePreflight(
             console.log(`🔄 [preflight-manager] Syncing existing repo archive for ${owner}/${repo}...`);
 
             const syncResult = await storageService.syncRepo(
-                newPreflight.id,
+                (newPreflight as PreflightRecord).id,
                 owner,
                 repo,
                 freshData.defaultBranch
@@ -372,7 +377,7 @@ async function getOrCreatePreflight(
             console.log(`📦 [preflight-manager] Downloading repo archive for ${owner}/${repo}...`);
 
             const result = await storageService.downloadAndStoreRepo(
-                newPreflight.id,
+                (newPreflight as PreflightRecord).id,
                 owner,
                 repo,
                 freshData.defaultBranch
@@ -391,7 +396,7 @@ async function getOrCreatePreflight(
 
     return {
         success: true,
-        preflight: newPreflight as PreflightRecord,
+        preflight: newPreflight as unknown as PreflightRecord,
         source: 'fresh'
     };
 }
@@ -468,7 +473,7 @@ serve(async (req) => {
             case 'create':
             case 'refresh':
                 response = await getOrCreatePreflight(
-                    supabase,
+                    supabase as ReturnType<typeof createClient>,
                     repoUrl,
                     userId,
                     authHeader,
@@ -478,7 +483,7 @@ serve(async (req) => {
                 break;
 
             case 'invalidate': {
-                const invalidateResult = await invalidatePreflight(supabase, repoUrl, userId);
+                const invalidateResult = await invalidatePreflight(supabase as ReturnType<typeof createClient>, repoUrl, userId);
                 response = invalidateResult.error ?
                     { success: invalidateResult.success, error: invalidateResult.error } :
                     { success: invalidateResult.success };
