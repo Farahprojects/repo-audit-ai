@@ -345,7 +345,7 @@ async function processJob(
             detectedStack
         };
 
-        const context: AuditContext = { ...baseContext, githubClient };
+        const context: AuditContext = { ...baseContext, githubClient, supabase };
 
         // ============================================================
         // PHASE 1: PLANNER (INLINE) - WITH RESUMABILITY
