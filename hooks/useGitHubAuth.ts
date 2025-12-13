@@ -107,7 +107,7 @@ export function useGitHubAuth() {
     // Fetch account on mount and when session changes
     useEffect(() => {
         fetchGitHubAccount();
-    }, [fetchGitHubAccount]);
+    }, [session?.user?.id]); // Only depend on user ID, not the callback
 
     // Get decrypted GitHub token using TokenService
     const getGitHubToken = useCallback(async (): Promise<string | null> => {
