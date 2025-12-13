@@ -750,7 +750,7 @@ async function processJob(
             // Update status to failed
             await updateProgress(100, 'Audit failed: Could not save results', {
                 status: 'failed',
-                error: auditError.message,
+                error_message: auditError.message,
                 completed_at: new Date().toISOString()
             });
 

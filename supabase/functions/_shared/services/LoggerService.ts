@@ -18,6 +18,7 @@ export interface LogContext {
   checkpoint?: string | undefined;
   method?: string | undefined;
   taskCount?: number | undefined;
+  cachedTasks?: number | undefined;
   url?: string | undefined;
   endpoint?: string | undefined;
   metadata?: Record<string, any> | undefined;

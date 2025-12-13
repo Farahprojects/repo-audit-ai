@@ -20,9 +20,15 @@ export interface ErrorDetails {
   correlationId?: string;
   component?: string;
   function?: string;
+  errorType?: string;
+  repoId?: string;
   duration?: number;
   preflightId?: string;
   tier?: string;
+  operation?: string;
+  workerIndex?: number;
+  statusCode?: number;
+  filePath?: string;
   metadata?: Record<string, any>;
 }
 
@@ -57,6 +63,15 @@ export class ErrorTrackingService {
   private static breadcrumbs: Breadcrumb[] = [];
   private static maxBreadcrumbs = 100;
   private static maxErrors = 1000;
+
+  // Track an error with default severity (convenience method)
+  static trackError(
+    error: Error | string,
+    context: Partial<ErrorDetails> = {},
+    severity: ErrorReport['severity'] = 'medium'
+  ): string {
+    return this.captureError(error, context, severity);
+  }
 
   // Capture and report an error
   static captureError(

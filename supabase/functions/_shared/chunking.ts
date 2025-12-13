@@ -16,7 +16,7 @@ export interface Chunk {
 }
 
 // Import shared token estimation
-export { estimateTokens } from './utils.ts';
+import { estimateTokens } from './utils.ts';
 
 // Group files by top-level folder
 function groupByFolder(files: FileInfo[]): Map<string, FileInfo[]> {

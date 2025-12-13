@@ -54,12 +54,17 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Authenticate user
+    // Initialize Supabase client first
+    const supabase = createSupabaseClient(ENV, {
+      auth: {
+        persistSession: false,
+      },
+    });
 
+    // Authenticate user
     const userId = await getAuthenticatedUserId(req, supabase);
 
     // Parse request body
-
     const body = await req.json();
     const { action, email, code } = body;
 
@@ -68,35 +73,24 @@ Deno.serve(async (req: Request) => {
     }
 
     // Action: send_code
-
     if (action === 'send_code') {
       if (!email || typeof email !== 'string') {
         return createErrorResponse('Missing or invalid email parameter', 400);
       }
 
       // Validate email format
-
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         return createErrorResponse('Invalid email format', 400);
       }
 
       // Generate 6-digit code
-
       const verificationCode = generateVerificationCode();
       console.log('[verify-email] Generated code:', verificationCode, 'for user:', userId);
 
       // Calculate expiry (5 minutes from now)
-
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + 5);
-
-      // Initialize Supabase client (moved from global scope for better cold-start performance)
-      const supabase = createSupabaseClient(ENV, {
-        auth: {
-          persistSession: false,
-        },
-      });
 
       // Delete any existing codes for this user
 

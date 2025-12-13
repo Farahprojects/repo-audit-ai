@@ -115,7 +115,7 @@ export const queryDbTool: Tool = {
                     break;
                 default:
                     // For any other tables, require explicit user_id in filters
-                    if (!filters.user_id) {
+                    if (!filters['user_id']) {
                         return {
                             success: false,
                             error: `Table '${table}' requires explicit user_id filter for security`

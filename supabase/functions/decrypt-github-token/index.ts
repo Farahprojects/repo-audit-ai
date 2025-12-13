@@ -80,6 +80,9 @@ Deno.serve(async (req: Request) => {
       return createErrorResponse('Missing authorization header', 401);
     }
 
+    // Initialize Supabase client first
+    const supabase = createSupabaseClient(ENV);
+
     // Get authenticated user ID
     let userId: string;
     try {
@@ -107,9 +110,6 @@ Deno.serve(async (req: Request) => {
     if (!/^[A-Za-z0-9+/=]+$/.test(encryptedToken)) {
       return createErrorResponse('Invalid encryptedToken format', 400);
     }
-
-    // Initialize Supabase client (moved from global scope for better cold-start performance)
-    const supabase = createSupabaseClient(ENV);
 
     // Verify user owns this GitHub account
     const { data: githubAccount, error: accountError } = await supabase
