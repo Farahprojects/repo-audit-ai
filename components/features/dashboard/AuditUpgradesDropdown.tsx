@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import ReactDOM from 'react-dom';
 import { TIERS, AuditTier } from '../../common/TierBadges';
 
@@ -12,7 +12,7 @@ interface AuditUpgradesDropdownProps {
   repoUrl: string;
 }
 
-export const AuditUpgradesDropdown: React.FC<AuditUpgradesDropdownProps> = ({
+export const AuditUpgradesDropdown: React.FC<AuditUpgradesDropdownProps> = memo(({
   upgradesDropdownOpen,
   dropdownPosition,
   dropdownRef,
@@ -72,4 +72,4 @@ export const AuditUpgradesDropdown: React.FC<AuditUpgradesDropdownProps> = ({
     </div>,
     document.body
   );
-};
+});

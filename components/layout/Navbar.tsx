@@ -14,6 +14,20 @@ interface NavbarProps {
   onLogoClick?: () => void;
 }
 
+// Static navigation data moved outside component to prevent recreation on every render
+const NAV_ITEMS: { id: ViewState; label: string }[] = [
+  { id: 'dashboard', label: 'Dash' },
+  { id: 'pricing', label: 'Pricing' },
+  { id: 'features', label: 'Features' },
+  { id: 'about', label: 'Mission' },
+  { id: 'contact', label: 'Contact' },
+  { id: 'legal', label: 'Legal' },
+];
+
+const USER_NAV_ITEMS: { id: ViewState; label: string; requiresAuth: boolean }[] = [
+  { id: 'dashboard', label: 'Dashboard', requiresAuth: true },
+];
+
 const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick, user, onSignOut, onLogoClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -42,19 +56,6 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const navItems: { id: ViewState; label: string }[] = [
-    { id: 'dashboard', label: 'Dash' },
-    { id: 'pricing', label: 'Pricing' },
-    { id: 'features', label: 'Features' },
-    { id: 'about', label: 'Mission' },
-    { id: 'contact', label: 'Contact' },
-    { id: 'legal', label: 'Legal' },
-  ];
-
-  const userNavItems: { id: ViewState; label: string; requiresAuth: boolean }[] = [
-    { id: 'dashboard', label: 'Dashboard', requiresAuth: true },
-  ];
-
   const handleNavClick = useCallback((view: ViewState) => {
     onNavigate(view);
     setIsMenuOpen(false);
@@ -76,7 +77,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
         {/* Desktop Nav - Only show when user is not signed in */}
         {!user && (
           <div className="hidden md:flex items-center gap-6">
-            {navItems.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
@@ -164,7 +165,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onSignInClick,
         {isMenuOpen && (
           <div className="fixed inset-0 bg-background z-40 flex flex-col pt-24 px-6 md:hidden animate-in fade-in slide-in-from-top-4 duration-200 overflow-y-auto">
             <div className="flex flex-col gap-2 pb-10">
-              {navItems.map((item) => (
+              {NAV_ITEMS.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}

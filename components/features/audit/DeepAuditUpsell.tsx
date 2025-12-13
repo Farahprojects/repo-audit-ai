@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Database, Zap, Shield, Layers, Key, Check, Server, Globe } from 'lucide-react';
 import { RepoReport } from '../../../types';
 
@@ -7,60 +7,68 @@ interface DeepAuditUpsellProps {
     onRunDeepAudit: (type: string, provider: string) => void;
 }
 
-export const DeepAuditUpsell: React.FC<DeepAuditUpsellProps> = ({ report, onRunDeepAudit }) => {
+// Define all possible deep audits as a module-level constant
+const DEEP_AUDIT_OPTIONS = [
+    {
+        id: 'supabase_deep_dive',
+        provider: 'supabase',
+        title: 'Supabase Deep Audit',
+        description: 'Analyze RLS policies, Edge Functions, and database schema security.',
+        icon: Database,
+        relevantKey: 'supabase',
+        price: '$50',
+    },
+    {
+        id: 'firebase_audit',
+        provider: 'firebase',
+        title: 'Firebase Security Audit',
+        description: 'Check Firestore rules, Auth configuration, and Function permissions.',
+        icon: Zap,
+        relevantKey: 'firebase',
+        price: '$50',
+    },
+    {
+        id: 'neon_postgres_audit',
+        provider: 'neon',
+        title: 'Neon Postgres Audit',
+        description: 'Performance tuning, branching best practices, and serverless driver checks.',
+        icon: Server,
+        relevantKey: ['neon', 'prisma', 'drizzle'], // Array of keys to check
+        price: '$45',
+    },
+    {
+        id: 'planetscale_audit',
+        provider: 'planetscale',
+        title: 'PlanetScale Check',
+        description: 'Schema review, foreign key constraints (or lack thereof), and sharding analysis.',
+        icon: Globe,
+        relevantKey: 'planetscale',
+        price: '$45',
+    },
+    {
+        id: 'generic_postgres_audit',
+        provider: 'postgres',
+        title: 'PostgreSQL Deep Dive',
+        description: 'General analyze of schema, indexes, and query performance.',
+        icon: Database,
+        relevantKey: false, // Always show "Other"? Or only if nothing else matches?
+        price: '$40',
+    },
+];
+
+export const DeepAuditUpsell: React.FC<DeepAuditUpsellProps> = memo(({ report, onRunDeepAudit }) => {
     const stack = report.detectedStack;
 
-    // Define all possible deep audits
-    const options = [
-        {
-            id: 'supabase_deep_dive',
-            provider: 'supabase',
-            title: 'Supabase Deep Audit',
-            description: 'Analyze RLS policies, Edge Functions, and database schema security.',
-            icon: Database,
-            relevant: stack?.supabase,
-            price: '$50',
-        },
-        {
-            id: 'firebase_audit',
-            provider: 'firebase',
-            title: 'Firebase Security Audit',
-            description: 'Check Firestore rules, Auth configuration, and Function permissions.',
-            icon: Zap,
-            relevant: stack?.firebase,
-            price: '$50',
-        },
-        {
-            id: 'neon_postgres_audit',
-            provider: 'neon',
-            title: 'Neon Postgres Audit',
-            description: 'Performance tuning, branching best practices, and serverless driver checks.',
-            icon: Server,
-            relevant: stack?.neon || stack?.prisma || stack?.drizzle, // Assume Neon/Modern Postgres for Prisma/Drizzle if not specific
-            price: '$45',
-        },
-        {
-            id: 'planetscale_audit',
-            provider: 'planetscale',
-            title: 'PlanetScale Check',
-            description: 'Schema review, foreign key constraints (or lack thereof), and sharding analysis.',
-            icon: Globe,
-            relevant: stack?.planetscale,
-            price: '$45',
-        },
-        {
-            id: 'generic_postgres_audit',
-            provider: 'postgres',
-            title: 'PostgreSQL Deep Dive',
-            description: 'General analyze of schema, indexes, and query performance.',
-            icon: Database,
-            relevant: false, // Always show "Other"? Or only if nothing else matches?
-            price: '$40',
-        },
-    ];
+    // Filter options based on detected stack
+    const options = DEEP_AUDIT_OPTIONS.map(option => ({
+        ...option,
+        relevant: option.relevantKey === false ? true :
+                 Array.isArray(option.relevantKey) ?
+                     option.relevantKey.some(key => stack?.[key as keyof typeof stack]) :
+                     stack?.[option.relevantKey as keyof typeof stack]
+    }));
 
-    // Logic: Show relevant ones. If none relative, maybe show generic? 
-    // User said: "Each one is only shown if relevant."
+    // Filter to only show relevant options
     const relevantOptions = options.filter(o => o.relevant);
 
     if (relevantOptions.length === 0) return null;
@@ -103,4 +111,4 @@ export const DeepAuditUpsell: React.FC<DeepAuditUpsellProps> = ({ report, onRunD
             </div>
         </div>
     );
-};
+});

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Check } from 'lucide-react';
 import { RepoReport } from '../../../types';
 import IssueCard from './IssueCard';
@@ -7,7 +7,7 @@ interface ReportIssuesProps {
   data: RepoReport;
 }
 
-export const ReportIssues: React.FC<ReportIssuesProps> = ({ data }) => {
+export const ReportIssues: React.FC<ReportIssuesProps> = memo(({ data }) => {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -37,4 +37,4 @@ export const ReportIssues: React.FC<ReportIssuesProps> = ({ data }) => {
       )}
     </div>
   );
-};
+});

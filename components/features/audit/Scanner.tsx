@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
+import { LogEntry } from '../../../types';
 
 interface ScannerProps {
-  logs: string[];
+  logs: LogEntry[];
   progress: number;
 }
 
@@ -75,16 +76,16 @@ const Scanner: React.FC<ScannerProps> = ({ logs, progress }) => {
                 <div className="text-slate-600 italic">Waiting for agents...</div>
             )}
             {logs.map((log, i) => (
-              <div key={i} className="text-slate-400 animate-in fade-in slide-in-from-left-2 duration-300 font-medium">
+              <div key={`${log.timestamp}-${i}`} className="text-slate-400 animate-in fade-in slide-in-from-left-2 duration-300 font-medium">
                 <span className="text-slate-700 mr-3 text-xs">
-                    {new Date().toLocaleTimeString('en-US', {hour12: false, hour: "numeric", minute: "numeric", second: "numeric"})}
+                    {new Date(log.timestamp).toLocaleTimeString('en-US', {hour12: false, hour: "numeric", minute: "numeric", second: "numeric"})}
                 </span>
-                {log.startsWith('[Error]') ? (
-                     <span className="text-red-400 font-bold">{log}</span>
-                ) : log.includes('Success') ? (
-                    <span className="text-emerald-400">{log}</span>
+                {log.message.startsWith('[Error]') ? (
+                     <span className="text-red-400 font-bold">{log.message}</span>
+                ) : log.message.includes('Success') ? (
+                    <span className="text-emerald-400">{log.message}</span>
                 ) : (
-                  <span>{log}</span>
+                  <span>{log.message}</span>
                 )}
               </div>
             ))}

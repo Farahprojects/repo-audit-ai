@@ -1,5 +1,10 @@
 export type ViewState = 'landing' | 'preflight' | 'scanning' | 'report' | 'pricing' | 'about' | 'contact' | 'features' | 'dashboard' | 'legal' | 'privacy' | 'terms';
 
+export interface LogEntry {
+  message: string;
+  timestamp: number;
+}
+
 export type AuditTier = 'shape' | 'conventions' | 'performance' | 'security' | 'supabase_deep_dive';
 
 export interface AuditStats {

@@ -1,87 +1,89 @@
 import React from 'react';
 import { Shield, Cpu, Layout, Zap, TrendingUp, Database, CheckCircle, ArrowRight } from 'lucide-react';
 
+// Static data moved outside component to prevent recreation on every render
+const CORE_FEATURES = [
+  {
+    icon: Shield,
+    title: 'Security Shield',
+    description: 'Detects vulnerabilities, hardcoded secrets, and outdated dependencies instantly. Your code stays secure from day one.',
+    color: 'text-red-600',
+    bgColor: 'bg-red-50',
+    borderColor: 'border-red-200'
+  },
+  {
+    icon: Cpu,
+    title: 'Performance Hunter',
+    description: 'Identifies N+1 queries, memory leaks, and unoptimized rendering patterns. Keep your applications fast and efficient.',
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-200'
+  },
+  {
+    icon: Layout,
+    title: 'Architecture Zen',
+    description: 'Analyzes code coupling, complexity, and file structure for long-term health. Build scalable, maintainable systems.',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-50',
+    borderColor: 'border-blue-200'
+  }
+];
+
+const AUDIT_TIERS = [
+  {
+    icon: Layout,
+    name: 'Shape Check',
+    shortName: 'Shape',
+    headline: 'Get the Big Picture',
+    description: 'Understanding your codebase architecture is the foundation of good development. Know what you\'re working with before making decisions.',
+    importance: 'Quick architectural overview helps you understand scale, complexity, and potential risks before investing time and resources.'
+  },
+  {
+    icon: Zap,
+    name: 'Senior Check',
+    shortName: 'Senior',
+    headline: 'Code Like a Senior Engineer',
+    description: 'Get insights that take years to develop. Identify patterns, anti-patterns, and improvements that elevate your code quality.',
+    importance: 'Senior-level code review catches issues that junior reviews miss, ensuring your codebase follows industry best practices.'
+  },
+  {
+    icon: TrendingUp,
+    name: 'Performance Audit',
+    shortName: 'Perf',
+    headline: 'Speed Matters to Users',
+    description: 'Slow applications lose users. Identify bottlenecks, optimize queries, and improve response times before they impact your business.',
+    importance: 'Performance issues compound over time. Early optimization saves thousands in infrastructure costs and keeps users engaged.'
+  },
+  {
+    icon: Shield,
+    name: 'Security Audit',
+    shortName: 'Security',
+    headline: 'Protect What Matters',
+    description: 'Security breaches can destroy businesses. Find vulnerabilities, misconfigurations, and weak points before attackers do.',
+    importance: 'One security breach can cost millions and damage reputation. Proactive security saves money and builds user trust.'
+  },
+  {
+    icon: Database,
+    name: 'Supabase Deep Dive',
+    shortName: 'Supabase',
+    headline: 'Database Security & Performance',
+    description: 'Your database holds your most valuable data. Ensure RLS policies are correct, queries are optimized, and your schema is secure.',
+    importance: 'Database issues affect everything. Proper configuration prevents data breaches and ensures your app scales efficiently.'
+  }
+];
+
+const BENEFITS = [
+  'Instant automated code review',
+  '24/7 senior engineer availability',
+  'Security vulnerability detection',
+  'Performance optimization insights',
+  'Architecture recommendations',
+  'Best practices enforcement',
+  'CI/CD integration ready',
+  'Team collaboration tools'
+];
+
 const Features: React.FC = () => {
-  const coreFeatures = [
-    {
-      icon: Shield,
-      title: 'Security Shield',
-      description: 'Detects vulnerabilities, hardcoded secrets, and outdated dependencies instantly. Your code stays secure from day one.',
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200'
-    },
-    {
-      icon: Cpu,
-      title: 'Performance Hunter',
-      description: 'Identifies N+1 queries, memory leaks, and unoptimized rendering patterns. Keep your applications fast and efficient.',
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      borderColor: 'border-orange-200'
-    },
-    {
-      icon: Layout,
-      title: 'Architecture Zen',
-      description: 'Analyzes code coupling, complexity, and file structure for long-term health. Build scalable, maintainable systems.',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200'
-    }
-  ];
-
-  const auditTiers = [
-    {
-      icon: Layout,
-      name: 'Shape Check',
-      shortName: 'Shape',
-      headline: 'Get the Big Picture',
-      description: 'Understanding your codebase architecture is the foundation of good development. Know what you\'re working with before making decisions.',
-      importance: 'Quick architectural overview helps you understand scale, complexity, and potential risks before investing time and resources.'
-    },
-    {
-      icon: Zap,
-      name: 'Senior Check',
-      shortName: 'Senior',
-      headline: 'Code Like a Senior Engineer',
-      description: 'Get insights that take years to develop. Identify patterns, anti-patterns, and improvements that elevate your code quality.',
-      importance: 'Senior-level code review catches issues that junior reviews miss, ensuring your codebase follows industry best practices.'
-    },
-    {
-      icon: TrendingUp,
-      name: 'Performance Audit',
-      shortName: 'Perf',
-      headline: 'Speed Matters to Users',
-      description: 'Slow applications lose users. Identify bottlenecks, optimize queries, and improve response times before they impact your business.',
-      importance: 'Performance issues compound over time. Early optimization saves thousands in infrastructure costs and keeps users engaged.'
-    },
-    {
-      icon: Shield,
-      name: 'Security Audit',
-      shortName: 'Security',
-      headline: 'Protect What Matters',
-      description: 'Security breaches can destroy businesses. Find vulnerabilities, misconfigurations, and weak points before attackers do.',
-      importance: 'One security breach can cost millions and damage reputation. Proactive security saves money and builds user trust.'
-    },
-    {
-      icon: Database,
-      name: 'Supabase Deep Dive',
-      shortName: 'Supabase',
-      headline: 'Database Security & Performance',
-      description: 'Your database holds your most valuable data. Ensure RLS policies are correct, queries are optimized, and your schema is secure.',
-      importance: 'Database issues affect everything. Proper configuration prevents data breaches and ensures your app scales efficiently.'
-    }
-  ];
-
-  const benefits = [
-    'Instant automated code review',
-    '24/7 senior engineer availability',
-    'Security vulnerability detection',
-    'Performance optimization insights',
-    'Architecture recommendations',
-    'Best practices enforcement',
-    'CI/CD integration ready',
-    'Team collaboration tools'
-  ];
 
   return (
     <div className="min-h-screen pt-32 pb-20 px-4 md:px-6 bg-white">
@@ -102,7 +104,7 @@ const Features: React.FC = () => {
         <div className="mb-24">
           <h2 className="text-3xl font-bold text-slate-900 mb-12 text-center">Core Capabilities</h2>
           <div className="grid md:grid-cols-3 gap-8">
-            {coreFeatures.map((feature, index) => (
+            {CORE_FEATURES.map((feature, index) => (
               <div key={index} className="group bg-surface p-8 rounded-2xl border border-border hover:border-slate-300 transition-all hover:shadow-lg">
                 <div className={`w-14 h-14 ${feature.bgColor} rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
                   <feature.icon className={`w-7 h-7 ${feature.color}`} />
@@ -119,7 +121,7 @@ const Features: React.FC = () => {
           <h2 className="text-3xl font-bold text-slate-900 mb-4 text-center">Choose Your Audit Depth</h2>
           <p className="text-slate-500 text-center mb-12 max-w-2xl mx-auto">Each audit level builds on the previous, giving you increasingly comprehensive insights into your codebase health.</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {auditTiers.map((tier, index) => (
+            {AUDIT_TIERS.map((tier, index) => (
               <div key={index} className="group bg-white border border-slate-200 rounded-2xl p-8 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-6">
@@ -151,7 +153,7 @@ const Features: React.FC = () => {
           <h2 className="text-3xl font-bold text-slate-900 mb-12 text-center">Why Choose SCAI?</h2>
           <div className="bg-slate-50 rounded-3xl p-8 md:p-12">
             <div className="grid md:grid-cols-2 gap-6">
-              {benefits.map((benefit, index) => (
+              {BENEFITS.map((benefit, index) => (
                 <div key={index} className="flex items-center gap-4">
                   <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                   <span className="text-slate-700 font-medium">{benefit}</span>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { RepoReport, AuditRecord, AuditTier } from '../../../types';
 import { UniversalConnectModal } from '../auth/UniversalConnectModal';
 import { ReportHeader } from './ReportHeader';
@@ -20,7 +20,7 @@ interface ReportDashboardProps {
   onDeleteAudit?: (auditId: string) => void;
 }
 
-const ReportDashboard: React.FC<ReportDashboardProps> = ({
+const ReportDashboard: React.FC<ReportDashboardProps> = memo(({
   data,
   relatedAudits,
   onRestart,
@@ -145,6 +145,6 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({
       />
     </div>
   );
-};
+});
 
 export default ReportDashboard;

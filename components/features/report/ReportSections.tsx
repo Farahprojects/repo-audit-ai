@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Star, AlertTriangle, FileQuestion, FolderTree, FileCode, Shield, Zap, Database, FileText, Rocket, Wrench } from 'lucide-react';
 import { RepoReport } from '../../../types';
 
@@ -19,7 +19,7 @@ const categoryIcons: Record<string, React.ElementType> = {
   maintenance: Wrench,
 };
 
-export const ReportSections: React.FC<ReportSectionsProps> = ({
+export const ReportSections: React.FC<ReportSectionsProps> = memo(({
   data,
   onRunDeepAudit,
   onRunTier,
@@ -134,4 +134,4 @@ export const ReportSections: React.FC<ReportSectionsProps> = ({
 
     </>
   );
-};
+});

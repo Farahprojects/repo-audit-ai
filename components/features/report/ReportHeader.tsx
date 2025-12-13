@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { GitBranch, Download, Share2, Check, ChevronDown, Clock, Plus } from 'lucide-react';
 import { RepoReport, AuditRecord } from '../../../types';
 import { TIERS, AuditTier } from '../../common/TierBadges';
@@ -28,7 +28,7 @@ const riskBadgeColor: Record<string, string> = {
   low: 'bg-emerald-100 text-emerald-700 border-emerald-200',
 };
 
-export const ReportHeader: React.FC<ReportHeaderProps> = ({
+export const ReportHeader: React.FC<ReportHeaderProps> = memo(({
   data,
   auditsByTier,
   completedTiers,
@@ -127,4 +127,4 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
       </div>
     </header>
   );
-};
+});

@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { ViewState, RepoReport, AuditRecord, AuditStats } from '../../../types';
 import { FileMapItem } from '../../../services/githubService';
 import { useScannerContext } from '../../layout/AppProviders';
@@ -52,7 +52,7 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
       return <Scanner logs={scannerLogs} progress={scannerProgress} />;
     case 'report':
       // Use activeAuditId to determine which data to show
-      const displayData = (() => {
+      const displayData = useMemo(() => {
         // If we have an explicit selection, use it
         if (activeAuditId) {
           if (historicalReportData?.auditId === activeAuditId) {
@@ -64,7 +64,7 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
         }
         // Fallback: prefer fresh data
         return reportData || historicalReportData;
-      })();
+      }, [activeAuditId, historicalReportData, reportData]);
       return displayData ? (
         <ReportDashboard
           data={displayData}

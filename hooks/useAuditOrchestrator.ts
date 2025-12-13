@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ViewState, AuditStats, RepoReport, AuditRecord } from '../types';
+import { ViewState, AuditStats, RepoReport, AuditRecord, LogEntry } from '../types';
 import { Tables } from '../src/integrations/supabase/types';
 import { AuditService } from '../services/auditService';
 import { ErrorHandler, ErrorLogger } from '../services/errorService';
@@ -26,11 +26,11 @@ export const useAuditOrchestrator = ({
   const [activeAuditId, setActiveAuditId] = useState<string | null>(null);
 
   // Real-time Scanner State
-  const [scannerLogs, setScannerLogs] = useState<string[]>([]);
+  const [scannerLogs, setScannerLogs] = useState<LogEntry[]>([]);
   const [scannerProgress, setScannerProgress] = useState(0);
   const [activeChannel, setActiveChannel] = useState<any>(null);
 
-  const addLog = useCallback((msg: string) => setScannerLogs(prev => [...prev, msg]), []);
+  const addLog = useCallback((msg: string) => setScannerLogs(prev => [...prev, { message: msg, timestamp: Date.now() }]), []);
 
   // Clean up real-time subscriptions on unmount
   useEffect(() => {
@@ -51,7 +51,7 @@ export const useAuditOrchestrator = ({
     setRelatedAudits([]);
     setPendingRepoUrl(null);
     setActiveAuditId(null);
-    setScannerLogs([]);
+    setScannerLogs([] as LogEntry[]);
     setScannerProgress(0);
 
     // Clean up any active real-time subscriptions

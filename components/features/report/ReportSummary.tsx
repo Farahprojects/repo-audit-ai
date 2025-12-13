@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { RepoReport, AuditRecord } from '../../../types';
 
 interface ReportSummaryProps {
@@ -13,7 +13,7 @@ const getHealthScoreColor = (score: number) => {
   return 'text-red-600 bg-red-50 border-red-200';
 };
 
-export const ReportSummary: React.FC<ReportSummaryProps> = ({
+export const ReportSummary: React.FC<ReportSummaryProps> = memo(({
   data,
   relatedAudits,
   currentTier,
@@ -36,4 +36,4 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
 
     </>
   );
-};
+});

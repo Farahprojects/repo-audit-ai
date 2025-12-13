@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import ReactDOM from 'react-dom';
 import { Check, Trash2 } from 'lucide-react';
 import { AuditRecord } from '../../../types';
@@ -17,7 +17,7 @@ interface AuditHistoryDropdownProps {
   repoUrl: string;
 }
 
-export const AuditHistoryDropdown: React.FC<AuditHistoryDropdownProps> = ({
+export const AuditHistoryDropdown: React.FC<AuditHistoryDropdownProps> = memo(({
   auditsByTier,
   historyDropdownOpen,
   dropdownPosition,
@@ -118,4 +118,4 @@ export const AuditHistoryDropdown: React.FC<AuditHistoryDropdownProps> = ({
     </div>,
     document.body
   );
-};
+});

@@ -5,7 +5,7 @@ import { useAuditOrchestrator } from '../../hooks/useAuditOrchestrator';
 import { useGitHubAuth } from '../../hooks/useGitHubAuth';
 import { useAuthFlow } from '../../hooks/useAuthFlow';
 import { User, Session } from '@supabase/supabase-js';
-import { ViewState, RepoReport, AuditStats, AuditRecord } from '../../types';
+import { ViewState, RepoReport, AuditStats, AuditRecord, LogEntry } from '../../types';
 
 // Auth Context
 interface AuthContextType {
@@ -48,7 +48,7 @@ export const useRouterContext = () => {
 
 // Scanner Context (Volatile - frequently changing)
 interface ScannerContextType {
-  scannerLogs: string[];
+  scannerLogs: LogEntry[];
   scannerProgress: number;
 }
 
