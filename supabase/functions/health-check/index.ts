@@ -161,16 +161,27 @@ async function checkDatabaseHealth(supabase: any): Promise<HealthCheck> {
 async function checkCircuitBreakers(): Promise<HealthCheck> {
   try {
     const breakerStatuses = CircuitBreakerService.getAllBreakerStatuses()
+    const stats = CircuitBreakerService.getBreakerStats()
 
     const openBreakers = Object.entries(breakerStatuses)
       .filter(([, status]) => status.state === 'open')
       .map(([name]) => name)
 
+    // Check if we're approaching memory limits
+    const limits = CircuitBreakerService.getLimits()
+    if (stats.total >= limits.warningThreshold) {
+      return {
+        status: 'warn',
+        message: `Circuit breaker memory usage high: ${stats.total}/${limits.maxBreakers} breakers`,
+        details: { stats, limits, openBreakers, allStatuses: breakerStatuses }
+      }
+    }
+
     if (openBreakers.length > 0) {
       return {
         status: 'warn',
         message: `Circuit breakers open: ${openBreakers.join(', ')}`,
-        details: { openBreakers, allStatuses: breakerStatuses }
+        details: { stats, openBreakers, allStatuses: breakerStatuses }
       }
     }
 
