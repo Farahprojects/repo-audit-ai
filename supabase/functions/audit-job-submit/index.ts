@@ -211,15 +211,24 @@ serve(withPerformanceMonitoring(async (req) => {
             );
         }
 
-        // Check for existing active job
+        // Check for existing RECENT active job (ignore stale jobs)
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
         const { data: existingJob } = await supabase
             .from('audit_jobs')
-            .select('id, status')
+            .select('id, status, created_at')
             .eq('preflight_id', preflightId)
             .in('status', ['pending', 'processing'])
+            .gt('created_at', tenMinutesAgo) // Only block if job is recent
             .single();
 
         if (existingJob) {
+            LoggerService.warn('Audit blocked by existing job', {
+                component: 'AuditJobSubmit',
+                existingJobId: existingJob.id,
+                existingStatus: existingJob.status,
+                preflightId,
+                userId: user.id
+            });
             return new Response(
                 JSON.stringify({
                     error: 'An audit is already in progress for this repository',
