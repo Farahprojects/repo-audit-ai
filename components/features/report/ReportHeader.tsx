@@ -120,14 +120,14 @@ export const ReportHeader: React.FC<ReportHeaderProps> = memo(({
         <div className="flex items-center gap-1 print:hidden">
           <button
             onClick={onCopyIssues}
-            className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
+            className="p-2 text-black hover:text-black hover:bg-slate-50 rounded-md transition-all"
             title="Copy All Issues"
           >
             {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
           </button>
           <button
             onClick={onExportCSV}
-            className="p-2 text-slate-400 hover:text-foreground hover:bg-slate-50 rounded-md transition-all"
+            className="p-2 text-black hover:text-black hover:bg-slate-50 rounded-md transition-all"
             title="Export CSV"
           >
             <Download className="w-4 h-4" />
