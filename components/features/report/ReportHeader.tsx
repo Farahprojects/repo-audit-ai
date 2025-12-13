@@ -128,7 +128,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = memo(({
           <button
             onClick={onExportCSV}
             className="p-2 text-black hover:text-black hover:bg-slate-50 rounded-md transition-all"
-            title="Export CSV"
+            title="Download Report (Markdown)"
           >
             <Download className="w-4 h-4" />
           </button>

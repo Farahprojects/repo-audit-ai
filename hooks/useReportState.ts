@@ -105,22 +105,41 @@ export const useReportState = ({ data, relatedAudits, onRunTier, onSelectAudit }
   }, [onRunTier, pendingDeepAuditTier, data.repoName]);
 
   const handleExportCSV = useCallback(() => {
-    const headers = ['ID', 'Title', 'Severity', 'Category', 'File Path', 'Line Number', 'Description'];
-    const rows = data.issues.map(issue => [
-      issue.id,
-      `"${issue.title.replace(/"/g, '""')}"`,
-      issue.severity,
-      issue.category,
-      issue.filePath,
-      issue.lineNumber,
-      `"${issue.description.replace(/"/g, '""')}"`
-    ]);
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Create markdown format perfect for AI platforms
+    let markdownContent = `# ${data.repoName} - Code Audit Report\n\n`;
+    markdownContent += `**Total Issues:** ${data.issues.length}\n`;
+    markdownContent += `**Generated:** ${new Date().toLocaleString()}\n\n`;
+
+    if (data.issues.length === 0) {
+      markdownContent += `✅ **No issues found!** Your codebase looks clean.\n`;
+    } else {
+      markdownContent += `## Issues Found\n\n`;
+
+      data.issues.forEach((issue, index) => {
+        markdownContent += `### ${index + 1}. ${issue.title}\n\n`;
+        markdownContent += `**Severity:** ${issue.severity.toUpperCase()}\n`;
+        markdownContent += `**Category:** ${issue.category}\n`;
+        markdownContent += `**File:** \`${issue.filePath}:${issue.lineNumber}\`\n\n`;
+        markdownContent += `**Description:**\n${issue.description}\n\n`;
+        markdownContent += `---\n\n`;
+      });
+
+      markdownContent += `## Summary by Severity\n\n`;
+      const severityCount = data.issues.reduce((acc, issue) => {
+        acc[issue.severity] = (acc[issue.severity] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      Object.entries(severityCount).forEach(([severity, count]) => {
+        markdownContent += `- **${severity}:** ${count} issue${count !== 1 ? 's' : ''}\n`;
+      });
+    }
+
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `${data.repoName}_audit_report.csv`);
+    link.setAttribute('download', `${data.repoName}_audit_report.md`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
