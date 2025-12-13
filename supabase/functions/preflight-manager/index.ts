@@ -217,6 +217,27 @@ async function getOrCreatePreflight(
             const existing = existingPreflights[0] as PreflightRecord;
 
             if (isPreflightValid(existing)) {
+                // Even with cached preflight, ensure repository data is fresh
+                console.log(`🔄 [preflight-manager] Syncing repository for cached preflight ${existing.id}...`);
+
+                const storageService = new RepoStorageService(supabase);
+                const syncResult = await storageService.syncRepo(
+                    existing.id,
+                    owner,
+                    repo,
+                    existing.default_branch,
+                    userToken // Pass token for private repos
+                );
+
+                if (!syncResult.synced && syncResult.error) {
+                    console.warn(`⚠️ [preflight-manager] Repo sync failed for cached preflight:`, syncResult.error);
+                    // Don't fail the request - use cached data as fallback
+                } else if (syncResult.changes > 0) {
+                    console.log(`✅ [preflight-manager] Synced ${syncResult.changes} changes for cached preflight`);
+                } else {
+                    console.log(`ℹ️ [preflight-manager] Repository already up-to-date for cached preflight`);
+                }
+
                 return {
                     success: true,
                     preflight: existing,
