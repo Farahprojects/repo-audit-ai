@@ -91,7 +91,7 @@ export interface Tool {
     description: string;
     inputSchema: ToolInputSchema;
     requiredPermission: PermissionLevel;
-    execute(input: unknown, context: ToolContext): Promise<ToolResult>;
+    execute(input: unknown, context: ToolContext): ToolResult | Promise<ToolResult>;
 }
 
 export interface ToolDescription {

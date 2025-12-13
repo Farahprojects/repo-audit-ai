@@ -2,15 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GitHubAuthenticator } from '../_shared/github/GitHubAuthenticator.ts';
 import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';
 import { GitHubAppClient } from '../_shared/github/GitHubAppClient.ts';
-import { FileCacheManager } from '../_shared/github/FileCacheManager.ts';
 import {
   validateRequestBody,
   validateGitHubOwner,
   validateGitHubRepo,
   validateFilePath,
   validateGitHubBranch,
-  validateAction,
-  ValidationError
+  validateAction
 } from '../_shared/utils.ts';
 import {
   handleStatsAction,
@@ -34,7 +32,7 @@ serve(async (req) => {
   try {
     // Validate request body
     const requestData = await validateRequestBody(req);
-    const { owner, repo, branch, filePath, action, userToken, installationId } = requestData;
+    const { owner, repo, branch, filePath, action, installationId } = requestData;
 
     // Validate required parameters
     if (!owner || !repo) {
@@ -89,22 +87,22 @@ serve(async (req) => {
     let client: GitHubAPIClient | GitHubAppClient;
 
     if (installationId) {
-        // Use GitHub App client
-        client = new GitHubAppClient(installationId);
-        console.log(`Using GitHub App client for installation ${installationId}`);
+      // Use GitHub App client
+      client = new GitHubAppClient(installationId);
+      console.log(`Using GitHub App client for installation ${installationId}`);
     } else {
-        // Use OAuth token (existing logic)
-        const authenticator = GitHubAuthenticator.getInstance();
-        const token = await authenticator.getAuthenticatedToken(userToken, req.headers.get('authorization'), owner);
+      // Use OAuth token from Authorization header (SECURITY: Never from request body)
+      const authenticator = GitHubAuthenticator.getInstance();
+      const token = await authenticator.getAuthenticatedToken(req.headers.get('authorization'), owner);
 
-        // Log authentication status
-        if (token) {
-            console.log('Using OAuth token for authentication');
-        } else {
-            console.log('No authentication token available');
-        }
+      // Log authentication status
+      if (token) {
+        console.log('Using OAuth token from Authorization header');
+      } else {
+        console.log('No authentication token available - public repo access only');
+      }
 
-        client = new GitHubAPIClient(token);
+      client = new GitHubAPIClient(token);
     }
 
     // 3. Route Action

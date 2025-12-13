@@ -12,6 +12,9 @@ import {
     PermissionLevel
 } from '../core/types.ts';
 
+// Import robust Gemini API utility with retry logic and JSON extraction
+import { callGemini } from '../../agents/utils.ts';
+
 // ============================================================================
 // Analyze Code Files Tool
 // ============================================================================
@@ -42,7 +45,7 @@ export const analyzeCodeFilesTool: Tool = {
         required: ['files']
     },
 
-    async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
+    async execute(input: unknown, _context: ToolContext): Promise<ToolResult> {
         const { files, focusAreas = ['quality'], context: analysisContext } = input as {
             files: Array<{ path: string; content: string }>;
             focusAreas?: string[];
@@ -106,79 +109,31 @@ ${analysisContext ? `\nAdditional Context: ${analysisContext}` : ''}
 
 Focus on identifying real issues and providing actionable insights.`;
 
-            // Call Gemini API
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro/generateContent`,
+            // Use robust callGemini utility with retry logic and JSON extraction
+            const response = await callGemini(
+                apiKey,
+                systemPrompt,
+                userPrompt,
+                0.3, // temperature
                 {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-goog-api-key': apiKey
-                    },
-                    body: JSON.stringify({
-                        contents: [
-                            {
-                                role: 'user',
-                                parts: [{ text: systemPrompt + '\n\n' + userPrompt }]
-                            }
-                        ],
-                        generationConfig: {
-                            temperature: 0.3,
-                            maxOutputTokens: 8192
-                        }
-                    })
+                    thinkingBudget: 8192
                 }
             );
 
-            if (!response.ok) {
-                return {
-                    success: false,
-                    error: `Gemini API error: ${response.status}`,
-                    metadata: { statusCode: response.status }
-                };
-            }
+            const analysis = response.data;
 
-            const result = await response.json();
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (!text) {
-                return {
-                    success: false,
-                    error: 'No response from Gemini API'
-                };
-            }
-
-            // Extract JSON from response (Gemini might add markdown formatting)
-            let jsonText = text;
-            if (text.includes('```json')) {
-                const match = text.match(/```json\s*([\s\S]*?)\s*```/);
-                if (match) jsonText = match[1];
-            }
-
-            try {
-                const analysis = JSON.parse(jsonText);
-
-                return {
-                    success: true,
-                    data: {
-                        issues: analysis.issues || [],
-                        strengths: analysis.strengths || [],
-                        weaknesses: analysis.weaknesses || [],
-                        appMap: analysis.appMap || {},
-                        filesAnalyzed: files.length,
-                        focusAreas
-                    },
-                    tokenUsage: result.usageMetadata?.totalTokenCount || 0
-                };
-            } catch (parseError) {
-                // If JSON parsing fails, return the raw text for debugging
-                return {
-                    success: false,
-                    error: 'Failed to parse Gemini response as JSON',
-                    data: { rawResponse: text },
-                    metadata: { parseError: parseError instanceof Error ? parseError.message : String(parseError) }
-                };
-            }
+            return {
+                success: true,
+                data: {
+                    issues: analysis.issues || [],
+                    strengths: analysis.strengths || [],
+                    weaknesses: analysis.weaknesses || [],
+                    appMap: analysis.appMap || {},
+                    filesAnalyzed: files.length,
+                    focusAreas
+                },
+                tokenUsage: response.usage?.totalTokens || 0
+            };
 
         } catch (error) {
             return {
@@ -213,8 +168,8 @@ export const calculateHealthScoreTool: Tool = {
         required: ['issues', 'fileCount']
     },
 
-    async execute(input: unknown, _context: ToolContext): Promise<ToolResult> {
-        const { issues, fileCount } = input as {
+    execute(input: unknown, _context: ToolContext): ToolResult {
+        const { issues, fileCount: _fileCount } = input as {
             issues: Array<{ severity: string }>;
             fileCount: number;
         };
@@ -288,10 +243,10 @@ export const generateSummaryTool: Tool = {
         required: ['healthScore', 'issues']
     },
 
-    async execute(input: unknown, _context: ToolContext): Promise<ToolResult> {
+    execute(input: unknown, _context: ToolContext): ToolResult {
         const { healthScore, issues, strengths = [], repoName = 'this repository' } = input as {
             healthScore: number;
-            issues: any[];
+            issues: Array<{ severity: string }>;
             strengths?: string[];
             repoName?: string;
         };
@@ -355,10 +310,10 @@ export const deepAIAnalysisTool: Tool = {
         required: ['query']
     },
 
-    async execute(input: unknown, context: ToolContext): Promise<ToolResult> {
+    async execute(input: unknown, _context: ToolContext): Promise<ToolResult> {
         const { query, context: analysisContext, analysisType = 'general' } = input as {
             query: string;
-            context?: any;
+            context?: Record<string, unknown>;
             analysisType?: string;
         };
 
@@ -385,56 +340,25 @@ Provide your analysis in a structured format.`;
 
 ${analysisContext ? `Context: ${JSON.stringify(analysisContext, null, 2)}` : ''}`;
 
-            // Call Gemini API
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro/generateContent`,
+            // Use robust callGemini utility with retry logic
+            const response = await callGemini(
+                apiKey,
+                systemPrompt,
+                userPrompt,
+                0.3, // temperature
                 {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-goog-api-key': apiKey
-                    },
-                    body: JSON.stringify({
-                        contents: [
-                            {
-                                role: 'user',
-                                parts: [{ text: systemPrompt + '\n\n' + userPrompt }]
-                            }
-                        ],
-                        generationConfig: {
-                            temperature: 0.3,
-                            maxOutputTokens: 8192
-                        }
-                    })
+                    thinkingBudget: 8192
                 }
             );
-
-            if (!response.ok) {
-                return {
-                    success: false,
-                    error: `Gemini API error: ${response.status}`,
-                    metadata: { statusCode: response.status }
-                };
-            }
-
-            const result = await response.json();
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (!text) {
-                return {
-                    success: false,
-                    error: 'No response from Gemini API'
-                };
-            }
 
             return {
                 success: true,
                 data: {
-                    analysis: text,
+                    analysis: response.data,
                     analysisType,
                     query
                 },
-                tokenUsage: result.usageMetadata?.totalTokenCount || 0
+                tokenUsage: response.usage?.totalTokens || 0
             };
 
         } catch (error) {

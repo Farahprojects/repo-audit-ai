@@ -1,8 +1,6 @@
 // @ts-ignore - Deno types are available at runtime in Supabase Edge Functions
 declare const Deno: { env: { get(key: string): string | undefined } };
 
-import { getAuthenticatedUserId } from '../utils.ts';
-
 export class GitHubAuthenticator {
     private static instance: GitHubAuthenticator;
 
@@ -15,15 +13,14 @@ export class GitHubAuthenticator {
         return GitHubAuthenticator.instance;
     }
 
-    async getAuthenticatedToken(userToken: string | undefined, authHeader: string | null, owner?: string): Promise<string | null> {
-        // 1. Check direct user token first
-        if (userToken) {
-            return userToken;
-        }
-
-        // 2. If no direct token, try to get it from the user's GitHub account via Supabase
+    /**
+     * Get authenticated GitHub token from Authorization header
+     * SECURITY: Never accepts tokens from request body - only from headers or database
+     */
+    async getAuthenticatedToken(authHeader: string | null, owner?: string): Promise<string | null> {
+        // Try to get token from the user's stored GitHub account via Supabase auth
         if (owner && authHeader) {
-            return this.retrieveStoredToken(authHeader);
+            return await this.retrieveStoredToken(authHeader);
         }
 
         return null;
@@ -40,8 +37,8 @@ export class GitHubAuthenticator {
         }
 
         try {
-            // @ts-ignore
-            const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+            // @ts-ignore: Supabase types not available in Deno environment
+            const { createClient } = await import('@supabase/supabase-js');
             const supabase = createClient(
                 Deno.env.get('SUPABASE_URL')!,
                 Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -66,8 +63,6 @@ export class GitHubAuthenticator {
 
             // Decrypt server-side
             const decryptedToken = await this.decryptToken(githubAccount.access_token_encrypted);
-            if (decryptedToken) {
-            }
             return decryptedToken;
 
         } catch (error) {
@@ -83,13 +78,13 @@ export class GitHubAuthenticator {
             const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
             if (!token) return null;
 
-                // Import Supabase client - @ts-ignore for ESM URL imports
-                // @ts-ignore
-                const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-                const supabase = createClient(
-                    Deno.env.get('SUPABASE_URL')!,
-                    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-                );
+            // Import Supabase client - @ts-ignore for ESM URL imports
+            // @ts-ignore: Supabase types not available in Deno environment
+            const { createClient } = await import('@supabase/supabase-js');
+            const supabase = createClient(
+                Deno.env.get('SUPABASE_URL')!,
+                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+            );
 
             // Securely get authenticated user ID using Supabase auth
             const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -100,15 +95,15 @@ export class GitHubAuthenticator {
 
             const userId = user.id;
 
-                // Get user's GitHub account
-                const { data: githubAccount, error } = await supabase
-                    .from('github_accounts')
-                    .select('access_token_encrypted')
-                    .eq('user_id', userId)
-                    .single();
+            // Get user's GitHub account
+            const { data: githubAccount, error } = await supabase
+                .from('github_accounts')
+                .select('access_token_encrypted')
+                .eq('user_id', userId)
+                .single();
 
-                if (!error && githubAccount) {
-                    return this.decryptToken(githubAccount.access_token_encrypted);
+            if (!error && githubAccount) {
+                return this.decryptToken(githubAccount.access_token_encrypted);
             }
         } catch (error) {
             console.error('Error retrieving user GitHub token:', error);

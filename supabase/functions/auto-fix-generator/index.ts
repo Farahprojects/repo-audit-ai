@@ -1,12 +1,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 import { corsHeaders, createErrorResponse, createJsonResponse, validateSupabaseEnv } from "../_shared/utils.ts";
 import { AutoFixService } from "../_shared/services/AutoFixService.ts";
 import { GitService } from "../_shared/services/GitService.ts";
 import { PaymentService } from "../_shared/services/PaymentService.ts";
 
-// @ts-ignore
+// @ts-ignore: Deno global not available in type checking
 console.log("Hello from auto-fix-generator!");
 
 // Initialize Supabase client at global scope to avoid cold start performance issues
@@ -24,30 +24,31 @@ serve(async (req) => {
 
     try {
 
-        // 1. Parse Request
-        const { owner, repo, issue, userToken, action = 'preview' } = await req.json();
+        // 1. Parse Request (SECURITY: No userToken in body)
+        const { owner, repo, issue, action = 'preview' } = await req.json();
 
         if (!owner || !repo || !issue || !issue.filePath || !issue.message) {
             return createErrorResponse(new Error("Missing required fields: owner, repo, issue (filePath, message)"), 400);
         }
 
-        if (!userToken) {
-            return createErrorResponse(new Error("User GitHub token is required for this operation"), 401);
+        // 2. Get GitHub token from Authorization header and stored tokens
+        const { GitHubAuthenticator } = await import("../_shared/github/GitHubAuthenticator.ts");
+        const authenticator = GitHubAuthenticator.getInstance();
+        const authHeader = req.headers.get('authorization');
+        const githubToken = await authenticator.getAuthenticatedToken(authHeader, owner);
+
+        if (!githubToken) {
+            return createErrorResponse(new Error("Authentication required. Please connect your GitHub account."), 401);
         }
 
-        // 2. Initialize Services
+        // 3. Initialize Services
         const googleApiKey = Deno.env.get('GEMINI_API_KEY');
         if (!googleApiKey) {
             throw new Error("Server configuration error: GEMINI_API_KEY not set");
         }
 
         const autoFixService = new AutoFixService(googleApiKey);
-        const gitService = new GitService(userToken);
-
-        // 3. Fetch File Content
-        // We assume the Issue object has the file path.
-        // We use GitService (which uses GitHubAPIClient) to fetch content.
-        // Note: GitService implementation currently only has mutation methods, 
+        const gitService = new GitService(githubToken);
         // we might need to expose a generic fetch or use the internal client if we want 'clean' separation.
         // However, existing GitService was focused on mutations.
         // Let's assume we can add `getFileContent` to GitService or use the client directly if exposed.

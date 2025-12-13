@@ -2,7 +2,7 @@
 // This edge function manages the lifecycle of preflight records
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId } from '../_shared/utils.ts';
 
 const corsHeaders = {
@@ -19,8 +19,8 @@ interface PreflightRecord {
     repo: string;
     default_branch: string;
     repo_map: FileMapItem[];
-    stats: any;
-    fingerprint: any;
+    stats: Record<string, unknown>;
+    fingerprint: Record<string, unknown>;
     is_private: boolean;
     fetch_strategy: 'public' | 'authenticated';
     github_account_id: string | null;
@@ -43,7 +43,7 @@ interface PreflightRequest {
     action: 'get' | 'create' | 'refresh' | 'invalidate';
     repoUrl: string;
     forceRefresh?: boolean;
-    userToken?: string; // GitHub token passed from frontend
+    // SECURITY: userToken removed - tokens only from Authorization header
     installationId?: number; // GitHub App installation ID (optional)
 }
 
@@ -66,9 +66,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
  */
 // Import canonical parser from shared utils
 import { parseGitHubRepo } from '../_shared/utils.ts';
-import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';
-import { GitHubAppClient } from '../_shared/github/GitHubAppClient.ts';
-import { FileCacheManager } from '../_shared/github/FileCacheManager.ts';
 import { RepoStorageService } from '../_shared/services/RepoStorageService.ts';
 
 // Alias for backward compatibility
@@ -98,39 +95,27 @@ function isPreflightValid(preflight: PreflightRecord): boolean {
  * Fetch fresh preflight data from GitHub via github-proxy
  */
 async function fetchFreshPreflightData(
-    supabase: any,
+    supabase: ReturnType<typeof createClient>,
     owner: string,
     repo: string,
-    userToken?: string,
     authHeader?: string | null,
     installationId?: number
 ): Promise<{
-    stats: any;
-    fingerprint: any;
+    stats: Record<string, unknown>;
+    fingerprint: Record<string, unknown>;
     fileMap: FileMapItem[];
     isPrivate: boolean;
     defaultBranch: string;
 } | { error: string; errorCode: string; requiresAuth: boolean }> {
 
-    // Determine which client to use
-    let clientType = 'oauth'; // Default
-    let effectiveToken = userToken;
-
-    if (installationId) {
-        // Use GitHub App client - pass installation ID to github-proxy
-        clientType = 'app';
-        effectiveToken = undefined; // Don't pass user token for app installations
-    }
-
+    // SECURITY: No userToken - only Authorization header
     // Call github-proxy with preflight action
     const { data, error } = await supabase.functions.invoke('github-proxy', {
         body: {
             owner,
             repo,
             action: 'preflight',
-            userToken: effectiveToken,
-            installationId: installationId, // Pass installation ID
-            clientType // For future extension
+            installationId: installationId // Pass installation ID for GitHub App
         },
         headers: authHeader ? { authorization: authHeader } : undefined
     });
@@ -166,10 +151,9 @@ async function fetchFreshPreflightData(
  * Get or create a preflight record for a repository
  */
 async function getOrCreatePreflight(
-    supabase: any,
+    supabase: ReturnType<typeof createClient>,
     repoUrl: string,
     userId: string | null,
-    userToken?: string,
     authHeader?: string | null,
     forceRefresh: boolean = false,
     installationId?: number
@@ -226,8 +210,8 @@ async function getOrCreatePreflight(
                     existing.id,
                     owner,
                     repo,
-                    existing.default_branch,
-                    userToken // Pass token for private repos
+                    existing.default_branch
+                    // SECURITY: Token now retrieved internally from github_account_id
                 );
 
                 if (!syncResult.synced && syncResult.error) {
@@ -245,12 +229,13 @@ async function getOrCreatePreflight(
                     source: 'cache'
                 };
             } else {
+                // Cache check failed, will fetch fresh data below
             }
         }
     }
 
-    // Step 2: Fetch fresh data from GitHub
-    const freshData = await fetchFreshPreflightData(supabase, owner, repo, userToken, authHeader, installationId);
+    // Step 2: Fetch fresh data from GitHub (SECURITY: No userToken)
+    const freshData = await fetchFreshPreflightData(supabase, owner, repo, authHeader, installationId);
 
     if ('error' in freshData) {
         return {
@@ -372,8 +357,8 @@ async function getOrCreatePreflight(
                 newPreflight.id,
                 owner,
                 repo,
-                freshData.defaultBranch,
-                userToken // Pass token for private repos
+                freshData.defaultBranch
+                // SECURITY: Token now retrieved internally from github_account_id
             );
 
             if (!syncResult.synced) {
@@ -390,8 +375,8 @@ async function getOrCreatePreflight(
                 newPreflight.id,
                 owner,
                 repo,
-                freshData.defaultBranch,
-                userToken // Pass token for private repos
+                freshData.defaultBranch
+                // SECURITY: Token now retrieved internally from github_account_id
             );
 
             if (!result.success) {
@@ -415,7 +400,7 @@ async function getOrCreatePreflight(
  * Invalidate a preflight (mark token as invalid)
  */
 async function invalidatePreflight(
-    supabase: any,
+    supabase: ReturnType<typeof createClient>,
     repoUrl: string,
     userId: string | null
 ): Promise<{ success: boolean; error?: string }> {
@@ -465,7 +450,8 @@ serve(async (req) => {
         }
 
         const body: PreflightRequest = await req.json();
-        const { action, repoUrl, forceRefresh, userToken, installationId } = body;
+        const { action, repoUrl, forceRefresh, installationId } = body;
+        // SECURITY: userToken removed - only use Authorization header
 
 
         if (!repoUrl) {
@@ -485,19 +471,19 @@ serve(async (req) => {
                     supabase,
                     repoUrl,
                     userId,
-                    userToken,
                     authHeader,
                     action === 'refresh' || forceRefresh,
                     installationId
                 );
                 break;
 
-            case 'invalidate':
+            case 'invalidate': {
                 const invalidateResult = await invalidatePreflight(supabase, repoUrl, userId);
                 response = invalidateResult.error ?
                     { success: invalidateResult.success, error: invalidateResult.error } :
                     { success: invalidateResult.success };
                 break;
+            }
 
             default:
                 response = {
