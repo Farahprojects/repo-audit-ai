@@ -19,8 +19,8 @@
     "dompurify": "^3.3.1",
     "lovable-tagger": "^1.1.11",
     "lucide-react": "^0.555.0",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1"
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "@deno/types": "^0.0.1",

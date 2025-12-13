@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_complete_data: {
+        Row: {
+          complete_data: Json | null
+          created_at: string | null
+          estimated_tokens: number | null
+          extra_data: Json | null
+          health_score: number | null
+          id: string
+          issues: Json | null
+          repo_url: string
+          results_chunked: boolean | null
+          summary: string | null
+          tier: string
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Insert: {
+          complete_data?: Json | null
+          created_at?: string | null
+          estimated_tokens?: number | null
+          extra_data?: Json | null
+          health_score?: number | null
+          id?: string
+          issues?: Json | null
+          repo_url: string
+          results_chunked?: boolean | null
+          summary?: string | null
+          tier: string
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          complete_data?: Json | null
+          created_at?: string | null
+          estimated_tokens?: number | null
+          extra_data?: Json | null
+          health_score?: number | null
+          id?: string
+          issues?: Json | null
+          repo_url?: string
+          results_chunked?: boolean | null
+          summary?: string | null
+          tier?: string
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       audit_jobs: {
         Row: {
           attempts: number
@@ -119,29 +167,7 @@ export type Database = {
           data_size_bytes?: number | null
           id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "audit_results_chunks_audit_id_fkey"
-            columns: ["audit_id"]
-            isOneToOne: false
-            referencedRelation: "audit_complete_data"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "audit_results_chunks_audit_id_fkey"
-            columns: ["audit_id"]
-            isOneToOne: false
-            referencedRelation: "audit_history"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "audit_results_chunks_audit_id_fkey"
-            columns: ["audit_id"]
-            isOneToOne: false
-            referencedRelation: "audits"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       audit_status: {
         Row: {
@@ -229,59 +255,6 @@ export type Database = {
             columns: ["preflight_id"]
             isOneToOne: true
             referencedRelation: "preflights"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      audits: {
-        Row: {
-          created_at: string
-          estimated_tokens: number | null
-          extra_data: Json | null
-          health_score: number | null
-          id: string
-          issues: Json | null
-          repo_url: string
-          results_chunked: boolean | null
-          summary: string | null
-          tier: string
-          total_tokens: number | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          estimated_tokens?: number | null
-          extra_data?: Json | null
-          health_score?: number | null
-          id?: string
-          issues?: Json | null
-          repo_url: string
-          results_chunked?: boolean | null
-          summary?: string | null
-          tier?: string
-          total_tokens?: number | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          estimated_tokens?: number | null
-          extra_data?: Json | null
-          health_score?: number | null
-          id?: string
-          issues?: Json | null
-          repo_url?: string
-          results_chunked?: boolean | null
-          summary?: string | null
-          tier?: string
-          total_tokens?: number | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "audits_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -633,6 +606,56 @@ export type Database = {
         }
         Relationships: []
       }
+      repos: {
+        Row: {
+          archive_hash: string
+          archive_size: number
+          branch: string
+          created_at: string | null
+          file_index: Json
+          id: string
+          last_accessed: string | null
+          last_updated: string | null
+          repo_id: string
+          repo_name: string
+          storage_path: string
+        }
+        Insert: {
+          archive_hash: string
+          archive_size?: number
+          branch?: string
+          created_at?: string | null
+          file_index?: Json
+          id?: string
+          last_accessed?: string | null
+          last_updated?: string | null
+          repo_id: string
+          repo_name: string
+          storage_path: string
+        }
+        Update: {
+          archive_hash?: string
+          archive_size?: number
+          branch?: string
+          created_at?: string | null
+          file_index?: Json
+          id?: string
+          last_accessed?: string | null
+          last_updated?: string | null
+          repo_id?: string
+          repo_name?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repos_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: true
+            referencedRelation: "preflights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_prompts: {
         Row: {
           created_at: string
@@ -701,94 +724,7 @@ export type Database = {
       }
     }
     Views: {
-      audit_complete_data: {
-        Row: {
-          complete_data: Json | null
-          created_at: string | null
-          estimated_tokens: number | null
-          extra_data: Json | null
-          health_score: number | null
-          id: string | null
-          issues: Json | null
-          repo_url: string | null
-          results_chunked: boolean | null
-          summary: string | null
-          tier: string | null
-          total_tokens: number | null
-          user_id: string | null
-        }
-        Insert: {
-          complete_data?: never
-          created_at?: string | null
-          estimated_tokens?: number | null
-          extra_data?: Json | null
-          health_score?: number | null
-          id?: string | null
-          issues?: Json | null
-          repo_url?: string | null
-          results_chunked?: boolean | null
-          summary?: string | null
-          tier?: string | null
-          total_tokens?: number | null
-          user_id?: string | null
-        }
-        Update: {
-          complete_data?: never
-          created_at?: string | null
-          estimated_tokens?: number | null
-          extra_data?: Json | null
-          health_score?: number | null
-          id?: string | null
-          issues?: Json | null
-          repo_url?: string | null
-          results_chunked?: boolean | null
-          summary?: string | null
-          tier?: string | null
-          total_tokens?: number | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "audits_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      audit_history: {
-        Row: {
-          created_at: string | null
-          current_progress: number | null
-          extra_data: Json | null
-          fingerprint: Json | null
-          health_score: number | null
-          id: string | null
-          issues: Json | null
-          job_attempts: number | null
-          job_last_error: string | null
-          job_status: string | null
-          owner: string | null
-          progress_logs: Json | null
-          repo: string | null
-          repo_url: string | null
-          stats: Json | null
-          summary: string | null
-          tier: string | null
-          total_tokens: number | null
-          user_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "audits_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       acquire_audit_job: {
@@ -823,9 +759,18 @@ export type Database = {
         Args: { p_audit_id: string; p_extra_data?: Json; p_issues?: Json }
         Returns: number
       }
+      cleanup_expired_file_cache: { Args: never; Returns: number }
       cleanup_expired_oauth_csrf_states: { Args: never; Returns: number }
       cleanup_expired_preflights: { Args: never; Returns: number }
       cleanup_old_audit_jobs: { Args: { days_old?: number }; Returns: number }
+      cleanup_stale_repo_files: {
+        Args: { days_retention?: number }
+        Returns: number
+      }
+      cleanup_stale_repos: {
+        Args: { days_retention?: number }
+        Returns: number
+      }
       complete_audit_job: {
         Args: { p_job_id: string; p_output_data: Json }
         Returns: undefined
@@ -859,6 +804,9 @@ export type Database = {
       }
       reconstruct_audit_results: { Args: { p_audit_id: string }; Returns: Json }
       recover_stale_audit_jobs: { Args: never; Returns: number }
+      reset_stuck_audit_jobs: { Args: never; Returns: number }
+      touch_repo: { Args: { p_repo_id: string }; Returns: undefined }
+      touch_repo_file: { Args: { file_id: string }; Returns: undefined }
       trigger_audit_job_processing: { Args: never; Returns: number }
     }
     Enums: {
