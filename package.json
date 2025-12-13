@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
-    "type-check:deno": "deno check supabase/functions/**/*.ts 2>/dev/null || echo '⚠️  Deno not installed. Install with: curl -fsSL https://deno.land/install.sh | sh'",
+    "type-check:deno": "command -v deno >/dev/null 2>&1 && deno check supabase/functions/**/*.ts || echo '⚠️  Deno not installed. Install with: curl -fsSL https://deno.land/install.sh | sh'",
     "type-check:frontend": "tsc --noEmit",
     "type-check:all": "npm run type-check:frontend && npm run type-check:deno",
     "type-check:script": "./type-check.sh"

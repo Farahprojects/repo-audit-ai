@@ -11,25 +11,46 @@ async function applyMigration(filePath) {
     console.log(`Applying migration: ${filePath}`);
     const sql = readFileSync(filePath, 'utf8');
 
-    // Split SQL into individual statements
-    const statements = sql.split(';').filter(stmt => stmt.trim().length > 0);
+    // Count statements for logging
+    const statementCount = sql.split(';').filter(stmt => stmt.trim().length > 0).length;
+    console.log(`Executing migration with ${statementCount} statements...`);
 
-    for (const statement of statements) {
-      if (statement.trim()) {
-        console.log(`Executing: ${statement.trim().substring(0, 50)}...`);
-        const { error } = await supabase.rpc('exec_sql', { sql: statement.trim() + ';' });
+    // Execute the entire migration file as one SQL batch
+    // This eliminates N+1 network calls (was N calls, now 1 call per migration)
+    const { error } = await supabase.rpc('exec_sql', { sql });
 
-        if (error) {
-          console.log(`Error executing statement:`, error);
-          // Continue with other statements even if one fails
-        }
-      }
+    if (error) {
+      console.error(`❌ Error executing migration:`, error);
+
+      // If batch execution fails, try executing statements individually as fallback
+      console.log('🔄 Falling back to individual statement execution...');
+      await executeStatementsIndividually(sql);
+    } else {
+      console.log(`✅ Migration ${filePath} applied successfully (${statementCount} statements in 1 call)`);
     }
-
-    console.log(`✅ Migration ${filePath} applied successfully`);
   } catch (error) {
     console.error(`❌ Failed to apply migration ${filePath}:`, error);
+    throw error; // Re-throw to stop execution on migration failure
   }
+}
+
+async function executeStatementsIndividually(sql) {
+  // Split SQL into individual statements as fallback
+  const statements = sql.split(';').filter(stmt => stmt.trim().length > 0);
+
+  for (const statement of statements) {
+    if (statement.trim()) {
+      console.log(`Executing: ${statement.trim().substring(0, 50)}...`);
+      const { error } = await supabase.rpc('exec_sql', { sql: statement.trim() + ';' });
+
+      if (error) {
+        console.error(`Error executing statement:`, error);
+        throw error; // Stop on first error in fallback mode
+      }
+    }
+  }
+
+  console.log(`✅ Executed ${statements.length} statements individually`);
 }
 
 async function main() {

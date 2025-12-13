@@ -33,48 +33,6 @@ export class AuditService {
   };
 
   /**
-   * Phase 1: Create Audit Plan
-   * Returns the plan along with preflight data for workers (avoids N+1 queries)
-   */
-  static async planAudit(
-    preflightId: string,
-    tier: string
-  ): Promise<{ plan: any; tier: string; detectedStack: any; usage: any; preflight: any }> {
-    const { data: result, error } = await supabase.functions.invoke('audit-planner', {
-      body: { preflightId, tier }
-    });
-
-    if (error) throw error;
-    return result;
-  }
-
-  /**
-   * Phase 2: Run Single Worker Task
-   * @param preflightId - The preflight record ID
-   * @param task - The task to run
-   * @param preflight - Optional inline preflight data to avoid N+1 DB queries
-   */
-  static async runAuditTask(
-    preflightId: string,
-    task: any,
-    preflight?: any
-  ): Promise<{ result: any; usage: any }> {
-    const { data, error } = await supabase.functions.invoke('audit-worker', {
-      body: {
-        preflightId,
-        taskId: task.id,
-        instruction: task.instruction,
-        role: task.role,
-        targetFiles: task.targetFiles,
-        preflight // Pass inline preflight data to avoid N+1 queries
-      }
-    });
-
-    if (error) throw error;
-    return data;
-  }
-
-  /**
    * Phase 3: Synthesize & Save
    */
   static async synthesizeAuditResults(
@@ -101,19 +59,6 @@ export class AuditService {
     };
   }
 
-  /**
-   * @deprecated logic moved to client-side orchestration hooks
-   */
-  static async executeAudit(
-    repoUrl: string,
-    tier: string,
-    auditStats: AuditStats,
-    preflightId: string,
-    onProgress: (log: string) => void,
-    onProgressUpdate: (progress: number) => void
-  ): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {
-    throw new Error("Use useAuditOrchestrator hooks instead of monolithic executeAudit. The architecture has been refactored to client-side orchestration.");
-  }
 
   // Process historical audit data
   static async processHistoricalAudit(audit: Tables<'audit_complete_data'> & { extra_data?: any }): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {

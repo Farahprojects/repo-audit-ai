@@ -26,12 +26,14 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 }) => {
   const [confirmInput, setConfirmInput] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setConfirmInput('');
       setIsDeleting(false);
+      setError(null);
     }
   }, [isOpen]);
 
@@ -41,10 +43,20 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
     }
 
     setIsDeleting(true);
+    setError(null); // Clear any previous errors
+
     try {
       await onConfirm();
+      // If we reach here, the operation succeeded
+      // The parent component should handle closing the modal
     } catch (error) {
       console.error('Delete operation failed:', error);
+      // Extract user-friendly error message
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'An unexpected error occurred while deleting. Please try again.';
+
+      setError(errorMessage);
     } finally {
       setIsDeleting(false);
     }
@@ -84,6 +96,19 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           <p className="text-slate-600 text-sm leading-relaxed">
             {message}
           </p>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="text-red-700 text-sm">
+                  <p className="font-medium">Delete failed</p>
+                  <p className="mt-1">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Type-to-Confirm Input (if required) */}
@@ -133,7 +158,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             ) : (
               <>
                 <Trash2 className="w-4 h-4" />
-                {confirmText}
+                {error ? 'Retry' : confirmText}
               </>
             )}
           </button>
@@ -144,3 +169,4 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 };
 
 export default DeleteConfirmModal;
+

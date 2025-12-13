@@ -4,9 +4,6 @@ project_id = "zlrivxntdtewfagrbtry"
 [functions.github-proxy]
 verify_jwt = true
 
-[functions.audit-runner]
-verify_jwt = true
-
 [functions.audit-job-submit]
 verify_jwt = true
 

@@ -112,36 +112,7 @@ async function runTests() {
   }
 
   // ============================================================================
-  // TEST 2: Audit Dispatcher (New Entry Point)
-  // ============================================================================
-
-  try {
-    const result = await makeRequest('audit-dispatcher', {
-      preflightId: TEST_PREFLIGHT_ID,
-      tier: 'performance',
-      userId: 'test-user-123'
-    }, 'Audit Dispatcher (New Entry Point)');
-
-    if (result.statusCode === 200) {
-      results.passed.push('✅ Audit Dispatcher routing to orchestrator');
-
-      if (result.body?._routing?.system === 'orchestrator') {
-        results.passed.push('✅ Dispatcher correctly routing to NEW system');
-      } else {
-        results.warnings.push('⚠️ Dispatcher not routing to orchestrator as expected');
-      }
-
-    } else if (result.statusCode === 500 && result.body?.error?.includes('Orchestrator failed')) {
-      results.failed.push('❌ Orchestrator execution failed (check orchestrator logs)');
-    } else {
-      results.failed.push(`❌ Dispatcher failed with status ${result.statusCode}: ${JSON.stringify(result.body)}`);
-    }
-  } catch (error) {
-    results.failed.push(`❌ Dispatcher test failed: ${error.message}`);
-  }
-
-  // ============================================================================
-  // TEST 3: Orchestrator Direct Call
+  // TEST 2: Orchestrator Direct Call
   // ============================================================================
 
   try {
@@ -173,29 +144,7 @@ async function runTests() {
   }
 
   // ============================================================================
-  // TEST 4: Legacy System (For Comparison)
-  // ============================================================================
-
-  try {
-    const result = await makeRequest('audit-orchestrator', {
-      preflightId: TEST_PREFLIGHT_ID,
-      tier: 'performance',
-      userId: 'test-user'
-    }, 'Legacy Audit Orchestrator (Old System)');
-
-    if (result.statusCode === 200) {
-      results.passed.push('✅ Legacy system still functional');
-    } else if (result.statusCode === 500 && result.body?.error?.includes('Preflight not found')) {
-      results.warnings.push('⚠️ Legacy system also missing preflight (expected)');
-    } else {
-      results.warnings.push(`⚠️ Legacy system status: ${result.statusCode} (may be expected)`);
-    }
-  } catch (error) {
-    results.warnings.push(`⚠️ Legacy system test failed: ${error.message} (may be expected)`);
-  }
-
-  // ============================================================================
-  // TEST 5: Streaming Support
+  // TEST 3: Streaming Support
   // ============================================================================
 
   try {
