@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppRouter } from '../../hooks/useAppRouter';
-import { useAuditOrchestrator } from '../../hooks/useAuditOrchestrator';
 import { useGitHubAuth } from '../../hooks/useGitHubAuth';
 import { useAuthFlow } from '../../hooks/useAuthFlow';
 import { User, Session } from '@supabase/supabase-js';
-import { ViewState, RepoReport, AuditStats, AuditRecord, LogEntry } from '../../types';
+import { ViewState, RepoReport, LogEntry } from '../../types';
+import { usePreflightStore, useAuditStore, useScannerStore } from '../../stores';
+import { supabase } from '../../src/integrations/supabase/client';
 
 // Auth Context
 interface AuthContextType {
@@ -31,6 +32,7 @@ interface RouterContextType {
   view: ViewState;
   previousView: ViewState;
   navigate: (view: ViewState) => void;
+  setPreviousView: (view: ViewState) => void;
   resetToLanding: () => void;
   isPublicPage: boolean;
   getSEO: (reportData?: RepoReport | null) => { title: string; description: string; keywords: string };
@@ -46,7 +48,7 @@ export const useRouterContext = () => {
   return context;
 };
 
-// Scanner Context (Volatile - frequently changing)
+// Scanner Context - Now backed by Zustand store + real-time logs
 interface ScannerContextType {
   scannerLogs: LogEntry[];
   scannerProgress: number;
@@ -58,36 +60,6 @@ export const useScannerContext = () => {
   const context = useContext(ScannerContext);
   if (!context) {
     throw new Error('useScannerContext must be used within a ScannerProvider');
-  }
-  return context;
-};
-
-// Audit Context (Stable - infrequently changing)
-interface AuditContextType {
-  repoUrl: string;
-  setRepoUrl: (url: string) => void;
-  auditStats: AuditStats | null;
-  reportData: RepoReport | null;
-  historicalReportData: RepoReport | null;
-  relatedAudits: AuditRecord[];
-  pendingRepoUrl: string | null;
-  setPendingRepoUrl: (url: string | null) => void;
-  activeAuditId: string | null;
-  handleAnalyze: (url: string) => void;
-  handleConfirmAudit: (tier: string, stats: AuditStats) => Promise<void>;
-  handleStartAuditWithPreflight: (url: string, tier: string, preflight: any) => Promise<void>;
-  handleRestart: () => void;
-  handleViewHistoricalReport: (audit: any) => Promise<void>;
-  handleSelectAudit: (audit: AuditRecord) => void;
-  clearAuditState: () => void;
-}
-
-const AuditContext = createContext<AuditContextType | undefined>(undefined);
-
-export const useAuditContext = () => {
-  const context = useContext(AuditContext);
-  if (!context) {
-    throw new Error('useAuditContext must be used within an AuditProvider');
   }
   return context;
 };
@@ -124,19 +96,72 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   // GitHub auth hook (only for clearGitHubState now)
   const { clearGitHubState } = useGitHubAuth();
 
-  // Audit orchestrator hook - no longer needs getGitHubToken (server-side now)
-  const auditOrchestrator = useAuditOrchestrator({
-    user: auth.user,
-    navigate: router.navigate,
-    setPreviousView: router.setPreviousView,
-  });
+  // Scanner logs - managed locally, synced from real-time updates
+  const [scannerLogs, setScannerLogs] = useState<LogEntry[]>([]);
+  const scannerProgress = useScannerStore((state) => state.progress);
+  const preflightId = usePreflightStore((state) => state.preflightId);
+
+  // Real-time subscription for scanner logs
+  useEffect(() => {
+    if (!preflightId) return;
+
+    const channel = supabase
+      .channel(`scanner-${preflightId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'audit_status',
+          filter: `preflight_id=eq.${preflightId}`
+        },
+        (payload) => {
+          const status = payload.new;
+          useScannerStore.getState().setProgress(status.progress || 0);
+
+          // Transform backend logs to frontend format
+          const transformedLogs = (status.logs || []).map((logStr: string) => {
+            const match = logStr.match(/^\[([^\]]+)\]\s*(.+)$/);
+            if (match) {
+              return { timestamp: new Date(match[1]).getTime(), message: match[2] };
+            }
+            return { timestamp: Date.now(), message: logStr };
+          });
+          setScannerLogs(transformedLogs);
+
+          // Handle completion
+          if (status.status === 'completed') {
+            useScannerStore.getState().setStatus('completed');
+            if (status.report_data?.auditId) {
+              useAuditStore.getState().setActiveAuditId(status.report_data.auditId);
+              useAuditStore.getState().setAuditPhase('complete');
+            }
+          }
+
+          if (status.status === 'failed') {
+            useScannerStore.getState().setStatus('failed');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [preflightId]);
+
+  // Pending repo URL for auth flow - now using Zustand
+  const pendingRepoUrl = usePreflightStore((state) => state.repoUrl);
+  const setPendingRepoUrl = useCallback((url: string | null) => {
+    usePreflightStore.getState().setRepoUrl(url);
+  }, []);
 
   // Auth flow hook
   const authFlow = useAuthFlow({
     user: auth.user,
     view: router.view,
-    pendingRepoUrl: auditOrchestrator.pendingRepoUrl,
-    setPendingRepoUrl: auditOrchestrator.setPendingRepoUrl,
+    pendingRepoUrl,
+    setPendingRepoUrl,
     navigate: router.navigate,
     setPreviousView: router.setPreviousView,
   });
@@ -154,56 +179,17 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     view: router.view,
     previousView: router.previousView,
     navigate: router.navigate,
+    setPreviousView: router.setPreviousView,
     resetToLanding: router.resetToLanding,
     isPublicPage: router.isPublicPage,
     getSEO: router.getSEO,
-  }), [router.view, router.previousView, router.navigate, router.resetToLanding, router.isPublicPage, router.getSEO]);
+  }), [router.view, router.previousView, router.navigate, router.setPreviousView, router.resetToLanding, router.isPublicPage, router.getSEO]);
 
-  // Stable audit context - infrequently changing values
-  const auditValue = useMemo(() => ({
-    repoUrl: auditOrchestrator.repoUrl,
-    setRepoUrl: auditOrchestrator.setRepoUrl,
-    auditStats: auditOrchestrator.auditStats,
-    reportData: auditOrchestrator.reportData,
-    historicalReportData: auditOrchestrator.historicalReportData,
-    relatedAudits: auditOrchestrator.relatedAudits,
-    pendingRepoUrl: auditOrchestrator.pendingRepoUrl,
-    setPendingRepoUrl: auditOrchestrator.setPendingRepoUrl,
-    activeAuditId: auditOrchestrator.activeAuditId,
-    handleAnalyze: auditOrchestrator.handleAnalyze,
-    handleConfirmAudit: auditOrchestrator.handleConfirmAudit,
-    handleStartAuditWithPreflight: auditOrchestrator.handleStartAuditWithPreflight,
-    handleRestart: auditOrchestrator.handleRestart,
-    handleViewHistoricalReport: auditOrchestrator.handleViewHistoricalReport,
-    handleSelectAudit: auditOrchestrator.handleSelectAudit,
-    clearAuditState: auditOrchestrator.clearAuditState,
-  }), [
-    auditOrchestrator.repoUrl,
-    auditOrchestrator.setRepoUrl,
-    auditOrchestrator.auditStats,
-    auditOrchestrator.reportData,
-    auditOrchestrator.historicalReportData,
-    auditOrchestrator.relatedAudits,
-    auditOrchestrator.pendingRepoUrl,
-    auditOrchestrator.setPendingRepoUrl,
-    auditOrchestrator.activeAuditId,
-    auditOrchestrator.handleAnalyze,
-    auditOrchestrator.handleConfirmAudit,
-    auditOrchestrator.handleStartAuditWithPreflight,
-    auditOrchestrator.handleRestart,
-    auditOrchestrator.handleViewHistoricalReport,
-    auditOrchestrator.handleSelectAudit,
-    auditOrchestrator.clearAuditState,
-  ]);
-
-  // Volatile scanner context - frequently changing values
+  // Scanner context value - now from Zustand + local logs
   const scannerValue = useMemo(() => ({
-    scannerLogs: auditOrchestrator.scannerLogs,
-    scannerProgress: auditOrchestrator.scannerProgress,
-  }), [
-    auditOrchestrator.scannerLogs,
-    auditOrchestrator.scannerProgress,
-  ]);
+    scannerLogs,
+    scannerProgress,
+  }), [scannerLogs, scannerProgress]);
 
   const authFlowValue = useMemo(() => ({
     isAuthOpen: authFlow.isAuthOpen,
@@ -215,13 +201,11 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   return (
     <AuthContext.Provider value={authValue}>
       <RouterContext.Provider value={routerValue}>
-        <AuditContext.Provider value={auditValue}>
-          <ScannerContext.Provider value={scannerValue}>
-            <AuthFlowContext.Provider value={authFlowValue}>
-              {children}
-            </AuthFlowContext.Provider>
-          </ScannerContext.Provider>
-        </AuditContext.Provider>
+        <ScannerContext.Provider value={scannerValue}>
+          <AuthFlowContext.Provider value={authFlowValue}>
+            {children}
+          </AuthFlowContext.Provider>
+        </ScannerContext.Provider>
       </RouterContext.Provider>
     </AuthContext.Provider>
   );

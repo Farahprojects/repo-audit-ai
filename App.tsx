@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import Pricing from './components/pages/Pricing';
@@ -10,68 +10,73 @@ import Privacy from './components/pages/Privacy';
 import Terms from './components/pages/Terms';
 import AuthModal from './components/features/auth/AuthModal';
 import SEO from './components/common/SEO';
-import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useAuthFlowContext } from './components/layout/AppProviders';
+import { AppProviders, useAuthContext, useRouterContext, useAuthFlowContext } from './components/layout/AppProviders';
 import { LandingPage } from './components/pages/LandingPage';
 import { AuditFlow } from './components/features/audit/AuditFlow';
 import { DashboardPage } from './components/pages/DashboardPage';
 import { DebugService } from './services/debugService';
-import { PreflightRecord } from './services/preflightService';
-import { deleteService } from './services/deleteService';
+import { fetchPreflight, PreflightRecord } from './services/preflightService';
+import { AuditService } from './services/auditService';
+import { usePreflightStore, useAuditStore, useScannerStore } from './stores';
+import { supabase } from './src/integrations/supabase/client';
+import { AuditStats, LogEntry, AuditRecord, RepoReport } from './types';
 
 const AppContent: React.FC = () => {
   const { user, signOut, clearGitHubState } = useAuthContext();
-  const { view, previousView, navigate, resetToLanding, isPublicPage, getSEO } = useRouterContext();
-  const {
-    repoUrl,
-    setRepoUrl,
-    auditStats,
-    reportData,
-    historicalReportData,
-    relatedAudits,
-    activeAuditId,
-    handleAnalyze,
-    handleConfirmAudit,
-    handleStartAuditWithPreflight,
-    handleRestart,
-    handleViewHistoricalReport,
-    handleSelectAudit,
-    clearAuditState,
-  } = useAuditContext();
+  const { view, previousView, navigate, resetToLanding, isPublicPage, getSEO, setPreviousView } = useRouterContext();
   const { isAuthOpen, handleSoftStart, openAuthModal, closeAuthModal } = useAuthFlowContext();
 
+  // Zustand stores for state management
+  const repoUrl = usePreflightStore((state) => state.repoUrl) || '';
+  const setRepoUrl = useCallback((url: string) => {
+    usePreflightStore.getState().setRepoUrl(url);
+  }, []);
+
+  // Local state for scanner logs (synced via real-time in AppProviders)
+  const [scannerLogs, setScannerLogs] = useState<LogEntry[]>([]);
+  const [activeChannel, setActiveChannel] = useState<any>(null);
+
+  // Handle analyze - navigate to preflight
+  const handleAnalyze = useCallback((url: string) => {
+    setRepoUrl(url);
+    setPreviousView('landing');
+    navigate('preflight');
+  }, [setRepoUrl, setPreviousView, navigate]);
+
   // Handle soft start (auth flow version)
-  const handleSoftStartWrapper = (url: string) => {
+  const handleSoftStartWrapper = useCallback((url: string) => {
     if (user) {
-      // If authenticated, start audit immediately
       handleAnalyze(url);
     } else {
-      // If not authenticated, use auth flow
       handleSoftStart(url);
     }
-  };
+  }, [user, handleAnalyze, handleSoftStart]);
+
+  // Clear all audit state using Zustand stores
+  const clearAuditState = useCallback(() => {
+    usePreflightStore.getState().clear();
+    useAuditStore.getState().clear();
+    useScannerStore.getState().reset();
+    setScannerLogs([]);
+    if (activeChannel) {
+      supabase.removeChannel(activeChannel);
+      setActiveChannel(null);
+    }
+  }, [activeChannel]);
 
   // Comprehensive logout handler
   const handleSignOut = async () => {
-    // Capture pre-logout storage state for debugging
     if (import.meta.env.DEV) {
       console.log('📸 Pre-logout storage state:');
       DebugService.logStorageSnapshot('Before Logout');
     }
 
     try {
-      // Sign out (this also clears localStorage/sessionStorage)
       await signOut();
-
-      // Clear GitHub auth state (tokens, account info)
       clearGitHubState();
-
-      // Clear all audit state
       clearAuditState();
-
-      // Reset router to landing page
       resetToLanding();
 
-      // Verify clean logout in dev mode
       if (import.meta.env.DEV) {
         setTimeout(() => {
           DebugService.verifyCleanLogout();
@@ -80,18 +85,126 @@ const AppContent: React.FC = () => {
       }
     } catch (error) {
       console.error('Error during logout:', error);
-      // Still attempt cleanup even if sign out fails
       clearGitHubState();
       clearAuditState();
       resetToLanding();
     }
   };
 
-  // Extracted inline functions to prevent recreation on every render
+  // Handle confirm audit - start the scan
+  const handleConfirmAudit = useCallback(async (
+    tier: string,
+    stats: AuditStats,
+    _fileMap: any[],
+    preflightId?: string
+  ) => {
+    if (!preflightId) {
+      console.error('[handleConfirmAudit] Missing preflight ID');
+      return;
+    }
+
+    navigate('scanning');
+    setScannerLogs([]);
+    useScannerStore.getState().reset();
+    useScannerStore.getState().setStatus('running');
+    useAuditStore.getState().setAuditPhase('scan');
+    usePreflightStore.getState().setPreflightId(preflightId);
+
+    try {
+      setScannerLogs(prev => [...prev, { message: `[System] Submitting audit job for ${tier}...`, timestamp: Date.now() }]);
+
+      const { data: jobResponse, error: jobError } = await supabase.functions.invoke('audit-job-submit', {
+        body: { preflightId, tier }
+      });
+
+      if (jobError) throw jobError;
+      if (!jobResponse?.success && !jobResponse?.existingJobId) {
+        throw new Error(jobResponse?.error || 'Failed to submit audit job');
+      }
+
+      const jobId = jobResponse?.jobId || jobResponse?.existingJobId;
+      useScannerStore.getState().setActiveJobId(jobId);
+      setScannerLogs(prev => [...prev, { message: `[System] Job ${jobResponse?.existingJobId ? 'resumed' : 'queued'}: ${jobId}`, timestamp: Date.now() }]);
+
+      // Real-time subscription for progress
+      const channel = supabase
+        .channel(`audit-${preflightId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'audit_status',
+            filter: `preflight_id=eq.${preflightId}`
+          },
+          (payload) => {
+            const status = payload.new;
+            useScannerStore.getState().setProgress(status.progress || 0);
+
+            const transformedLogs = (status.logs || []).map((logStr: string) => {
+              const match = logStr.match(/^\[([^\]]+)\]\s*(.+)$/);
+              if (match) {
+                return { timestamp: new Date(match[1]).getTime(), message: match[2] };
+              }
+              return { timestamp: Date.now(), message: logStr };
+            });
+            setScannerLogs(transformedLogs);
+
+            if (status.status === 'completed' && status.report_data) {
+              setScannerLogs(prev => [...prev, { message: '[System] Audit completed successfully!', timestamp: Date.now() }]);
+
+              const auditId = status.report_data.auditId;
+              useAuditStore.getState().setActiveAuditId(auditId);
+              useAuditStore.getState().setAuditPhase('complete');
+              useScannerStore.getState().setStatus('completed');
+              useScannerStore.getState().setProgress(100);
+
+              // Fetch related audit IDs
+              supabase
+                .from('audit_complete_data')
+                .select('id')
+                .eq('repo_url', repoUrl)
+                .order('created_at', { ascending: false })
+                .then(({ data: related }) => {
+                  const auditIds = (related || []).map((a: any) => a.id);
+                  useAuditStore.getState().setAuditIds(auditIds);
+                  setTimeout(() => navigate('report'), 1000);
+                });
+
+              supabase.removeChannel(channel);
+              setActiveChannel(null);
+            }
+
+            if (status.status === 'failed') {
+              setScannerLogs(prev => [...prev, { message: `[Error] Audit failed: ${status.error_message || 'Unknown error'}`, timestamp: Date.now() }]);
+              useScannerStore.getState().setStatus('failed');
+              supabase.removeChannel(channel);
+              setActiveChannel(null);
+              setTimeout(() => navigate('preflight'), 4000);
+            }
+          }
+        )
+        .subscribe();
+
+      setActiveChannel(channel);
+
+    } catch (error) {
+      console.error('Orchestration Error:', error);
+      setScannerLogs(prev => [...prev, { message: `[Error] Failed to start audit: ${error instanceof Error ? error.message : 'Unknown error'}`, timestamp: Date.now() }]);
+      setTimeout(() => navigate('preflight'), 4000);
+    }
+  }, [navigate, repoUrl]);
+
+  // Handle restart
+  const handleRestart = useCallback(() => {
+    navigate('landing');
+    clearAuditState();
+  }, [navigate, clearAuditState]);
+
+  // Handle run tier from report
   const handleRunTier = useCallback(async (tier: string, url: string, config?: any) => {
     console.log('[handleRunTier] Called with:', { tier, url, config });
 
-    // Validate URL before proceeding
     if (!url || !url.includes('github.com')) {
       console.error('[handleRunTier] Invalid URL:', url);
       return;
@@ -99,48 +212,40 @@ const AppContent: React.FC = () => {
 
     setRepoUrl(url);
 
-    // When coming from report page, try to reuse existing preflight instead of always going through modal
     try {
-      const { fetchPreflight } = await import('./services/preflightService');
       const preflightResponse = await fetchPreflight(url);
-
       if (preflightResponse.success && preflightResponse.preflight) {
-        // We have a valid preflight, use it directly
         const preflight = preflightResponse.preflight;
-        await handleStartAuditWithPreflight(url, tier, preflight);
+        usePreflightStore.getState().setPreflightId(preflight.id);
+        await handleConfirmAudit(tier, preflight.stats, [], preflight.id);
         return;
       }
     } catch (error) {
       console.warn('Failed to check for existing preflight, falling back to modal:', error);
-      // Fall through to modal approach
     }
 
-    // No valid preflight found, go through modal
     navigate('preflight');
-  }, [setRepoUrl, navigate, handleStartAuditWithPreflight]);
+  }, [setRepoUrl, navigate, handleConfirmAudit]);
 
+  // Handle start audit from dashboard
   const handleStartAuditFromDashboard = useCallback(async (url: string, tier: string) => {
-    // Always go through preflight flow - simpler and more reliable
     setRepoUrl(url);
     navigate('preflight');
   }, [setRepoUrl, navigate]);
 
+  // Handle cancel preflight
   const handleCancelPreflight = useCallback(() => {
     navigate(previousView);
   }, [navigate, previousView]);
 
-  const handleDeleteAudit = useCallback(async (auditId: string) => {
-    try {
-      await deleteService.deleteAudit(auditId);
-      // Could add toast notification here
-      console.log('Audit deleted successfully:', auditId);
-    } catch (error) {
-      console.error('Failed to delete audit:', error);
-      // Could add error toast notification here
-    }
-  }, []);
+  // Handle view historical report
+  const handleViewHistoricalReport = useCallback(async (audit: any) => {
+    useAuditStore.getState().setActiveAuditId(audit.id);
+    setRepoUrl(audit.repo_url);
+    navigate('report');
+  }, [setRepoUrl, navigate]);
 
-  const seoData = getSEO(reportData);
+  const seoData = getSEO(null);
 
   const renderContent = () => {
     switch (view) {
