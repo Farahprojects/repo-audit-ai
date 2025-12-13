@@ -23,14 +23,14 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================
--- TABLES
+-- TABLES (Create if not exists)
 -- ============================================
 
 -- Users table (managed by Supabase Auth)
 -- This is automatically created by Supabase
 
 -- GitHub Accounts
-CREATE TABLE github_accounts (
+CREATE TABLE IF NOT EXISTS github_accounts (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     github_id TEXT NOT NULL UNIQUE,
@@ -45,7 +45,7 @@ CREATE TABLE github_accounts (
 );
 
 -- Verification Codes for Email
-CREATE TABLE verification_codes (
+CREATE TABLE IF NOT EXISTS verification_codes (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE verification_codes (
 );
 
 -- System Prompts for AI Agents
-CREATE TABLE system_prompts (
+CREATE TABLE IF NOT EXISTS system_prompts (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     tier TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE system_prompts (
 );
 
 -- Preflights (Repository Analysis Preparation)
-CREATE TABLE preflights (
+CREATE TABLE IF NOT EXISTS preflights (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     github_account_id UUID REFERENCES github_accounts(id) ON DELETE SET NULL,
@@ -85,7 +85,7 @@ CREATE TABLE preflights (
 );
 
 -- Repos (Repository Storage in Supabase Storage)
-CREATE TABLE repos (
+CREATE TABLE IF NOT EXISTS repos (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     repo_id UUID NOT NULL REFERENCES preflights(id) ON DELETE CASCADE,
     repo_name TEXT NOT NULL, -- "owner/repo"
@@ -101,7 +101,7 @@ CREATE TABLE repos (
 );
 
 -- Audit Jobs (Main audit orchestration)
-CREATE TABLE audit_jobs (
+CREATE TABLE IF NOT EXISTS audit_jobs (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     preflight_id UUID REFERENCES preflights(id) ON DELETE CASCADE,
@@ -115,7 +115,7 @@ CREATE TABLE audit_jobs (
 );
 
 -- Audit Status (Real-time job progress)
-CREATE TABLE audit_status (
+CREATE TABLE IF NOT EXISTS audit_status (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     preflight_id UUID REFERENCES preflights(id) ON DELETE CASCADE,
     job_id UUID REFERENCES audit_jobs(id) ON DELETE SET NULL,
@@ -130,7 +130,7 @@ CREATE TABLE audit_status (
 );
 
 -- Audit Complete Data (Final results storage)
-CREATE TABLE audit_complete_data (
+CREATE TABLE IF NOT EXISTS audit_complete_data (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     audit_job_id UUID REFERENCES audit_jobs(id) ON DELETE SET NULL,
@@ -145,50 +145,50 @@ CREATE TABLE audit_complete_data (
 );
 
 -- ============================================
--- INDEXES
+-- INDEXES (Create if not exists)
 -- ============================================
 
 -- GitHub Accounts
-CREATE INDEX idx_github_accounts_user_id ON github_accounts(user_id);
-CREATE INDEX idx_github_accounts_github_id ON github_accounts(github_id);
+CREATE INDEX IF NOT EXISTS idx_github_accounts_user_id ON github_accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_github_accounts_github_id ON github_accounts(github_id);
 
 -- Verification Codes
-CREATE INDEX idx_verification_codes_user_id ON verification_codes(user_id);
-CREATE INDEX idx_verification_codes_email ON verification_codes(email);
-CREATE INDEX idx_verification_codes_expires_at ON verification_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_user_id ON verification_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_email ON verification_codes(email);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_expires_at ON verification_codes(expires_at);
 
 -- System Prompts
-CREATE INDEX idx_system_prompts_tier ON system_prompts(tier);
+CREATE INDEX IF NOT EXISTS idx_system_prompts_tier ON system_prompts(tier);
 
 -- Preflights
-CREATE INDEX idx_preflights_user_id ON preflights(user_id);
-CREATE INDEX idx_preflights_github_account_id ON preflights(github_account_id);
-CREATE INDEX idx_preflights_repo_url ON preflights(repo_url);
+CREATE INDEX IF NOT EXISTS idx_preflights_user_id ON preflights(user_id);
+CREATE INDEX IF NOT EXISTS idx_preflights_github_account_id ON preflights(github_account_id);
+CREATE INDEX IF NOT EXISTS idx_preflights_repo_url ON preflights(repo_url);
 
 -- Repos
-CREATE INDEX idx_repos_repo_id ON repos(repo_id);
-CREATE INDEX idx_repos_last_accessed ON repos(last_accessed);
-CREATE INDEX idx_repos_last_updated ON repos(last_updated);
-CREATE INDEX idx_repos_file_index ON repos USING GIN (file_index);
+CREATE INDEX IF NOT EXISTS idx_repos_repo_id ON repos(repo_id);
+CREATE INDEX IF NOT EXISTS idx_repos_last_accessed ON repos(last_accessed);
+CREATE INDEX IF NOT EXISTS idx_repos_last_updated ON repos(last_updated);
+CREATE INDEX IF NOT EXISTS idx_repos_file_index ON repos USING GIN (file_index);
 
 -- Audit Jobs
-CREATE INDEX idx_audit_jobs_user_id ON audit_jobs(user_id);
-CREATE INDEX idx_audit_jobs_preflight_id ON audit_jobs(preflight_id);
-CREATE INDEX idx_audit_jobs_status ON audit_jobs(status);
-CREATE INDEX idx_audit_jobs_created_at ON audit_jobs(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_jobs_user_id ON audit_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_jobs_preflight_id ON audit_jobs(preflight_id);
+CREATE INDEX IF NOT EXISTS idx_audit_jobs_status ON audit_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_audit_jobs_created_at ON audit_jobs(created_at);
 
 -- Audit Status
-CREATE INDEX idx_audit_status_preflight_id ON audit_status(preflight_id);
-CREATE INDEX idx_audit_status_job_id ON audit_status(job_id);
+CREATE INDEX IF NOT EXISTS idx_audit_status_preflight_id ON audit_status(preflight_id);
+CREATE INDEX IF NOT EXISTS idx_audit_status_job_id ON audit_status(job_id);
 
 -- Audit Complete Data
-CREATE INDEX idx_audit_complete_data_user_id ON audit_complete_data(user_id);
-CREATE INDEX idx_audit_complete_data_audit_job_id ON audit_complete_data(audit_job_id);
-CREATE INDEX idx_audit_complete_data_repo_url ON audit_complete_data(repo_url);
-CREATE INDEX idx_audit_complete_data_created_at ON audit_complete_data(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_complete_data_user_id ON audit_complete_data(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_complete_data_audit_job_id ON audit_complete_data(audit_job_id);
+CREATE INDEX IF NOT EXISTS idx_audit_complete_data_repo_url ON audit_complete_data(repo_url);
+CREATE INDEX IF NOT EXISTS idx_audit_complete_data_created_at ON audit_complete_data(created_at);
 
 -- ============================================
--- RLS POLICIES
+-- RLS POLICIES (Drop and recreate for consolidation)
 -- ============================================
 
 -- Enable RLS on all tables
@@ -201,63 +201,100 @@ ALTER TABLE audit_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_status ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_complete_data ENABLE ROW LEVEL SECURITY;
 
+-- Clean up any existing policies first
+DROP POLICY IF EXISTS "Users can view own github accounts" ON github_accounts;
+DROP POLICY IF EXISTS "Users can insert own github accounts" ON github_accounts;
+DROP POLICY IF EXISTS "Users can update own github accounts" ON github_accounts;
+DROP POLICY IF EXISTS "Service role full access to github accounts" ON github_accounts;
+
+DROP POLICY IF EXISTS "Users can view own verification codes" ON verification_codes;
+DROP POLICY IF EXISTS "Users can insert own verification codes" ON verification_codes;
+DROP POLICY IF EXISTS "Users can update own verification codes" ON verification_codes;
+DROP POLICY IF EXISTS "Service role full access to verification codes" ON verification_codes;
+
+DROP POLICY IF EXISTS "Authenticated users can view system prompts" ON system_prompts;
+DROP POLICY IF EXISTS "Service role full access to system prompts" ON system_prompts;
+
+DROP POLICY IF EXISTS "Users can view own preflights" ON preflights;
+DROP POLICY IF EXISTS "Users can insert own preflights" ON preflights;
+DROP POLICY IF EXISTS "Users can update own preflights" ON preflights;
+DROP POLICY IF EXISTS "Users can delete own preflights" ON preflights;
+DROP POLICY IF EXISTS "Service role full access to preflights" ON preflights;
+
+-- Repos policies (these will be optimized in the next migration)
+DROP POLICY IF EXISTS "Users can view repos from accessible preflights" ON repos;
+DROP POLICY IF EXISTS "Users can update own repos" ON repos;
+DROP POLICY IF EXISTS "Service role full access to repos" ON repos;
+
+DROP POLICY IF EXISTS "Users can view own audit jobs" ON audit_jobs;
+DROP POLICY IF EXISTS "Users can insert own audit jobs" ON audit_jobs;
+DROP POLICY IF EXISTS "Users can update own audit jobs" ON audit_jobs;
+DROP POLICY IF EXISTS "Service role full access to audit jobs" ON audit_jobs;
+
+DROP POLICY IF EXISTS "Users can view audit status for own preflights" ON audit_status;
+DROP POLICY IF EXISTS "Service role full access to audit status" ON audit_status;
+
+DROP POLICY IF EXISTS "Users can view own audit results" ON audit_complete_data;
+DROP POLICY IF EXISTS "Service role full access to audit complete data" ON audit_complete_data;
+
 -- GitHub Accounts: Users can only see their own
 CREATE POLICY "Users can view own github accounts" ON github_accounts
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can insert own github accounts" ON github_accounts
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
+    FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can update own github accounts" ON github_accounts
-    FOR UPDATE USING (auth.uid() = user_id);
+    FOR UPDATE USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Service role full access to github accounts" ON github_accounts
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL USING ((select auth.role()) = 'service_role');
 
 -- Verification Codes: Users can only see their own
 CREATE POLICY "Users can view own verification codes" ON verification_codes
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can insert own verification codes" ON verification_codes
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
+    FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can update own verification codes" ON verification_codes
-    FOR UPDATE USING (auth.uid() = user_id);
+    FOR UPDATE USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Service role full access to verification codes" ON verification_codes
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL USING ((select auth.role()) = 'service_role');
 
 -- System Prompts: Read-only for all authenticated users
 CREATE POLICY "Authenticated users can view system prompts" ON system_prompts
-    FOR SELECT USING (auth.role() = 'authenticated');
+    FOR SELECT USING ((select auth.role()) = 'authenticated');
 
 CREATE POLICY "Service role full access to system prompts" ON system_prompts
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL USING ((select auth.role()) = 'service_role');
 
 -- Preflights: Users can see their own, service role can see all
 CREATE POLICY "Users can view own preflights" ON preflights
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can insert own preflights" ON preflights
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
+    FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can update own preflights" ON preflights
-    FOR UPDATE USING (auth.uid() = user_id);
+    FOR UPDATE USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can delete own preflights" ON preflights
-    FOR DELETE USING (auth.uid() = user_id);
+    FOR DELETE USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Service role full access to preflights" ON preflights
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL USING ((select auth.role()) = 'service_role');
 
--- Repos: Users can see repos from their preflights, service role can see all
+-- Repos policies (optimized versions will be created in the next migration)
+-- For now, create basic working policies that will be replaced
 CREATE POLICY "Users can view repos from accessible preflights" ON repos
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM preflights p
             WHERE p.id = repos.repo_id
             AND (
-                p.user_id = auth.uid() OR
+                p.user_id = (select auth.uid()) OR
                 (p.user_id IS NULL AND p.is_private = false)
             )
         )
@@ -268,25 +305,25 @@ CREATE POLICY "Users can update own repos" ON repos
         EXISTS (
             SELECT 1 FROM preflights p
             WHERE p.id = repos.repo_id
-            AND p.user_id = auth.uid()
+            AND p.user_id = (select auth.uid())
         )
     );
 
 CREATE POLICY "Service role full access to repos" ON repos
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL USING ((select auth.role()) = 'service_role');
 
 -- Audit Jobs: Users can see their own, service role can see all
 CREATE POLICY "Users can view own audit jobs" ON audit_jobs
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can insert own audit jobs" ON audit_jobs
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
+    FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can update own audit jobs" ON audit_jobs
-    FOR UPDATE USING (auth.uid() = user_id);
+    FOR UPDATE USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Service role full access to audit jobs" ON audit_jobs
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL USING ((select auth.role()) = 'service_role');
 
 -- Audit Status: Users can see status for their preflights, service role can see all
 CREATE POLICY "Users can view audit status for own preflights" ON audit_status
@@ -294,22 +331,22 @@ CREATE POLICY "Users can view audit status for own preflights" ON audit_status
         EXISTS (
             SELECT 1 FROM preflights p
             WHERE p.id = audit_status.preflight_id
-            AND p.user_id = auth.uid()
+            AND p.user_id = (select auth.uid())
         )
     );
 
 CREATE POLICY "Service role full access to audit status" ON audit_status
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL USING ((select auth.role()) = 'service_role');
 
 -- Audit Complete Data: Users can see their own results, service role can see all
 CREATE POLICY "Users can view own audit results" ON audit_complete_data
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Service role full access to audit complete data" ON audit_complete_data
-    FOR ALL USING (auth.role() = 'service_role');
+    FOR ALL USING ((select auth.role()) = 'service_role');
 
 -- ============================================
--- FUNCTIONS
+-- FUNCTIONS (Create or replace)
 -- ============================================
 
 -- Updated at triggers
@@ -416,8 +453,15 @@ END;
 $$;
 
 -- ============================================
--- TRIGGERS
+-- TRIGGERS (Drop if exists, then create)
 -- ============================================
+
+-- Clean up existing triggers first
+DROP TRIGGER IF EXISTS update_github_accounts_updated_at ON github_accounts;
+DROP TRIGGER IF EXISTS update_preflights_updated_at ON preflights;
+DROP TRIGGER IF EXISTS update_audit_jobs_updated_at ON audit_jobs;
+DROP TRIGGER IF EXISTS update_audit_status_updated_at ON audit_status;
+DROP TRIGGER IF EXISTS update_repos_last_updated ON repos;
 
 -- Updated at triggers for all tables with updated_at
 CREATE TRIGGER update_github_accounts_updated_at
