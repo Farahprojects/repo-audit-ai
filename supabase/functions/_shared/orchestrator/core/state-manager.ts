@@ -75,7 +75,7 @@ export class StateManager {
                     component: 'StateManager',
                     operation: 'createSession',
                     sessionId: this.sessionId,
-                    userId: userId,
+                    ...(userId && { userId }),
                     taskDescription: taskDescription?.substring(0, 100),
                     allowInMemoryFallback: this.allowInMemoryFallback
                 }
@@ -199,7 +199,7 @@ export class StateManager {
                     operation: 'saveStep',
                     sessionId: this.sessionId,
                     stepNumber: this.stepCounter,
-                    toolCalled: step.toolCalled,
+                    ...(step.toolCalled && { toolCalled: step.toolCalled }),
                     tokenUsage: step.tokenUsage,
                     allowInMemoryFallback: this.allowInMemoryFallback
                 }
@@ -269,7 +269,7 @@ export class StateManager {
                     component: 'StateManager',
                     operation: 'getHistory',
                     sessionId: this.sessionId,
-                    requestedLimit: limit
+                    ...(limit !== undefined && { requestedLimit: limit })
                 }
             );
             // Return empty array but log the error for monitoring

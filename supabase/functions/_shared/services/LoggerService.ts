@@ -12,6 +12,9 @@ export interface LogContext {
   function?: string | undefined;
   duration?: number | undefined;
   memoryUsage?: number | undefined;
+  githubAccountId?: string | undefined;
+  repoUrl?: string | undefined;
+  jobId?: string | undefined;
   error?: Error | string | undefined;
   correlationId?: string | undefined;
   errorType?: string | undefined;
@@ -24,8 +27,6 @@ export interface LogContext {
   metadata?: Record<string, any> | undefined;
   installationId?: number | string | undefined;
   accountId?: string | undefined;
-  // Queue-based architecture fields
-  jobId?: string | undefined;
   workerId?: string | undefined;
   jobIds?: string[] | undefined;
   trigger?: string | undefined;

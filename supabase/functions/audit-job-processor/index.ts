@@ -321,7 +321,7 @@ async function processJob(
             } else {
                 // Token decryption failed - this is critical
                 const errorMessage = `Failed to decrypt GitHub token for private repository`;
-                LoggerService.error(errorMessage, {
+                LoggerService.error(errorMessage, undefined, {
                     component: 'AuditJobProcessor',
                     jobId: job.job_id,
                     preflightId: preflight.id,

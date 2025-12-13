@@ -33,6 +33,33 @@ export interface ErrorDetails {
   statusCode?: number;
   filePath?: string;
   metadata?: Record<string, any>;
+  // Orchestrator-specific properties
+  taskDescription?: string;
+  newStatus?: string;
+  stepNumber?: number;
+  currentStep?: number;
+  requestedLimit?: number;
+  requestedCount?: number;
+  allowInMemoryFallback?: boolean;
+  totalTokens?: number;
+  toolCalled?: string;
+  hasContextSnapshot?: boolean;
+  tokenUsage?: any;
+  recoveryStrategiesCount?: number;
+  // GitHub-specific properties
+  githubAccountId?: string;
+  repoUrl?: string;
+  isPrivate?: boolean;
+  // Storage-specific properties
+  storagePath?: string;
+  error?: string;
+  filename?: string;
+  requestedFiles?: number;
+  phase?: string;
+  // Job-specific properties
+  jobId?: string;
+  taskId?: string;
+  severity?: string;
 }
 
 export interface ErrorReport {
