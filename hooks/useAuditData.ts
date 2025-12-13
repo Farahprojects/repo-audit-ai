@@ -20,14 +20,18 @@ export const useAuditData = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Track if we're currently fetching to prevent double-fetches
+    const [fetchingId, setFetchingId] = useState<string | null>(null);
+
     // Fetch active audit report by ID
     useEffect(() => {
         if (!activeAuditId) return;
 
-        // Check cache first
-        if (reportCache[activeAuditId]) return;
+        // Skip if already cached or already fetching this ID
+        if (reportCache[activeAuditId] || fetchingId === activeAuditId) return;
 
         const fetchData = async () => {
+            setFetchingId(activeAuditId);
             setLoading(true);
             setError(null);
 
@@ -37,12 +41,9 @@ export const useAuditData = () => {
                     setReportCache((prev) => ({ ...prev, [activeAuditId]: result.report }));
                     setAuditCache((prev) => ({ ...prev, [activeAuditId]: result.audit }));
 
-                    // Fetch related audits if we have repo URL
                     if (result.audit.repo_url) {
                         const related = await AuditService.fetchAuditsByRepoUrl(result.audit.repo_url);
                         setRelatedAudits(related);
-
-                        // Update store with all audit IDs
                         useAuditStore.getState().setAuditIds(related.map((a) => a.id));
                     }
                 }
@@ -50,11 +51,12 @@ export const useAuditData = () => {
                 setError(err instanceof Error ? err.message : 'Failed to fetch audit');
             } finally {
                 setLoading(false);
+                setFetchingId(null);
             }
         };
 
         fetchData();
-    }, [activeAuditId, reportCache]);
+    }, [activeAuditId]);  // Remove reportCache from deps
 
     // Fetch related audits when repoUrl changes
     useEffect(() => {
