@@ -157,18 +157,11 @@ const AppContent: React.FC = () => {
         return (
           <AuditFlow
             view={view}
-            previousView={previousView}
             repoUrl={repoUrl}
-            reportData={reportData}
-            historicalReportData={historicalReportData}
-            relatedAudits={relatedAudits}
-            activeAuditId={activeAuditId}
             onConfirmAudit={handleConfirmAudit}
             onCancelPreflight={handleCancelPreflight}
             onRestart={handleRestart}
-            onSelectAudit={handleSelectAudit}
             onRunTier={handleRunTier}
-            onDeleteAudit={handleDeleteAudit}
           />
         );
       case 'pricing':

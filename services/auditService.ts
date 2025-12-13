@@ -59,6 +59,50 @@ export class AuditService {
     };
   }
 
+  /**
+   * Fetch a single audit by ID - primary method for pointer-layer architecture
+   */
+  static async fetchAuditById(auditId: string): Promise<{ report: RepoReport; audit: AuditRecord } | null> {
+    const { data: audit, error } = await supabase
+      .from('audit_complete_data')
+      .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
+      .eq('id', auditId)
+      .single();
+
+    if (error || !audit) return null;
+
+    const report = this.processSelectedAudit(audit as unknown as AuditRecord);
+    return { report, audit: audit as unknown as AuditRecord };
+  }
+
+  /**
+   * Fetch all audit IDs for a repo URL - returns IDs only for store
+   */
+  static async fetchAuditIdsByRepoUrl(repoUrl: string): Promise<string[]> {
+    const { data: audits, error } = await supabase
+      .from('audit_complete_data')
+      .select('id')
+      .eq('repo_url', repoUrl)
+      .order('created_at', { ascending: false });
+
+    if (error || !audits) return [];
+    return audits.map(a => a.id);
+  }
+
+  /**
+   * Fetch all audits for a repo URL - for related audits display
+   */
+  static async fetchAuditsByRepoUrl(repoUrl: string): Promise<AuditRecord[]> {
+    const { data: audits, error } = await supabase
+      .from('audit_complete_data')
+      .select('id, repo_url, tier, health_score, summary, created_at, issues, extra_data')
+      .eq('repo_url', repoUrl)
+      .order('created_at', { ascending: false });
+
+    if (error || !audits) return [];
+    return audits as unknown as AuditRecord[];
+  }
+
 
   // Process historical audit data
   static async processHistoricalAudit(audit: Tables<'audit_complete_data'> & { extra_data?: any }): Promise<{ report: RepoReport; relatedAudits: AuditRecord[] }> {

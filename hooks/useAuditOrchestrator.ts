@@ -5,6 +5,7 @@ import { AuditService } from '../services/auditService';
 import { ErrorHandler, ErrorLogger } from '../services/errorService';
 import { PreflightRecord } from '../services/preflightService';
 import { supabase } from '../src/integrations/supabase/client';
+import { useAuditStore, usePreflightStore, useScannerStore } from '../stores';
 
 interface UseAuditOrchestratorProps {
   user: any;
@@ -161,6 +162,13 @@ export const useAuditOrchestrator = ({
             if (status.status === 'completed' && status.report_data) {
               addLog(`[System] Audit completed successfully!`);
 
+              // Sync to Zustand stores (pointer layer)
+              const auditId = status.report_data.auditId;
+              useAuditStore.getState().setActiveAuditId(auditId);
+              useAuditStore.getState().setAuditPhase('complete');
+              useScannerStore.getState().setStatus('completed');
+              useScannerStore.getState().setProgress(100);
+
               // Fetch related audits for navigation
               supabase
                 .from('audit_complete_data')
@@ -168,6 +176,10 @@ export const useAuditOrchestrator = ({
                 .eq('repo_url', url)
                 .order('created_at', { ascending: false })
                 .then(({ data: related }) => {
+                  // Sync audit IDs to store
+                  const auditIds = (related || []).map((a: any) => a.id);
+                  useAuditStore.getState().setAuditIds(auditIds);
+
                   setReportData(status.report_data);
                   setActiveAuditId(status.report_data.auditId);  // Fresh audit is now active
                   setRelatedAudits((related || []) as unknown as AuditRecord[]);

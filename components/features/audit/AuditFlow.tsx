@@ -1,44 +1,43 @@
-import React, { memo, useMemo } from 'react';
-import { ViewState, RepoReport, AuditRecord, AuditStats } from '../../../types';
+import React, { memo, useCallback } from 'react';
+import { ViewState, AuditStats, AuditTier } from '../../../types';
 import { FileMapItem } from '../../../services/githubService';
+import { useScannerStore } from '../../../stores';
 import { useScannerContext } from '../../layout/AppProviders';
 import PreflightModal from './PreflightModal';
 import Scanner from './Scanner';
 import ReportDashboard from '../report/ReportDashboard';
 
+/**
+ * AuditFlow - Zustand pointer-layer version
+ * 
+ * Props reduced from 12+ to essential view/navigation only.
+ * Data flows through Zustand stores, not props.
+ */
 interface AuditFlowProps {
   view: ViewState;
-  previousView: ViewState;
   repoUrl: string;
-  reportData: RepoReport | null;
-  historicalReportData: RepoReport | null;
-  relatedAudits: AuditRecord[];
-  activeAuditId: string | null;
   onConfirmAudit: (tier: string, stats: AuditStats, fileMap: FileMapItem[], preflightId?: string) => void;
   onCancelPreflight: () => void;
   onRestart: () => void;
-  onSelectAudit: (audit: AuditRecord) => void;
   onRunTier: (tier: string, url: string, config?: any) => void;
-  onDeleteAudit?: (auditId: string) => void;
 }
 
 export const AuditFlow: React.FC<AuditFlowProps> = memo(({
   view,
-  previousView,
   repoUrl,
-  reportData,
-  historicalReportData,
-  relatedAudits,
-  activeAuditId,
   onConfirmAudit,
   onCancelPreflight,
   onRestart,
-  onSelectAudit,
   onRunTier,
-  onDeleteAudit,
 }) => {
-  // Consume scanner context only where it's needed (scanning view)
+  // Scanner data from context (still using context for now, will migrate later)
   const { scannerLogs, scannerProgress } = useScannerContext();
+
+  // Cast onRunTier to proper type for ReportDashboard
+  const handleRunTier = useCallback((tier: AuditTier, url: string, config?: any) => {
+    onRunTier(tier, url, config);
+  }, [onRunTier]);
+
   switch (view) {
     case 'preflight':
       return (
@@ -51,30 +50,13 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
     case 'scanning':
       return <Scanner logs={scannerLogs} progress={scannerProgress} />;
     case 'report':
-      // Use activeAuditId to determine which data to show
-      const displayData = useMemo(() => {
-        // If we have an explicit selection, use it
-        if (activeAuditId) {
-          if (historicalReportData?.auditId === activeAuditId) {
-            return historicalReportData;
-          }
-          if (reportData?.auditId === activeAuditId) {
-            return reportData;
-          }
-        }
-        // Fallback: prefer fresh data
-        return reportData || historicalReportData;
-      }, [activeAuditId, historicalReportData, reportData]);
-      return displayData ? (
+      // ReportDashboard now gets data from stores via useAuditData hook
+      return (
         <ReportDashboard
-          data={displayData}
-          relatedAudits={relatedAudits}
           onRestart={onRestart}
-          onSelectAudit={onSelectAudit}
-          onRunTier={onRunTier}
-          onDeleteAudit={onDeleteAudit}
+          onRunTier={handleRunTier}
         />
-      ) : null;
+      );
     default:
       return null;
   }

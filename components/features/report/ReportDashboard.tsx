@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useCallback } from 'react';
 import { RepoReport, AuditRecord, AuditTier } from '../../../types';
 import { UniversalConnectModal } from '../auth/UniversalConnectModal';
 import { ReportHeader } from './ReportHeader';
@@ -10,32 +10,78 @@ import { AuditUpgradesDropdown } from '../dashboard/AuditUpgradesDropdown';
 import { useReportState } from '../../../hooks/useReportState';
 import { useDropdownPositioning } from '../../../hooks/useDropdownPositioning';
 import DeleteConfirmModal from '../../common/DeleteConfirmModal';
+import { useAuditData } from '../../../hooks/useAuditData';
+import { usePreflightStore } from '../../../stores';
+import { useRouterContext } from '../../layout/AppProviders';
+import { deleteService } from '../../../services/deleteService';
 
+/**
+ * ReportDashboard - Zustand pointer-layer version
+ * 
+ * Props reduced from 6 to 2 (optional callbacks for tier running).
+ * Data fetched by ID from stores via useAuditData hook.
+ */
 interface ReportDashboardProps {
-  data: RepoReport;
-  relatedAudits: AuditRecord[];
-  onRestart: () => void;
+  // Optional callbacks for running new tiers (passed from parent for now)
   onRunTier?: (tier: AuditTier, repoUrl: string, config?: any) => void;
-  onSelectAudit?: (audit: AuditRecord) => void;
-  onDeleteAudit?: (auditId: string) => void;
+  onRestart?: () => void;
 }
 
 const ReportDashboard: React.FC<ReportDashboardProps> = memo(({
-  data,
-  relatedAudits,
-  onRestart,
   onRunTier,
-  onSelectAudit,
-  onDeleteAudit
+  onRestart,
 }) => {
+  // Get data from Zustand stores via bridge hook
+  const {
+    activeReport: data,
+    relatedAudits,
+    selectAudit,
+    deleteAudit,
+    loading,
+  } = useAuditData();
+
+  const repoUrlFromStore = usePreflightStore((state) => state.repoUrl);
+  const { navigate } = useRouterContext();
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [auditToDelete, setAuditToDelete] = useState<AuditRecord | null>(null);
 
-  // Get repoUrl from first related audit, fallback to constructed URL
-  const rawRepoUrl = relatedAudits[0]?.repo_url || `https://github.com/${data.repoName}`;
-  // Ensure repoUrl is always valid by normalizing it
+  // Handle restart - navigate back to landing
+  const handleRestart = useCallback(() => {
+    if (onRestart) {
+      onRestart();
+    } else {
+      navigate('landing');
+    }
+  }, [onRestart, navigate]);
+
+  // If no data yet, show loading or empty state
+  if (!data) {
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-surface flex items-center justify-center">
+          <div className="text-muted-foreground">Loading report...</div>
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="text-muted-foreground">No report data available</div>
+      </div>
+    );
+  }
+
+  // Get repoUrl from store or construct from data
+  const rawRepoUrl = repoUrlFromStore || relatedAudits[0]?.repo_url || `https://github.com/${data.repoName}`;
   const repoUrl = rawRepoUrl.startsWith('https://') ? rawRepoUrl : `https://github.com/${rawRepoUrl}`;
-  const reportState = useReportState({ data, relatedAudits, onRunTier, onSelectAudit });
+
+  // Use existing UI state hook
+  const reportState = useReportState({
+    data,
+    relatedAudits,
+    onRunTier,
+    onSelectAudit: selectAudit
+  });
 
   useDropdownPositioning({
     dropdownRef: reportState.dropdownRef,
@@ -53,11 +99,13 @@ const ReportDashboard: React.FC<ReportDashboardProps> = memo(({
   };
 
   const handleConfirmDeleteAudit = async () => {
-    if (auditToDelete && onDeleteAudit) {
-      await onDeleteAudit(auditToDelete.id);
+    if (auditToDelete) {
+      // Delete from backend
+      await deleteService.deleteAudit(auditToDelete.id);
+      // Update local cache
+      await deleteAudit(auditToDelete.id);
       setShowDeleteModal(false);
       setAuditToDelete(null);
-      // Close the dropdown after deletion
       reportState.setHistoryDropdownOpen(null);
     }
   };
@@ -107,7 +155,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = memo(({
         dropdownPosition={reportState.dropdownPosition}
         dropdownRef={reportState.dropdownRef}
         formatDate={reportState.formatDate}
-        onSelectAudit={onSelectAudit}
+        onSelectAudit={selectAudit}
         onCloseDropdown={() => reportState.setHistoryDropdownOpen(null)}
         onRunTier={onRunTier}
         onDeleteAudit={handleDeleteAuditClick}
