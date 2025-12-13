@@ -10,7 +10,7 @@ import Privacy from './components/pages/Privacy';
 import Terms from './components/pages/Terms';
 import AuthModal from './components/features/auth/AuthModal';
 import SEO from './components/common/SEO';
-import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useScannerContext, useAuthFlowContext } from './components/layout/AppProviders';
+import { AppProviders, useAuthContext, useRouterContext, useAuditContext, useAuthFlowContext } from './components/layout/AppProviders';
 import { LandingPage } from './components/pages/LandingPage';
 import { AuditFlow } from './components/features/audit/AuditFlow';
 import { DashboardPage } from './components/pages/DashboardPage';
@@ -37,7 +37,6 @@ const AppContent: React.FC = () => {
     handleSelectAudit,
     clearAuditState,
   } = useAuditContext();
-  const { scannerLogs, scannerProgress } = useScannerContext();
   const { isAuthOpen, handleSoftStart, openAuthModal, closeAuthModal } = useAuthFlowContext();
 
   // Handle soft start (auth flow version)
@@ -160,8 +159,6 @@ const AppContent: React.FC = () => {
             view={view}
             previousView={previousView}
             repoUrl={repoUrl}
-            scannerLogs={scannerLogs}
-            scannerProgress={scannerProgress}
             reportData={reportData}
             historicalReportData={historicalReportData}
             relatedAudits={relatedAudits}

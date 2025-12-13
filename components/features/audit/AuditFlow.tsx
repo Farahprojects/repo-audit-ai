@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { ViewState, RepoReport, AuditRecord, AuditStats } from '../../../types';
 import { FileMapItem } from '../../../services/githubService';
+import { useScannerContext } from '../../layout/AppProviders';
 import PreflightModal from './PreflightModal';
 import Scanner from './Scanner';
 import ReportDashboard from '../report/ReportDashboard';
@@ -9,8 +10,6 @@ interface AuditFlowProps {
   view: ViewState;
   previousView: ViewState;
   repoUrl: string;
-  scannerLogs: string[];
-  scannerProgress: number;
   reportData: RepoReport | null;
   historicalReportData: RepoReport | null;
   relatedAudits: AuditRecord[];
@@ -27,8 +26,6 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
   view,
   previousView,
   repoUrl,
-  scannerLogs,
-  scannerProgress,
   reportData,
   historicalReportData,
   relatedAudits,
@@ -40,6 +37,8 @@ export const AuditFlow: React.FC<AuditFlowProps> = memo(({
   onRunTier,
   onDeleteAudit,
 }) => {
+  // Consume scanner context only where it's needed (scanning view)
+  const { scannerLogs, scannerProgress } = useScannerContext();
   switch (view) {
     case 'preflight':
       return (
