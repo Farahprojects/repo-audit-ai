@@ -100,8 +100,10 @@ export async function runPlanner(context: AuditContext, apiKey: string, tierProm
     // Group file index by layer for smarter assignment
     const byLayer: Record<string, string[]> = {};
     for (const ref of fileIndex) {
-      if (!byLayer[ref.layer]) byLayer[ref.layer] = [];
-      byLayer[ref.layer].push(`${ref.id}:${ref.path}`);
+      if (!byLayer[ref.layer]) {
+        byLayer[ref.layer] = [];
+      }
+      byLayer[ref.layer]!.push(`${ref.id}:${ref.path}`);
     }
 
     fileListSection = Object.entries(byLayer)

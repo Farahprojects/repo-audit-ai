@@ -420,7 +420,7 @@ export class FileAnnotationAnalyzer {
             if (file.annotations.isEntryPoint) signals.push('entry');
 
             const signalStr = signals.length > 0 ? ` [${signals.join(',')}]` : '';
-            byLayer[layer].push(`${file.id}:${file.path}${signalStr}`);
+            byLayer[layer]!.push(`${file.id}:${file.path}${signalStr}`);
         }
 
         const lines: string[] = ['REPRESENTATIVE FILES BY LAYER:'];

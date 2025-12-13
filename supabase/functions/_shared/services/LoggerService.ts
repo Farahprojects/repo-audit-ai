@@ -50,6 +50,8 @@ export interface LogContext {
   action?: string | undefined;
   result?: any | undefined;
   concurrency?: number | undefined;
+  existingJobId?: string | undefined;
+  existingStatus?: string | undefined;
 
   // GitHub-related fields
   expiresAt?: string | undefined;

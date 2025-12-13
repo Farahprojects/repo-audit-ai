@@ -55,6 +55,24 @@ const ReportDashboard: React.FC<ReportDashboardProps> = memo(({
     }
   }, [onRestart, navigate]);
 
+  // Use existing UI state hook - MUST be called before any early returns
+  const reportState = useReportState({
+    data: data || { issues: [], repoName: '', tier: 'shape' } as any,
+    relatedAudits: relatedAudits || [],
+    onRunTier,
+    onSelectAudit: selectAudit
+  });
+
+  useDropdownPositioning({
+    dropdownRef: reportState.dropdownRef,
+    tierButtonRefs: reportState.tierButtonRefs,
+    upgradesButtonRef: reportState.upgradesButtonRef,
+    historyDropdownOpen: reportState.historyDropdownOpen,
+    upgradesDropdownOpen: reportState.upgradesDropdownOpen,
+    setHistoryDropdownOpen: reportState.setHistoryDropdownOpen,
+    setUpgradesDropdownOpen: reportState.setUpgradesDropdownOpen,
+  });
+
   // If no data yet, show loading or empty state
   if (!data) {
     if (loading) {
@@ -74,24 +92,6 @@ const ReportDashboard: React.FC<ReportDashboardProps> = memo(({
   // Get repoUrl from store or construct from data
   const rawRepoUrl = repoUrlFromStore || relatedAudits[0]?.repo_url || `https://github.com/${data.repoName}`;
   const repoUrl = rawRepoUrl.startsWith('https://') ? rawRepoUrl : `https://github.com/${rawRepoUrl}`;
-
-  // Use existing UI state hook
-  const reportState = useReportState({
-    data,
-    relatedAudits,
-    onRunTier,
-    onSelectAudit: selectAudit
-  });
-
-  useDropdownPositioning({
-    dropdownRef: reportState.dropdownRef,
-    tierButtonRefs: reportState.tierButtonRefs,
-    upgradesButtonRef: reportState.upgradesButtonRef,
-    historyDropdownOpen: reportState.historyDropdownOpen,
-    upgradesDropdownOpen: reportState.upgradesDropdownOpen,
-    setHistoryDropdownOpen: reportState.setHistoryDropdownOpen,
-    setUpgradesDropdownOpen: reportState.setUpgradesDropdownOpen,
-  });
 
   const handleDeleteAuditClick = (audit: AuditRecord) => {
     setAuditToDelete(audit);
