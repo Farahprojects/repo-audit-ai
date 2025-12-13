@@ -44,6 +44,10 @@ export interface LogContext {
   // Repository metrics
   fileCount?: number | undefined;
   archiveSizeKB?: number | undefined;
+  owner?: string | undefined;
+  repo?: string | undefined;
+  changes?: number | undefined;
+  filesUpdated?: number | undefined;
 
   // NEW: Job processing metrics
   attempt?: number | undefined;

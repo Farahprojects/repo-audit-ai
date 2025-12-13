@@ -4,11 +4,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId } from '../_shared/utils.ts';
+import { Database } from '../_shared/database.types.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 };
 
 // Types
@@ -24,19 +24,19 @@ interface PreflightRecord {
     is_private: boolean;
     fetch_strategy: 'public' | 'authenticated';
     github_account_id: string | null;
+    installation_id?: number;
     token_valid: boolean;
     user_id: string | null;
     file_count: number;
-    created_at: string;
-    updated_at: string;
+    created_at?: string;
+    updated_at?: string;
     expires_at: string;
 }
 
 interface FileMapItem {
     path: string;
-    size: number;
+    size?: number;
     type: string;
-    url?: string;
 }
 
 interface PreflightRequest {
@@ -56,10 +56,17 @@ interface PreflightResponse {
     requiresAuth?: boolean;
 }
 
-// Environment
+// Declare Deno global for Supabase Edge Functions
+declare const Deno: {
+    env: {
+        get(key: string): string | undefined;
+    };
+};
+
+// Environment - using generated Database types
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 /**
  * Extract owner/repo from GitHub URL
@@ -220,9 +227,12 @@ async function getOrCreatePreflight(
                 );
 
                 if (!syncResult.synced && syncResult.error) {
-                    console.warn(`⚠️ [preflight-manager] Repo sync failed for cached preflight:`, syncResult.error);
-                    // Don't fail the request - use cached data as fallback
-                } else if (syncResult.changes > 0) {
+                    // FAIL-FAST: Don't serve stale data
+                    console.error(`❌ [preflight-manager] CRITICAL: Repo sync failed for cached preflight:`, syncResult.error);
+                    throw new Error(`Failed to sync repository: ${syncResult.error}`);
+                }
+
+                if (syncResult.changes > 0) {
                     console.log(`✅ [preflight-manager] Synced ${syncResult.changes} changes for cached preflight`);
                 } else {
                     console.log(`ℹ️ [preflight-manager] Repository already up-to-date for cached preflight`);
@@ -266,18 +276,19 @@ async function getOrCreatePreflight(
     }
 
     // Step 4: Create or update the preflight record
-    const preflightData = {
+    // Using generated Database types for full type safety
+    const preflightData: Database['public']['Tables']['preflights']['Insert'] = {
         repo_url: normalizedUrl,
         owner,
         repo,
         default_branch: freshData.defaultBranch,
-        repo_map: freshData.fileMap,
-        stats: freshData.stats,
-        fingerprint: freshData.fingerprint,
+        repo_map: freshData.fileMap as any, // Json type - Supabase uses Json for complex objects
+        stats: freshData.stats as any, // Json type
+        fingerprint: freshData.fingerprint as any, // Json type
         is_private: freshData.isPrivate,
         fetch_strategy: freshData.isPrivate ? 'authenticated' : 'public',
         github_account_id: githubAccountId,
-        installation_id: installationId,
+        installation_id: installationId || null,
         token_valid: true,
         user_id: userId,
         file_count: freshData.fileMap.length,
@@ -285,7 +296,7 @@ async function getOrCreatePreflight(
     };
 
     // Try to upsert (update if exists, insert if not)
-    let upsertQuery;
+    let upsertQuery: any;
 
     if (installationId) {
         // For GitHub App installations, use repo_url + installation_id as conflict target
@@ -396,7 +407,7 @@ async function getOrCreatePreflight(
 
     return {
         success: true,
-        preflight: newPreflight as unknown as PreflightRecord,
+        preflight: newPreflight as PreflightRecord,
         source: 'fresh'
     };
 }
@@ -417,9 +428,14 @@ async function invalidatePreflight(
 
     const normalizedUrl = `https://github.com/${parsed.owner}/${parsed.repo}`;
 
+    const updateData: Database['public']['Tables']['preflights']['Update'] = {
+        token_valid: false,
+        updated_at: new Date().toISOString()
+    };
+
     let query = supabase
         .from('preflights')
-        .update({ token_valid: false, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('repo_url', normalizedUrl);
 
     if (userId) {

@@ -19,6 +19,13 @@ import { createClient } from '@supabase/supabase-js';
 import { LoggerService } from '../_shared/services/LoggerService.ts';
 import { RuntimeMonitoringService, withPerformanceMonitoring } from '../_shared/services/RuntimeMonitoringService.ts';
 
+// Declare Deno global for Supabase Edge Functions
+declare const Deno: {
+    env: {
+        get(key: string): string | undefined;
+    };
+};
+
 // Declare EdgeRuntime global for Deno/Supabase Edge Functions
 declare const EdgeRuntime: {
     waitUntil: (promise: Promise<any>) => void;
@@ -231,6 +238,57 @@ serve(withPerformanceMonitoring(async (req) => {
                 { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
+
+        // CRITICAL: Force sync repository BEFORE every audit
+        // This ensures we always audit the latest code, not stale cached data
+        LoggerService.info('Syncing repository before audit', {
+            component: 'AuditJobSubmit',
+            preflightId,
+            owner: preflight.owner,
+            repo: preflight.repo
+        });
+
+        const { RepoStorageService } = await import('../_shared/services/RepoStorageService.ts');
+        const storageService = new RepoStorageService(supabase);
+
+        // Get default branch from preflight
+        const { data: preflightDetails } = await supabase
+            .from('preflights')
+            .select('default_branch')
+            .eq('id', preflightId)
+            .single();
+
+        const syncResult = await storageService.syncRepo(
+            preflightId,
+            preflight.owner,
+            preflight.repo,
+            preflightDetails?.default_branch || 'main'
+            // SECURITY: Token retrieved internally from github_account_id
+        );
+
+        if (!syncResult.synced && syncResult.error) {
+            // FAIL-FAST: Don't allow audit on stale data
+            LoggerService.error('Repository sync failed before audit', new Error(syncResult.error), {
+                component: 'AuditJobSubmit',
+                preflightId,
+                owner: preflight.owner,
+                repo: preflight.repo
+            });
+            return new Response(
+                JSON.stringify({
+                    error: 'Failed to sync repository with GitHub. Cannot audit stale data.',
+                    details: syncResult.error
+                }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        LoggerService.info('Repository synced successfully before audit', {
+            component: 'AuditJobSubmit',
+            preflightId,
+            changes: syncResult.changes,
+            filesUpdated: syncResult.changes
+        });
 
         // Insert job into queue (upsert to handle re-runs)
         // CRITICAL: Reset ALL state fields to allow re-runs to work properly

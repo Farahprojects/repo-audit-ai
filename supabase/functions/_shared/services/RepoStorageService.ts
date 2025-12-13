@@ -165,15 +165,16 @@ export class RepoStorageService {
                 return { success: false, fileCount: 0, archiveSize: 0, error: uploadError.message };
             }
 
-            // 6. Get latest commit SHA from GitHub
+            // 6. Get latest commit SHA from GitHub (CRITICAL for delta sync)
             let commitSha: string | undefined;
             try {
                 const githubClient = new GitHubAPIClient(githubToken);
                 const latestCommit = await githubClient.getLatestCommit(owner, repo, branch);
                 commitSha = latestCommit.sha;
             } catch (error) {
-                console.warn(`⚠️ Could not fetch commit SHA for ${repoName}:`, error);
-                // Continue without commit SHA - sync will handle this later
+                // FAIL-FAST: commit_sha is REQUIRED for proper delta sync
+                console.error(`❌ CRITICAL: Could not fetch commit SHA for ${repoName}:`, error);
+                throw new Error(`Failed to get commit SHA: ${error instanceof Error ? error.message : String(error)}`);
             }
 
             // 7. Store metadata in DB
