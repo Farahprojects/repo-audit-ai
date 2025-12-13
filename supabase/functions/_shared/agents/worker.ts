@@ -106,19 +106,18 @@ export async function runWorker(
     }
 
     // =========================================================================
-    // LOAD FILES FROM REPO ARCHIVE
-    // Agents have NO GitHub API access - all files come from the stored archive
+    // LOAD FILES FROM PRE-EXTRACTED ARCHIVE (Shared Workspace Pattern)
+    // Workers do NOT download or unzip - that happens ONCE in job processor
     // =========================================================================
-    const supabase = context.supabase;
 
-    if (!supabase) {
-        console.error(`🚨 Worker [${task.role}] has no supabase client - cannot fetch files!`);
+    if (!context.extractedFiles || !context.strFromU8) {
+        console.error(`🚨 Worker [${task.role}] has no pre-extracted files!`);
         return {
             result: {
                 taskId: task.id,
                 findings: {
-                    error: "NO_DATABASE_CLIENT",
-                    message: "Cannot fetch files without database access. Ensure supabase is passed in context.",
+                    error: "NO_EXTRACTED_FILES",
+                    message: "Files must be pre-extracted by job processor. This is a system error.",
                     analysis: null,
                     issues: []
                 },
@@ -128,94 +127,31 @@ export async function runWorker(
         };
     }
 
-    // Import fflate for unzip
-    const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
+    console.log(`📄 Worker [${task.role}] reading ${filesToFetch.length} files from shared workspace...`);
 
-    // Load the entire repo archive from Storage (avoid DB bloat)
-    // 1. Get storage path from DB
-    const { data: repoData, error: repoError } = await supabase
-        .from('repos')
-        .select('storage_path, file_index')
-        .eq('repo_id', context.preflight!.id)
-        .single();
-
-    if (repoError || !repoData?.storage_path) {
-        console.error(`🚨 Worker [${task.role}] could not find repo storage path!`);
-        return {
-            result: {
-                taskId: task.id,
-                findings: {
-                    error: "REPO_NOT_FOUND",
-                    message: "Repository metadata not found. Ensure preflight completed successfully.",
-                    analysis: null,
-                    issues: []
-                },
-                tokenUsage: 0
-            },
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-        };
-    }
-
-    // 2. Download from Supabase Storage
-    const { data: storageData, error: storageError } = await supabase.storage
-        .from('repo_archives')
-        .download(repoData.storage_path);
-
-    if (storageError || !storageData) {
-        console.error(`🚨 Worker [${task.role}] could not download repo archive from storage: ${repoData.storage_path}`, storageError);
-        return {
-            result: {
-                taskId: task.id,
-                findings: {
-                    error: "STORAGE_DOWNLOAD_FAILED",
-                    message: "Failed to download repository archive from object storage.",
-                    analysis: null,
-                    issues: []
-                },
-                tokenUsage: 0
-            },
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-        };
-    }
-
-    // 3. Unzip the archive
-    const arrayBuffer = await storageData.arrayBuffer();
-    const archiveData = new Uint8Array(arrayBuffer);
-    const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
-
-    console.log(`📦 Worker [${task.role}] loaded repo archive from storage, extracting ${filesToFetch.length} files...`);
-
-    // Extract each requested file
+    // Extract each requested file from the pre-loaded archive
     const fetchedContent: (string | null)[] = [];
     for (const f of filesToFetch) {
         try {
-            if (!unzipped[f.path]) {
+            if (!context.extractedFiles[f.path]) {
                 console.warn(`⚠️ File not in archive: ${f.path}`);
                 fetchedContent.push(null);
                 continue;
             }
 
-            const content = strFromU8(unzipped[f.path]!);
+            const content = context.strFromU8(context.extractedFiles[f.path]!);
             if (!content || content.trim().length === 0) {
                 console.warn(`⚠️ Empty content for ${f.path}`);
                 fetchedContent.push(null);
                 continue;
             }
 
-            console.log(`📄 Extracted ${f.path}`);
             fetchedContent.push(`--- ${f.path} ---\n${content}`);
         } catch (err) {
-            console.error(`🚨 Failed to extract ${f.path}:`, err);
+            console.error(`🚨 Failed to read ${f.path}:`, err);
             fetchedContent.push(null);
         }
     }
-
-    // Update last_accessed (fire and forget)
-    supabase
-        .from('repos')
-        .update({ last_accessed: new Date().toISOString() })
-        .eq('repo_id', context.preflight!.id)
-        .then(() => { });
 
     // Filter out failed fetches
     const successfulContent = fetchedContent.filter(Boolean) as string[];

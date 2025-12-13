@@ -348,6 +348,50 @@ async function processJob(
         const context: AuditContext = { ...baseContext, githubClient, supabase };
 
         // ============================================================
+        // PRE-LOAD: Download and extract archive ONCE for all workers
+        // ============================================================
+        const { unzipSync, strFromU8 } = await import('https://esm.sh/fflate@0.8.2');
+
+        // Get storage path from repos table
+        const { data: repoData, error: repoError } = await supabase
+            .from('repos')
+            .select('storage_path, file_index')
+            .eq('repo_id', preflight.id)
+            .single();
+
+        if (repoError || !repoData?.storage_path) {
+            throw new Error(`Repository archive not found for preflight ${preflight.id}`);
+        }
+
+        // Download archive from storage ONCE
+        const { data: storageData, error: storageError } = await supabase.storage
+            .from('repo_archives')
+            .download(repoData.storage_path);
+
+        if (storageError || !storageData) {
+            throw new Error(`Failed to download archive: ${storageError?.message || 'Unknown error'}`);
+        }
+
+        // Unzip ONCE into memory
+        const arrayBuffer = await storageData.arrayBuffer();
+        const archiveBytes = new Uint8Array(arrayBuffer);
+        const extractedFiles = unzipSync(archiveBytes) as Record<string, Uint8Array>;
+
+        LoggerService.info('Archive pre-loaded for all workers', {
+            component: 'AuditJobProcessor',
+            jobId: job.job_id,
+            fileCount: Object.keys(extractedFiles).length,
+            archiveSizeKB: Math.round(archiveBytes.length / 1024)
+        });
+
+        // Add extracted files to context for workers
+        const contextWithFiles: AuditContext = {
+            ...context,
+            extractedFiles,  // <-- NEW: Pass pre-extracted files
+            strFromU8        // <-- NEW: Pass utility function for string conversion
+        };
+
+        // ============================================================
         // PHASE 1: PLANNER (INLINE) - WITH RESUMABILITY
         // ============================================================
 
@@ -372,7 +416,7 @@ async function processJob(
             });
         } else {
             await updateProgress(15, 'Running planner - generating task breakdown...');
-            const execResult = await runPlanner(context, GEMINI_API_KEY, tierPrompt);
+            const execResult = await runPlanner(contextWithFiles, GEMINI_API_KEY, tierPrompt);
             plan = execResult.result;
             plannerUsage = execResult.usage;
             totalTokensUsed += plannerUsage?.totalTokens || 0;
@@ -527,7 +571,7 @@ async function processJob(
                 };
 
                 // Run worker inline (Blocker: This is the expensive LLM call)
-                const { result, usage } = await runWorker(context, workerTask, GEMINI_API_KEY);
+                const { result, usage } = await runWorker(contextWithFiles, workerTask, GEMINI_API_KEY);
 
                 taskProgress.status = 'completed';
                 taskProgress.completedAt = new Date().toISOString();

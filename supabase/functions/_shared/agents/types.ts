@@ -97,6 +97,12 @@ export interface AuditContext {
     // This is the ONLY source of file content for agents
     supabase?: any;
 
+    // Pre-extracted archive files (shared across workers)
+    extractedFiles?: Record<string, Uint8Array>;
+
+    // Utility for converting bytes to string
+    strFromU8?: (data: Uint8Array) => string;
+
     metadata?: any;
 }
 
