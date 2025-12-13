@@ -1,3 +1,7 @@
+// Re-export annotation types for convenience
+export type { FileAnnotation, AnnotationSummary, FileReference, AnnotatedFile, AnnotatedFileMap } from '../github/FileAnnotation.ts';
+import type { FileAnnotation, AnnotationSummary, FileReference } from '../github/FileAnnotation.ts';
+
 export interface FileNode {
     path: string;
     type: 'file' | 'directory';
@@ -5,6 +9,12 @@ export interface FileNode {
     content?: string;
     url?: string;
     language?: string;
+
+    // NEW: Observable file annotations
+    annotations?: FileAnnotation;
+
+    // NEW: Stable ID for worker assignment
+    id?: string;
 }
 
 /**
@@ -64,6 +74,12 @@ export interface PreflightData {
 
     // File count (cached for quick access)
     file_count: number;
+
+    // NEW: Annotation summary for brain context
+    annotationSummary?: AnnotationSummary;
+
+    // NEW: Full file index with stable IDs for worker assignment  
+    fileIndex?: FileReference[];
 }
 
 export interface AuditContext {

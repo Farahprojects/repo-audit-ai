@@ -2,6 +2,7 @@
 import { GitHubAPIClient } from '../_shared/github/GitHubAPIClient.ts';
 import { ComplexityAnalyzer } from '../_shared/github/ComplexityAnalyzer.ts';
 import { FileCacheManager } from '../_shared/github/FileCacheManager.ts';
+import { FileAnnotationAnalyzer } from '../_shared/github/FileAnnotationAnalyzer.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -218,7 +219,8 @@ export async function handlePreflightAction(client: GitHubAPIClient | any, owner
             client.getHeaders()
         );
 
-        // 7. Create filtered file map (same logic as handleTreeAction)
+        // 7. Create annotated file map with observable traits
+        // This replaces the old compressFileMap approach with signal-based annotations
         const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.rb', '.php', '.vue', '.svelte', '.css', '.scss', '.html', '.json', '.yaml', '.yml', '.md', '.txt', '.sql', '.sh', '.env.example'];
         const excludePatterns = ['node_modules/', 'dist/', 'build/', '.git/', 'vendor/', '__pycache__/', '.next/', 'coverage/', '.docz/', 'storybook-static/'];
 
@@ -231,23 +233,40 @@ export async function handlePreflightAction(client: GitHubAPIClient | any, owner
             return codeExtensions.includes(ext) || item.path.includes('Dockerfile') || item.path.includes('Makefile');
         });
 
-        // Only include path, size, and type - NO file content or GitHub API URLs
-        const rawFileMap = filteredTree.map((item: any) => ({
-            path: item.path,
-            size: item.size || 0,
-            type: 'file'
+        // Create annotated file map with:
+        // - display: representative high-signal files for brain context (limited count)
+        // - summary: aggregate annotation patterns for brain reasoning
+        // - fileIndex: full file list with IDs for worker assignment
+        const annotatedFileMap = FileAnnotationAnalyzer.createAnnotatedFileMap(
+            filteredTree.map((item: any) => ({
+                path: item.path,
+                size: item.size || 0,
+                type: 'blob'
+            })),
+            100 // Display limit - top 100 high-signal files
+        );
+
+        // For backward compatibility, also provide legacy fileMap format
+        // This can be removed once all consumers migrate to annotated format
+        const legacyFileMap = annotatedFileMap.display.map(f => ({
+            path: f.path,
+            size: f.size,
+            type: 'file',
+            id: f.id
         }));
-
-        // Compress the file map if there are too many files of the same type
-        const fileMap = compressFileMap(rawFileMap);
-
 
         // 8. Return combined response
         return new Response(
             JSON.stringify({
                 stats,
                 fingerprint,
-                fileMap
+                // NEW: Annotated file data
+                fileMap: legacyFileMap,  // Backward compatible
+                annotatedFileMap: {
+                    summary: annotatedFileMap.summary,
+                    display: annotatedFileMap.display,
+                    fileIndex: annotatedFileMap.fileIndex
+                }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

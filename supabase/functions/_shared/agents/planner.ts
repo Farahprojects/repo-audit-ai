@@ -1,5 +1,6 @@
 import { AuditContext, SwarmPlan, WorkerTask } from './types.ts';
 import { callGemini, GeminiUsage } from './utils.ts';
+import { FileAnnotationAnalyzer } from '../github/FileAnnotationAnalyzer.ts';
 
 const SYSTEM_PROMPT = `You are the CEO / PLANNER of a Code Audit Team.
 Your job is to read the Client's Audit Goal and the File Map.
@@ -83,23 +84,56 @@ export async function runPlanner(context: AuditContext, apiKey: string, tierProm
   // Build valid file set from preflight/context (single source of truth)
   const validFiles = new Set(context.files.map(f => f.path));
 
-  const fileList = context.files.map(f => f.path).join('\n');
-  const userPrompt = `PROJECT OVERVIEW:
-- Total files: ${context.files.length}
-- Worker capacity: 3-5 parallel workers available
-- File distribution: Distribute files EVENLY across workers
+  // Check if we have annotation data from preflight
+  const hasAnnotations = context.preflight?.annotationSummary;
+  const annotationSummary = context.preflight?.annotationSummary;
+  const fileIndex = context.preflight?.fileIndex;
 
-PROJECT FILE MAP (ONLY use these files - do not invent any others):
-${fileList}
+  // Build context prompt based on available data
+  let observableContext = '';
+  let fileListSection = '';
+
+  if (hasAnnotations && annotationSummary && fileIndex) {
+    // NEW: Use rich annotation context
+    observableContext = FileAnnotationAnalyzer.formatSummaryForPrompt(annotationSummary);
+
+    // Group file index by layer for smarter assignment
+    const byLayer: Record<string, string[]> = {};
+    for (const ref of fileIndex) {
+      if (!byLayer[ref.layer]) byLayer[ref.layer] = [];
+      byLayer[ref.layer].push(`${ref.id}:${ref.path}`);
+    }
+
+    fileListSection = Object.entries(byLayer)
+      .map(([layer, files]) => `[${layer.toUpperCase()}]\n${files.join('\n')}`)
+      .join('\n\n');
+  } else {
+    // FALLBACK: Legacy flat file list
+    observableContext = `Total files: ${context.files.length}`;
+    fileListSection = context.files.map(f => f.path).join('\n');
+  }
+
+  const userPrompt = `PROJECT OVERVIEW:
+${observableContext}
+
+Worker capacity: 3-5 parallel workers available
+File distribution: Distribute files EVENLY across workers, but GROUP by layer/functionality
+
+FILE MAP (ONLY use these files - do not invent any others):
+${fileListSection}
 
 CLIENT AUDIT GOAL & REQUIREMENTS:
 ${tierPrompt}
 
 PLANNING REQUIREMENTS:
 1. Extract the specific checklist items, rules, and focus areas from the Audit Goal above
-2. Create 3-5 tasks (one per worker) with EVEN file distribution
+2. Create 3-5 tasks (one per worker) with intelligent distribution:
+   - Security-focused tasks get BOUNDARY and AUTH-touching files
+   - Database tasks get DB-touching files
+   - Core logic tasks get CORE layer files
+   - Utility/shared code tasks get UTILITY layer files
 3. Each task must include the extracted rules/checklist items in its instruction
-4. Group related files logically by functionality (auth, database, frontend, etc.)
+4. Prioritize high-signal files (entry points, auth, secrets, database) for security audits
 5. Provide detailed, actionable instructions for each worker
 
 Create a comprehensive task breakdown that ensures complete audit coverage with no gaps or overlaps.`;
