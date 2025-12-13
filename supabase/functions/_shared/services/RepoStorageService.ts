@@ -259,7 +259,20 @@ export class RepoStorageService {
 
             // Download archive
             const archiveData = await this.fetchArchiveFromStorage(repoMeta.storage_path);
-            if (!archiveData) return null;
+            if (!archiveData) {
+                console.warn(`⚠️ Failed to download archive for repo ${repoId} from ${repoMeta.storage_path}`);
+                ErrorTrackingService.trackError(
+                    new Error(`Failed to download repository archive: ${repoId}`),
+                    {
+                        component: 'RepoStorageService',
+                        operation: 'getRepoFile',
+                        repoId,
+                        storagePath: repoMeta.storage_path,
+                        filePath
+                    }
+                );
+                return null;
+            }
 
             // Unzip
             const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
@@ -301,11 +314,35 @@ export class RepoStorageService {
                 .eq('repo_id', repoId)
                 .single();
 
-            if (error || !repoMeta?.storage_path) return result;
+            if (error || !repoMeta?.storage_path) {
+                console.warn(`⚠️ Repo metadata not found for ${repoId}:`, error?.message || 'No storage path');
+                ErrorTrackingService.trackError(
+                    new Error(`Repository metadata not found: ${repoId}`),
+                    {
+                        component: 'RepoStorageService',
+                        operation: 'getRepoFiles',
+                        repoId,
+                        error: error?.message
+                    }
+                );
+                return result;
+            }
 
             // Download archive
             const archiveData = await this.fetchArchiveFromStorage(repoMeta.storage_path);
-            if (!archiveData) return result;
+            if (!archiveData) {
+                console.warn(`⚠️ Failed to download archive for repo ${repoId} from ${repoMeta.storage_path}`);
+                ErrorTrackingService.trackError(
+                    new Error(`Failed to download repository archive: ${repoId}`),
+                    {
+                        component: 'RepoStorageService',
+                        operation: 'getRepoFiles',
+                        repoId,
+                        storagePath: repoMeta.storage_path
+                    }
+                );
+                return result;
+            }
 
             // Unzip
             const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
@@ -320,7 +357,16 @@ export class RepoStorageService {
             return result;
 
         } catch (err) {
-            console.error(`❌ Error retrieving files batch:`, err);
+            console.error(`❌ Error retrieving files batch for repo ${repoId}:`, err);
+            ErrorTrackingService.trackError(
+                err instanceof Error ? err : new Error(String(err)),
+                {
+                    component: 'RepoStorageService',
+                    operation: 'getRepoFiles',
+                    repoId,
+                    requestedFiles: filePaths.length
+                }
+            );
             return result;
         }
     }
@@ -341,11 +387,37 @@ export class RepoStorageService {
                 .eq('repo_id', repoId)
                 .single();
 
-            if (error || !repoMeta?.storage_path) return false;
+            if (error || !repoMeta?.storage_path) {
+                console.warn(`⚠️ Repo metadata not found for ${repoId}:`, error?.message || 'No storage path');
+                ErrorTrackingService.trackError(
+                    new Error(`Repository metadata not found: ${repoId}`),
+                    {
+                        component: 'RepoStorageService',
+                        operation: 'updateRepoFile',
+                        repoId,
+                        filePath,
+                        error: error?.message
+                    }
+                );
+                return false;
+            }
 
             // Download
             const archiveData = await this.fetchArchiveFromStorage(repoMeta.storage_path);
-            if (!archiveData) return false;
+            if (!archiveData) {
+                console.warn(`⚠️ Failed to download archive for repo ${repoId} from ${repoMeta.storage_path}`);
+                ErrorTrackingService.trackError(
+                    new Error(`Failed to download repository archive: ${repoId}`),
+                    {
+                        component: 'RepoStorageService',
+                        operation: 'updateRepoFile',
+                        repoId,
+                        filePath,
+                        storagePath: repoMeta.storage_path
+                    }
+                );
+                return false;
+            }
 
             // Unzip
             const unzipped = unzipSync(archiveData) as Record<string, Uint8Array>;
