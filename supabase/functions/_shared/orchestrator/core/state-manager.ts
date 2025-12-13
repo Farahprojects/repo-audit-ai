@@ -14,6 +14,7 @@ import {
     ReasoningCheckpoint,
     CompressedContext
 } from './types.ts';
+import { ErrorTrackingService } from '../../services/ErrorTrackingService.ts';
 
 export interface StateManagerConfig {
     supabase: any; // SupabaseClient
@@ -68,10 +69,26 @@ export class StateManager {
 
         if (error) {
             console.error('[StateManager] Failed to create session:', error);
+            ErrorTrackingService.trackError(
+                new Error(`Session persistence failed: ${error.message}`),
+                {
+                    component: 'StateManager',
+                    operation: 'createSession',
+                    sessionId: this.sessionId,
+                    userId: userId,
+                    taskDescription: taskDescription?.substring(0, 100),
+                    allowInMemoryFallback: this.allowInMemoryFallback
+                }
+            );
+
             if (!this.allowInMemoryFallback) {
                 throw new Error(`Failed to persist session to database: ${error.message}`);
             }
-            // Continue in memory only if explicitly allowed
+            // WARNING: Continuing with in-memory fallback - session will not be persisted!
+            console.warn('[StateManager] ⚠️ Using in-memory fallback for session creation - data will not be persisted to database');
+            // Add persistence failure metadata to the session
+            (session as any)._persistenceFailed = true;
+            (session as any)._persistenceError = error.message;
         }
 
         return session;
@@ -125,6 +142,18 @@ export class StateManager {
 
         if (error) {
             console.error('[StateManager] Failed to update session status:', error);
+            ErrorTrackingService.trackError(
+                new Error(`Session status update failed: ${error.message}`),
+                {
+                    component: 'StateManager',
+                    operation: 'updateSessionStatus',
+                    sessionId: this.sessionId,
+                    newStatus: status,
+                    currentStep: this.stepCounter,
+                    totalTokens: this.totalTokens
+                }
+            );
+            console.warn('[StateManager] ⚠️ Session status update failed - session may appear stale in database');
         }
     }
 
@@ -163,10 +192,27 @@ export class StateManager {
 
         if (error) {
             console.error('[StateManager] Failed to save step:', error);
+            ErrorTrackingService.trackError(
+                new Error(`Step persistence failed: ${error.message}`),
+                {
+                    component: 'StateManager',
+                    operation: 'saveStep',
+                    sessionId: this.sessionId,
+                    stepNumber: this.stepCounter,
+                    toolCalled: step.toolCalled,
+                    tokenUsage: step.tokenUsage,
+                    allowInMemoryFallback: this.allowInMemoryFallback
+                }
+            );
+
             if (!this.allowInMemoryFallback) {
                 throw new Error(`Failed to persist step to database: ${error.message}`);
             }
-            // Return the step anyway - we have it in memory only if explicitly allowed
+            // WARNING: Continuing with in-memory fallback - step will not be persisted!
+            console.warn('[StateManager] ⚠️ Using in-memory fallback for step persistence - data will not be persisted to database');
+            // Add persistence failure metadata to the step
+            (fullStep as any)._persistenceFailed = true;
+            (fullStep as any)._persistenceError = error.message;
         }
 
         fullStep.id = data?.id;
@@ -181,7 +227,20 @@ export class StateManager {
             })
             .eq('id', this.sessionId)
             .then(() => { })
-            .catch((e: Error) => console.error('[StateManager] Failed to update session totals:', e));
+            .catch((e: Error) => {
+                console.error('[StateManager] Failed to update session totals:', e);
+                ErrorTrackingService.trackError(
+                    new Error(`Session totals update failed: ${e.message}`),
+                    {
+                        component: 'StateManager',
+                        operation: 'updateSessionTotals',
+                        sessionId: this.sessionId,
+                        currentStep: this.stepCounter,
+                        totalTokens: this.totalTokens
+                    }
+                );
+                console.warn('[StateManager] ⚠️ Session totals may be out of sync with database');
+            });
 
         return fullStep;
     }
@@ -204,6 +263,17 @@ export class StateManager {
 
         if (error) {
             console.error('[StateManager] Failed to get history:', error);
+            ErrorTrackingService.trackError(
+                new Error(`Failed to retrieve reasoning history: ${error.message}`),
+                {
+                    component: 'StateManager',
+                    operation: 'getHistory',
+                    sessionId: this.sessionId,
+                    requestedLimit: limit
+                }
+            );
+            // Return empty array but log the error for monitoring
+            console.warn('[StateManager] ⚠️ Returning empty history due to database error - this may indicate data loss');
             return [];
         }
 
@@ -233,6 +303,17 @@ export class StateManager {
 
         if (error) {
             console.error('[StateManager] Failed to get recent steps:', error);
+            ErrorTrackingService.trackError(
+                new Error(`Failed to retrieve recent steps: ${error.message}`),
+                {
+                    component: 'StateManager',
+                    operation: 'getRecentSteps',
+                    sessionId: this.sessionId,
+                    requestedCount: count
+                }
+            );
+            // Return empty array but log the error for monitoring
+            console.warn('[StateManager] ⚠️ Returning empty recent steps due to database error - this may indicate data loss');
             return [];
         }
 
@@ -278,6 +359,18 @@ export class StateManager {
 
         if (error) {
             console.error('[StateManager] Failed to save checkpoint:', error);
+            ErrorTrackingService.trackError(
+                new Error(`Checkpoint save failed: ${error.message}`),
+                {
+                    component: 'StateManager',
+                    operation: 'saveCheckpoint',
+                    sessionId: this.sessionId,
+                    stepNumber: checkpoint.stepNumber,
+                    hasContextSnapshot: !!checkpoint.contextSnapshot,
+                    recoveryStrategiesCount: checkpoint.recoveryStrategies?.length || 0
+                }
+            );
+            console.warn('[StateManager] ⚠️ Checkpoint save failed - recovery may not be possible after failures');
         }
     }
 
