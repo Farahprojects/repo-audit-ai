@@ -56,19 +56,103 @@ export class RepoStorageService {
     }
 
     /**
+     * Get or create repo - the ONLY entry point for repo storage
+     * Guarantees single canonical copy per owner/repo
+     * PHASE 6: Duplicate download guard
+     */
+    async getOrCreateRepo(
+        owner: string,
+        repo: string,
+        branch: string,
+        token?: string
+    ): Promise<{ repoId: string; isNew: boolean; error?: string }> {
+        const ownerRepo = `${owner}/${repo}`;
+
+        // 1. Check if repo exists
+        const { data: existing } = await this.supabase
+            .from('repos')
+            .select('id, commit_sha')
+            .eq('owner_repo', ownerRepo)
+            .single();
+
+        if (existing?.id) {
+            // 2. Exists - sync it
+            const syncResult = await this.syncRepo(owner, repo, branch, token);
+            return { repoId: existing.id, isNew: false, error: syncResult.error };
+        }
+
+        // 3. Doesn't exist - create it
+        const result = await this.downloadAndStoreRepo(
+            crypto.randomUUID(),
+            owner, repo, branch, token
+        );
+
+        // 4. Get the created repo ID
+        const { data: newRepo } = await this.supabase
+            .from('repos')
+            .select('id')
+            .eq('owner_repo', ownerRepo)
+            .single();
+
+        return {
+            repoId: newRepo?.id || '',
+            isNew: true,
+            error: result.error
+        };
+    }
+
+
+    /**
      * Download repo as zipball from GitHub and upload to Supabase Storage
      * Stores metadata and file index in Postgres
+     * CRITICAL: Uses owner/repo as stable key, NOT preflight_id
      */
     async downloadAndStoreRepo(
-        repoId: string,
+        preflightId: string,  // Keep for backwards compat
         owner: string,
         repo: string,
         branch: string,
         githubToken?: string
     ): Promise<{ success: boolean; fileCount: number; archiveSize: number; error?: string }> {
-        const repoName = `${owner}/${repo}`;
+        const ownerRepo = `${owner}/${repo}`;
+        const stableRepoKey = `${owner}_${repo}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+
+        // CRITICAL: Check if repo already exists with this canonical key
+        const { data: existingRepo } = await this.supabase
+            .from('repos')
+            .select('id, commit_sha, storage_path')
+            .eq('owner_repo', ownerRepo)
+            .single();
+
+        if (existingRepo) {
+            // Repo already exists - use syncRepo instead
+            console.log(`📦 Repo ${ownerRepo} already in storage, syncing instead of re-downloading...`);
+            const syncResult = await this.syncRepo(owner, repo, branch, githubToken);
+
+            // Convert syncRepo response to downloadAndStoreRepo response format
+            if (syncResult.error) {
+                return { success: false, fileCount: 0, archiveSize: 0, error: syncResult.error };
+            }
+
+            // Get file count from existing repo
+            const { data: repoData } = await this.supabase
+                .from('repos')
+                .select('file_index, archive_size')
+                .eq('owner_repo', ownerRepo)
+                .single();
+
+            const fileCount = repoData?.file_index ? Object.keys(repoData.file_index).length : 0;
+            const archiveSize = repoData?.archive_size || 0;
+
+            return {
+                success: true,
+                fileCount,
+                archiveSize
+            };
+        }
+
         const startTime = Date.now();
-        console.log(`📦 Downloading zipball for ${repoName}@${branch}...`);
+        console.log(`📦 Downloading zipball for ${ownerRepo}@${branch}...`);
 
         try {
             // 1. Download zipball from GitHub
@@ -92,7 +176,7 @@ export class RepoStorageService {
                         component: 'RepoStorageService',
                         operation: 'downloadRepo',
                         statusCode: response.status,
-                        repoId
+                        ownerRepo
                     }
                 );
                 return {
@@ -151,8 +235,8 @@ export class RepoStorageService {
             const archiveHash = hashContent(recompressed);
             console.log(`🗜️ Re-compressed: ${(recompressed.length / 1024).toFixed(1)}KB`);
 
-            // 5. Upload to Supabase Storage
-            const storagePath = `${repoId}/archive.zip`;
+            // 5. Upload to Supabase Storage using stable key (NOT preflight_id!)
+            const storagePath = `${stableRepoKey}/archive.zip`;
             const { error: uploadError } = await this.supabase.storage
                 .from(this.BUCKET_NAME)
                 .upload(storagePath, recompressed, {
@@ -173,25 +257,26 @@ export class RepoStorageService {
                 commitSha = latestCommit.sha;
             } catch (error) {
                 // FAIL-FAST: commit_sha is REQUIRED for proper delta sync
-                console.error(`❌ CRITICAL: Could not fetch commit SHA for ${repoName}:`, error);
+                console.error(`❌ CRITICAL: Could not fetch commit SHA for ${ownerRepo}:`, error);
                 throw new Error(`Failed to get commit SHA: ${error instanceof Error ? error.message : String(error)}`);
             }
 
-            // 7. Store metadata in DB
+            // 7. Store metadata in DB with owner_repo as STABLE CANONICAL KEY
             const { error: dbError } = await this.supabase
                 .from('repos')
                 .upsert({
-                    repo_id: repoId,
-                    repo_name: repoName,
+                    repo_id: crypto.randomUUID(),  // Internal ID
+                    owner_repo: ownerRepo,         // STABLE CANONICAL KEY
+                    repo_name: ownerRepo,
                     branch: branch,
-                    storage_path: storagePath, // Storing PATH, not BLOB
+                    storage_path: storagePath,
                     archive_hash: archiveHash,
                     archive_size: recompressed.length,
                     file_index: fileIndex,
                     commit_sha: commitSha,
                     last_updated: new Date().toISOString()
                 }, {
-                    onConflict: 'repo_id'
+                    onConflict: 'owner_repo'       // Upsert by stable key
                 });
 
             if (dbError) {
@@ -200,7 +285,7 @@ export class RepoStorageService {
                 return { success: false, fileCount: 0, archiveSize: 0, error: dbError.message };
             }
 
-            console.log(`✅ Stored ${repoName}: ${fileCount} files in Storage (${storagePath}) in ${Date.now() - startTime}ms`);
+            console.log(`✅ Stored ${ownerRepo}: ${fileCount} files in Storage (${storagePath}) in ${Date.now() - startTime}ms`);
 
             return {
                 success: true,
@@ -593,22 +678,31 @@ export class RepoStorageService {
     /**
      * Sync repository with latest changes from GitHub
      * Only downloads and applies changes since last sync
+     * CRITICAL: Looks up by owner/repo (stable key), not repo_id
      */
-    async syncRepo(repoId: string, owner: string, repo: string, branch: string, token?: string): Promise<{
+    async syncRepo(owner: string, repo: string, branch: string, token?: string): Promise<{
         synced: boolean;
         changes: number;
         error?: string;
     }> {
+        const ownerRepo = `${owner}/${repo}`;
+
         try {
-            // 1. Get current stored commit_sha from repos table
+            // 1. Look up by STABLE KEY (owner/repo), not repo_id
             const { data: repoData, error: repoError } = await this.supabase
                 .from('repos')
-                .select('commit_sha')
-                .eq('repo_id', repoId)
+                .select('id, commit_sha, storage_path')
+                .eq('owner_repo', ownerRepo)
                 .single();
 
-            if (repoError) {
-                throw new Error(`Failed to get repo data: ${repoError.message}`);
+            if (repoError || !repoData) {
+                // Repo doesn't exist - need full download
+                console.log(`📦 Repo ${ownerRepo} not found in storage, triggering full download...`);
+                const result = await this.downloadAndStoreRepo(
+                    crypto.randomUUID(),  // Generate new internal ID
+                    owner, repo, branch, token
+                );
+                return { synced: result.success, changes: result.fileCount, error: result.error };
             }
 
             const storedCommitSha = repoData?.commit_sha;
@@ -616,8 +710,8 @@ export class RepoStorageService {
             // 2. If no stored commit SHA, we need a full re-download
             // This handles repos downloaded before SHA tracking was added
             if (!storedCommitSha) {
-                console.log(`⚠️ No stored commit SHA for ${repoId}, triggering full re-download...`);
-                const result = await this.downloadAndStoreRepo(repoId, owner, repo, branch, token);
+                console.log(`⚠️ No stored commit SHA for ${ownerRepo}, triggering full re-download...`);
+                const result = await this.downloadAndStoreRepo(repoData.id, owner, repo, branch, token);
                 return {
                     synced: result.success,
                     changes: result.fileCount,
@@ -643,7 +737,7 @@ export class RepoStorageService {
                 await this.supabase
                     .from('repos')
                     .update({ commit_sha: latestSha })
-                    .eq('repo_id', repoId);
+                    .eq('id', repoData.id);
                 return { synced: true, changes: 0 };
             }
 
@@ -676,7 +770,7 @@ export class RepoStorageService {
                             {
                                 component: 'RepoStorageService',
                                 operation: 'syncRepo',
-                                repoId,
+                                ownerRepo,
                                 filename,
                                 phase: 'file_fetch'
                             }
@@ -699,7 +793,7 @@ export class RepoStorageService {
             }
 
             // 6. Apply all changes in batch
-            const success = await this.patchRepoFiles(repoId, changes);
+            const success = await this.patchRepoFiles(repoData.id, changes);
 
             if (!success) {
                 throw new Error('Failed to apply changes to repository archive');
@@ -712,13 +806,13 @@ export class RepoStorageService {
                     commit_sha: latestSha,
                     updated_at: new Date().toISOString()
                 })
-                .eq('repo_id', repoId);
+                .eq('id', repoData.id);
 
             if (updateError) {
                 throw updateError;
             }
 
-            console.log(`✅ Synced ${repoId}: ${changes.length} changes applied, commit_sha updated to ${latestSha}`);
+            console.log(`✅ Synced ${ownerRepo}: ${changes.length} changes applied, commit_sha updated to ${latestSha}`);
             return { synced: true, changes: changes.length };
 
         } catch (error) {
@@ -726,7 +820,7 @@ export class RepoStorageService {
             ErrorTrackingService.trackError(error as Error, {
                 component: 'RepoStorageService',
                 function: 'syncRepo',
-                repoId,
+                ownerRepo,
                 owner,
                 repo,
                 branch

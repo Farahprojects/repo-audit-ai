@@ -219,7 +219,6 @@ async function getOrCreatePreflight(
 
                 const storageService = new RepoStorageService(supabase);
                 const syncResult = await storageService.syncRepo(
-                    existing.id,
                     owner,
                     repo,
                     existing.default_branch
@@ -370,7 +369,6 @@ async function getOrCreatePreflight(
             console.log(`🔄 [preflight-manager] Syncing existing repo archive for ${owner}/${repo}...`);
 
             const syncResult = await storageService.syncRepo(
-                (newPreflight as PreflightRecord).id,
                 owner,
                 repo,
                 freshData.defaultBranch

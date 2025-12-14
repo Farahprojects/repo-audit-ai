@@ -1,4 +1,5 @@
 -- Allow users to read their own audit chunks via the audit_complete_data relationship
+DROP POLICY IF EXISTS "Users can read own audit chunks" ON audit_results_chunks;
 CREATE POLICY "Users can read own audit chunks" ON audit_results_chunks
   FOR SELECT USING (
     EXISTS (

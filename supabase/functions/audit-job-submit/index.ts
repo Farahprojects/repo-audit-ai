@@ -259,8 +259,7 @@ serve(withPerformanceMonitoring(async (req) => {
             .single();
 
         const syncResult = await storageService.syncRepo(
-            preflightId,
-            preflight.owner,
+            preflight.owner,       // Just owner/repo - stable key used internally
             preflight.repo,
             preflightDetails?.default_branch || 'main'
             // SECURITY: Token retrieved internally from github_account_id
