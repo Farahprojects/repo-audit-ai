@@ -259,6 +259,50 @@ export type Database = {
           },
         ]
       }
+      commits: {
+        Row: {
+          author: string | null
+          author_email: string | null
+          branch: string
+          commit_sha: string
+          committed_at: string | null
+          id: string
+          imported_at: string | null
+          message: string | null
+          repo_id: string
+        }
+        Insert: {
+          author?: string | null
+          author_email?: string | null
+          branch: string
+          commit_sha: string
+          committed_at?: string | null
+          id?: string
+          imported_at?: string | null
+          message?: string | null
+          repo_id: string
+        }
+        Update: {
+          author?: string | null
+          author_email?: string | null
+          branch?: string
+          commit_sha?: string
+          committed_at?: string | null
+          id?: string
+          imported_at?: string | null
+          message?: string | null
+          repo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commits_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: false
+            referencedRelation: "preflights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       domain_slugs: {
         Row: {
           admin: boolean | null
@@ -516,6 +560,7 @@ export type Database = {
           fingerprint: Json | null
           github_account_id: string | null
           id: string
+          installation_id: number | null
           is_private: boolean
           owner: string
           repo: string
@@ -536,6 +581,7 @@ export type Database = {
           fingerprint?: Json | null
           github_account_id?: string | null
           id?: string
+          installation_id?: number | null
           is_private?: boolean
           owner: string
           repo: string
@@ -556,6 +602,7 @@ export type Database = {
           fingerprint?: Json | null
           github_account_id?: string | null
           id?: string
+          installation_id?: number | null
           is_private?: boolean
           owner?: string
           repo?: string
@@ -611,6 +658,7 @@ export type Database = {
           archive_hash: string
           archive_size: number
           branch: string
+          commit_sha: string | null
           created_at: string | null
           file_index: Json
           id: string
@@ -624,6 +672,7 @@ export type Database = {
           archive_hash: string
           archive_size?: number
           branch?: string
+          commit_sha?: string | null
           created_at?: string | null
           file_index?: Json
           id?: string
@@ -637,6 +686,7 @@ export type Database = {
           archive_hash?: string
           archive_size?: number
           branch?: string
+          commit_sha?: string | null
           created_at?: string | null
           file_index?: Json
           id?: string
@@ -651,6 +701,62 @@ export type Database = {
             foreignKeyName: "repos_repo_id_fkey"
             columns: ["repo_id"]
             isOneToOne: true
+            referencedRelation: "preflights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repository_imports: {
+        Row: {
+          branch: string
+          commit_sha: string
+          completed_at: string | null
+          created_at: string | null
+          errors: Json | null
+          file_count: number | null
+          id: string
+          repo_id: string
+          started_at: string | null
+          status: string
+          success: boolean | null
+          total_size_bytes: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          branch: string
+          commit_sha: string
+          completed_at?: string | null
+          created_at?: string | null
+          errors?: Json | null
+          file_count?: number | null
+          id?: string
+          repo_id: string
+          started_at?: string | null
+          status?: string
+          success?: boolean | null
+          total_size_bytes?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          branch?: string
+          commit_sha?: string
+          completed_at?: string | null
+          created_at?: string | null
+          errors?: Json | null
+          file_count?: number | null
+          id?: string
+          repo_id?: string
+          started_at?: string | null
+          status?: string
+          success?: boolean | null
+          total_size_bytes?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repository_imports_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: false
             referencedRelation: "preflights"
             referencedColumns: ["id"]
           },
@@ -775,6 +881,16 @@ export type Database = {
         Args: { p_job_id: string; p_output_data: Json }
         Returns: undefined
       }
+      complete_repository_import: {
+        Args: {
+          p_errors?: Json
+          p_file_count?: number
+          p_import_id: string
+          p_success: boolean
+          p_total_size_bytes?: number
+        }
+        Returns: undefined
+      }
       fail_audit_job: {
         Args: { p_error: string; p_error_stack?: string; p_job_id: string }
         Returns: undefined
@@ -805,6 +921,10 @@ export type Database = {
       reconstruct_audit_results: { Args: { p_audit_id: string }; Returns: Json }
       recover_stale_audit_jobs: { Args: never; Returns: number }
       reset_stuck_audit_jobs: { Args: never; Returns: number }
+      start_repository_import: {
+        Args: { p_branch: string; p_commit_sha: string; p_repo_id: string }
+        Returns: string
+      }
       touch_repo: { Args: { p_repo_id: string }; Returns: undefined }
       touch_repo_file: { Args: { file_id: string }; Returns: undefined }
       trigger_audit_job_processing: { Args: never; Returns: number }

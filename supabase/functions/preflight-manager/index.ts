@@ -346,7 +346,7 @@ async function getOrCreatePreflight(
                 id: 'ephemeral-' + Date.now(),
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
-            } as PreflightRecord,
+            } as unknown as PreflightRecord,
             source: 'fresh'
         };
     }
