@@ -10,6 +10,7 @@
 import { unzipSync, zipSync, strToU8, strFromU8 } from 'https://esm.sh/fflate@0.8.2';
 import { ErrorTrackingService } from './ErrorTrackingService.ts';
 import { GitHubAPIClient } from '../github/GitHubAPIClient.ts';
+import { GitHubAuthenticator } from '../github/GitHubAuthenticator.ts';
 
 export interface FileIndexEntry {
     size: number;
@@ -106,6 +107,7 @@ export class RepoStorageService {
      * Download repo as zipball from GitHub and upload to Supabase Storage
      * Stores metadata and file index in Postgres
      * CRITICAL: Uses owner/repo as stable key, NOT preflight_id
+     * SECURITY: Retrieves GitHub token internally from preflights table
      */
     async downloadAndStoreRepo(
         preflightId: string,  // Keep for backwards compat
@@ -117,6 +119,30 @@ export class RepoStorageService {
         const ownerRepo = `${owner}/${repo}`;
         const stableRepoKey = `${owner}_${repo}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
+        // SECURITY: Retrieve GitHub token internally if not provided
+        let effectiveToken = githubToken;
+        if (!effectiveToken) {
+            const { data: preflightData } = await this.supabase
+                .from('preflights')
+                .select('github_account_id, is_private')
+                .eq('owner', owner)
+                .eq('repo', repo)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (preflightData?.is_private && preflightData?.github_account_id) {
+                const authenticator = GitHubAuthenticator.getInstance();
+                effectiveToken = await authenticator.getTokenByAccountId(preflightData.github_account_id) || undefined;
+
+                if (!effectiveToken) {
+                    console.warn(`⚠️ Failed to retrieve GitHub token for private repo ${ownerRepo}`);
+                } else {
+                    console.log(`🔐 Retrieved GitHub token for private repo ${ownerRepo}`);
+                }
+            }
+        }
+
         // CRITICAL: Check if repo already exists with this canonical key
         const { data: existingRepo } = await this.supabase
             .from('repos')
@@ -127,7 +153,7 @@ export class RepoStorageService {
         if (existingRepo) {
             // Repo already exists - use syncRepo instead
             console.log(`📦 Repo ${ownerRepo} already in storage, syncing instead of re-downloading...`);
-            const syncResult = await this.syncRepo(owner, repo, branch, githubToken);
+            const syncResult = await this.syncRepo(owner, repo, branch, effectiveToken);
 
             // Convert syncRepo response to downloadAndStoreRepo response format
             if (syncResult.error) {
@@ -161,8 +187,8 @@ export class RepoStorageService {
                 'Accept': 'application/vnd.github+json',
                 'User-Agent': 'RepoAudit'
             };
-            if (githubToken) {
-                headers['Authorization'] = `Bearer ${githubToken}`;
+            if (effectiveToken) {
+                headers['Authorization'] = `Bearer ${effectiveToken}`;
             }
 
             const response = await fetch(zipUrl, { headers });
@@ -252,9 +278,10 @@ export class RepoStorageService {
             // 6. Get latest commit SHA from GitHub (CRITICAL for delta sync)
             let commitSha: string | undefined;
             try {
-                const githubClient = new GitHubAPIClient(githubToken);
+                const githubClient = new GitHubAPIClient(effectiveToken);
                 const latestCommit = await githubClient.getLatestCommit(owner, repo, branch);
                 commitSha = latestCommit.sha;
+                console.log(`📍 Stored commit SHA for ${ownerRepo}: ${commitSha.substring(0, 7)}`);
             } catch (error) {
                 // FAIL-FAST: commit_sha is REQUIRED for proper delta sync
                 console.error(`❌ CRITICAL: Could not fetch commit SHA for ${ownerRepo}:`, error);
@@ -679,6 +706,7 @@ export class RepoStorageService {
      * Sync repository with latest changes from GitHub
      * Only downloads and applies changes since last sync
      * CRITICAL: Looks up by owner/repo (stable key), not repo_id
+     * SECURITY: Retrieves GitHub token internally from preflights table
      */
     async syncRepo(owner: string, repo: string, branch: string, token?: string): Promise<{
         synced: boolean;
@@ -688,6 +716,32 @@ export class RepoStorageService {
         const ownerRepo = `${owner}/${repo}`;
 
         try {
+            // 0. SECURITY: Retrieve GitHub token internally if not provided
+            // This ensures private repos can be synced without exposing tokens
+            let effectiveToken = token;
+            if (!effectiveToken) {
+                // Look up github_account_id from preflights table
+                const { data: preflightData } = await this.supabase
+                    .from('preflights')
+                    .select('github_account_id, is_private')
+                    .eq('owner', owner)
+                    .eq('repo', repo)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (preflightData?.is_private && preflightData?.github_account_id) {
+                    const authenticator = GitHubAuthenticator.getInstance();
+                    effectiveToken = await authenticator.getTokenByAccountId(preflightData.github_account_id) || undefined;
+
+                    if (!effectiveToken) {
+                        console.warn(`⚠️ Failed to retrieve GitHub token for private repo ${ownerRepo}`);
+                    } else {
+                        console.log(`🔐 Retrieved GitHub token for private repo ${ownerRepo}`);
+                    }
+                }
+            }
+
             // 1. Look up by STABLE KEY (owner/repo), not repo_id
             const { data: repoData, error: repoError } = await this.supabase
                 .from('repos')
@@ -700,7 +754,7 @@ export class RepoStorageService {
                 console.log(`📦 Repo ${ownerRepo} not found in storage, triggering full download...`);
                 const result = await this.downloadAndStoreRepo(
                     crypto.randomUUID(),  // Generate new internal ID
-                    owner, repo, branch, token
+                    owner, repo, branch, effectiveToken
                 );
                 return { synced: result.success, changes: result.fileCount, error: result.error };
             }
@@ -711,7 +765,7 @@ export class RepoStorageService {
             // This handles repos downloaded before SHA tracking was added
             if (!storedCommitSha) {
                 console.log(`⚠️ No stored commit SHA for ${ownerRepo}, triggering full re-download...`);
-                const result = await this.downloadAndStoreRepo(repoData.id, owner, repo, branch, token);
+                const result = await this.downloadAndStoreRepo(repoData.id, owner, repo, branch, effectiveToken);
                 return {
                     synced: result.success,
                     changes: result.fileCount,
@@ -720,14 +774,17 @@ export class RepoStorageService {
             }
 
             // 3. Get latest HEAD sha from GitHub
-            const githubClient = new GitHubAPIClient(token);
+            const githubClient = new GitHubAPIClient(effectiveToken);
             const latestCommit = await githubClient.getLatestCommit(owner, repo, branch);
             const latestSha = latestCommit.sha;
 
             // 4. If same → return early (no changes)
             if (storedCommitSha === latestSha) {
+                console.log(`ℹ️ Repo ${ownerRepo} is already up-to-date (SHA: ${latestSha})`);
                 return { synced: false, changes: 0 };
             }
+
+            console.log(`🔄 Syncing ${ownerRepo}: ${storedCommitSha.substring(0, 7)} → ${latestSha.substring(0, 7)}`);
 
             // 5. If different → call GitHub Compare API
             const comparison = await githubClient.compareCommits(owner, repo, storedCommitSha, latestSha);
@@ -738,12 +795,15 @@ export class RepoStorageService {
                     .from('repos')
                     .update({ commit_sha: latestSha })
                     .eq('id', repoData.id);
+                console.log(`✅ Updated ${ownerRepo} commit SHA (no file changes)`);
                 return { synced: true, changes: 0 };
             }
 
-            // 5. For each changed file: fetch content or mark for deletion
+            // 6. For each changed file: fetch content or mark for deletion
             const changes: { path: string; content: string | null }[] = [];
             const failedFiles: { path: string; error: string }[] = [];
+
+            console.log(`📥 Fetching ${comparison.files.length} changed files for ${ownerRepo}...`);
 
             for (const file of comparison.files) {
                 const { filename, status } = file;
@@ -792,14 +852,14 @@ export class RepoStorageService {
                 };
             }
 
-            // 6. Apply all changes in batch
+            // 7. Apply all changes in batch
             const success = await this.patchRepoFiles(repoData.id, changes);
 
             if (!success) {
                 throw new Error('Failed to apply changes to repository archive');
             }
 
-            // 7. Update commit_sha in repos table (only if all files fetched successfully)
+            // 8. Update commit_sha in repos table (only if all files fetched successfully)
             const { error: updateError } = await this.supabase
                 .from('repos')
                 .update({
